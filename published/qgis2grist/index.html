@@ -20,10 +20,10 @@
   --surface2: #f1f5f9;
   --surface3: #e2e8f0;
   --border: #e2e8f0;
-  --primary: #0369a1;
-  --primary-dark: #0284c7;
-  --primary-dim: rgba(3,105,161,0.08);
-  --primary-glow: rgba(3,105,161,0.18);
+  --primary: #3e5de7;
+  --primary-dark: #2d4bd4;
+  --primary-dim: rgba(62,93,231,0.08);
+  --primary-glow: rgba(62,93,231,0.18);
   --green: #10b981;
   --orange: #ef4444;
   --yellow: #f59e0b;
@@ -138,7 +138,7 @@ body {
   padding: 4px 10px; border-radius: 6px; letter-spacing: 0.06em;
 }
 .fmt-badge.q2w { background: rgba(63,185,80,0.15); color: var(--green); border: 1px solid rgba(63,185,80,0.3); }
-.fmt-badge.qgz { background: rgba(3,105,161,0.08); color: var(--primary); border: 1px solid rgba(3,105,161,0.2); }
+.fmt-badge.qgz { background: rgba(62,93,231,0.08); color: var(--primary); border: 1px solid rgba(62,93,231,0.2); }
 .fmt-badge.qfd { background: rgba(227,179,65,0.15); color: var(--yellow); border: 1px solid rgba(227,179,65,0.3); }
 
 .drop-btn {
@@ -170,7 +170,7 @@ body {
   animation: spin 0.8s linear infinite;
 }
 .reading-spinner::after {
-  border-bottom-color: rgba(3,105,161,0.2);
+  border-bottom-color: rgba(62,93,231,0.2);
   animation: spin 0.8s linear infinite reverse;
   inset: 8px;
 }
@@ -220,7 +220,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   font-size: 13px; flex-shrink: 0;
 }
-.geom-icon.point { background: rgba(3,105,161,0.1); color: var(--primary); }
+.geom-icon.point { background: rgba(62,93,231,0.1); color: var(--primary); }
 .geom-icon.line { background: rgba(63,185,80,0.12); color: var(--green); }
 .geom-icon.polygon { background: rgba(227,179,65,0.12); color: var(--yellow); }
 .geom-icon.unknown { background: var(--surface3); color: var(--text-dim); }
@@ -362,11 +362,11 @@ body {
 .rb-sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
 .rb-upload-label {
   font-size: 11px; padding: 6px 14px; border-radius: 4px; cursor: pointer;
-  background: rgba(3,105,161,0.08); border: 1px solid var(--primary);
+  background: rgba(62,93,231,0.08); border: 1px solid var(--primary);
   color: var(--primary); font-weight: 600; white-space: nowrap;
   transition: background 0.15s; font-family: var(--font-sans);
 }
-.rb-upload-label:hover { background: rgba(3,105,161,0.15); }
+.rb-upload-label:hover { background: rgba(62,93,231,0.15); }
 
 /* ─── STATE: ORIGINAL MAP ────────────────────────────────── */
 #state-original { flex-direction: column; }
@@ -391,11 +391,11 @@ body {
 /* ─── MAP TOOLBAR extras ─────────────────────────────────── */
 .map-toolbar .map-btn-orig {
   font-size: 11px; padding: 4px 12px; border-radius: 4px;
-  background: rgba(3,105,161,0.06); border: 1px solid var(--primary);
+  background: rgba(62,93,231,0.06); border: 1px solid var(--primary);
   color: var(--primary); cursor: pointer; font-family: var(--font-sans);
   font-weight: 600; white-space: nowrap; transition: all 0.15s;
 }
-.map-toolbar .map-btn-orig:hover { background: rgba(3,105,161,0.15); }
+.map-toolbar .map-btn-orig:hover { background: rgba(62,93,231,0.15); }
 .map-toolbar .map-btn-orig:disabled { opacity: 0.35; cursor: not-allowed; }
 
 /* ─── SCROLLBAR ──────────────────────────────────────────── */
@@ -1253,7 +1253,7 @@ function showPreview(layers, fileName) {
     Polygon: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1.5" y="2.5" width="9" height="7" rx="1"/></svg>',
     unknown: '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="6" r="5"/><line x1="6" y1="4" x2="6" y2="6.5"/><line x1="6" y1="8" x2="6.01" y2="8"/></svg>'
   };
-  const PALETTE = ['#0369a1','#10b981','#f59e0b','#ef4444','#8b5cf6','#3b82f6'];
+  const PALETTE = ['#3e5de7','#10b981','#f59e0b','#ef4444','#8b5cf6','#3b82f6'];
 
   layers.forEach((layer, idx) => {
     const icon = GEOM_ICONS[layer.geomType] || '?';
@@ -1468,7 +1468,7 @@ async function startImport() {
 // ══════════════════════════════════════════════════════════════
 // MAP VIEW (post-import)
 // ══════════════════════════════════════════════════════════════
-const LAYER_COLORS = ['#0369a1','#10b981','#f59e0b','#ef4444','#8b5cf6','#3b82f6','#f97316'];
+const LAYER_COLORS = ['#3e5de7','#10b981','#f59e0b','#ef4444','#8b5cf6','#3b82f6','#f97316'];
 
 // ══════════════════════════════════════════════════════════════
 // STORAGE PERSISTENCE
@@ -1652,7 +1652,7 @@ function showMap(importedLayerData, restoredState) {
   // If restored from storage with no in-memory features, load from Grist tables
   if (restoredState) {
     (async () => {
-      const PALETTE = ['#0369a1','#10b981','#f59e0b','#ef4444','#8b5cf6','#3b82f6'];
+      const PALETTE = ['#3e5de7','#10b981','#f59e0b','#ef4444','#8b5cf6','#3b82f6'];
       let ci = 0;
       for (const [tableName, layer] of Object.entries(importedLayerData)) {
         if (layer.features && layer.features.length > 0) { ci++; continue; }
@@ -2073,7 +2073,7 @@ function renderAsWidget(html) {
     'background:rgba(255,255,255,0.92);border-radius:6px;' +
     'display:flex;gap:4px;padding:4px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.12);">' +
     '<button onclick="window.__resetQgisWidget()" style="' +
-    'font-size:11px;color:#0369a1;background:none;border:1px solid #0369a1;' +
+    'font-size:11px;color:#3e5de7;background:none;border:1px solid #3e5de7;' +
     'border-radius:4px;padding:3px 10px;cursor:pointer;font-family:Inter,sans-serif;font-weight:600;">' +
     '\u21ba Changer de fichier</button></div>';
 

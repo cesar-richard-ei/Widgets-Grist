@@ -7,7 +7,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Importez des couches QGIS (qgis2web .zip/.html, .qgz, QField) directement dans Grist avec création automatique du schéma",
-    "lastUpdatedAt": "2026-02-24T08:10:30.149Z",
+    "lastUpdatedAt": "2026-02-24T08:19:16.407Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -23,7 +23,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Tableau Kanban avec drag & drop pour la gestion de tâches",
-    "lastUpdatedAt": "2026-02-24T08:10:30.150Z",
+    "lastUpdatedAt": "2026-02-24T08:19:16.408Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -39,7 +39,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Diagramme de Gantt interactif pour la planification",
-    "lastUpdatedAt": "2026-02-24T08:10:30.150Z",
+    "lastUpdatedAt": "2026-02-24T08:19:16.408Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -55,7 +55,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Calendrier interactif avec vue mois/semaine/jour",
-    "lastUpdatedAt": "2026-02-24T08:10:30.150Z",
+    "lastUpdatedAt": "2026-02-24T08:19:16.408Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -71,7 +71,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Tableau de bord avec KPIs et statistiques des tâches",
-    "lastUpdatedAt": "2026-02-24T08:10:30.150Z",
+    "lastUpdatedAt": "2026-02-24T08:19:16.408Z",
     "authors": [
       {
         "name": "nic01asfr",
