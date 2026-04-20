@@ -92,6 +92,8 @@
         .card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 0.7rem; color: var(--text-muted); }
         .card-project { display: flex; align-items: center; gap: 3px; }
         .card-deps { display: flex; align-items: center; gap: 2px; }
+        .card-subs { display: inline-flex; align-items: center; gap: 2px; font-size: 0.7rem; color: var(--text-muted); }
+        .card-subs.complete { color: var(--success, #10b981); }
         .card-progress { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; overflow: hidden; cursor: pointer; transition: height 0.15s; }  /* KAN-03: cliquable */
         .card-progress:hover { height: 6px; }  /* KAN-03: feedback visuel */
         .card-progress-fill { height: 100%; border-radius: 2px; transition: width 0.2s; }
@@ -570,6 +572,8 @@
             const projectName = getProjectName(t.projet);
             const projectColor = getProjectColor(t.projet);
             const typeIcon = TYPE_ICONS[t.type] || '';
+            const subs = getSubtasks(t);
+            const subsDone = subs.filter(s => s.done).length;
 
             return `<div class="task-card p${p} ${t.statut === 'done' ? 'done' : ''} ${t.id === selectedTaskId ? 'selected' : ''}" data-id="${t.id}" onclick="openTaskPanel(${t.id})">
                 <div class="card-header">
@@ -579,6 +583,7 @@
                 <div class="card-meta">
                     ${projectName ? `<span class="card-project"><span style="color:${projectColor}">●</span> ${escapeHtml(projectName)}</span>` : ''}
                     ${deps.length ? `<span class="card-deps">← ${deps.length}</span>` : ''}
+                    ${subs.length ? `<span class="card-subs${subsDone === subs.length ? ' complete' : ''}" title="Sous-tâches">◎ ${subsDone}/${subs.length}</span>` : ''}
                 </div>
                 ${t.type !== 'jalon' ? `<div class="card-progress" onclick="event.stopPropagation();setCardProgress(event, ${t.id})"><div class="card-progress-fill p${p}" style="width:${t.progression || 0}%"></div></div>` : ''}
                 ${assignees.length ? `<div class="card-assignees">${assignees.slice(0, 3).map(id => `<div class="card-avatar" style="background:${getTeamMemberColor(id)}">${getInitials(getTeamMemberName(id))}</div>`).join('')}${assignees.length > 3 ? `<div class="card-avatar more">+${assignees.length - 3}</div>` : ''}</div>` : ''}
