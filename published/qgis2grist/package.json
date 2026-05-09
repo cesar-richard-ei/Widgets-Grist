@@ -1,7 +1,7 @@
 {
   "name": "qgis2grist",
-  "version": "1.0.0",
-  "description": "Importateur QGIS → Grist : analyse les exports qgis2web et projets QGIS, crée le schéma de tables et importe les données géographiques",
+  "version": "1.1.0",
+  "description": "Importateur QGIS → Grist : analyse exports qgis2web/QGZ/QField/GPKG, crée le schéma de tables Grist (labels, Choice depuis ValueMap, Ref depuis relations QGIS) et importe les données géographiques",
   "authors": [
     {
       "name": "nic01asfr",
