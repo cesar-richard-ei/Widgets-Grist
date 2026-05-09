@@ -1,5 +1,21 @@
 [
   {
+    "widgetId": "artefactory",
+    "name": "Artefactory",
+    "url": "https://VOTRE_USER.github.io/Widgets-Grist/artefactory/",
+    "published": true,
+    "accessLevel": "full",
+    "renderAfterReady": true,
+    "description": "IDE no-code dans Grist : créer/éditer ses widgets (React, HTML, SVG, Mermaid, Markdown) avec assistant IA optionnel",
+    "lastUpdatedAt": "2026-05-09T06:36:44.637Z",
+    "authors": [
+      {
+        "name": "nic01asfr",
+        "url": "https://github.com/nic01asfr"
+      }
+    ]
+  },
+  {
     "widgetId": "qgis2grist",
     "name": "QGIS → Grist Importer",
     "url": "https://VOTRE_USER.github.io/Widgets-Grist/qgis2grist/",
@@ -7,7 +23,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Importez des couches QGIS (qgis2web .zip/.html, .qgz, QField) directement dans Grist avec création automatique du schéma",
-    "lastUpdatedAt": "2026-02-26T16:21:48.859Z",
+    "lastUpdatedAt": "2026-05-09T06:36:44.643Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -23,7 +39,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Tableau Kanban avec drag & drop pour la gestion de tâches",
-    "lastUpdatedAt": "2026-02-26T16:21:48.860Z",
+    "lastUpdatedAt": "2026-05-09T06:36:44.643Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -39,7 +55,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Diagramme de Gantt interactif pour la planification",
-    "lastUpdatedAt": "2026-02-26T16:21:48.860Z",
+    "lastUpdatedAt": "2026-05-09T06:36:44.644Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -55,7 +71,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Calendrier interactif avec vue mois/semaine/jour",
-    "lastUpdatedAt": "2026-02-26T16:21:48.860Z",
+    "lastUpdatedAt": "2026-05-09T06:36:44.644Z",
     "authors": [
       {
         "name": "nic01asfr",
@@ -71,7 +87,7 @@
     "accessLevel": "full",
     "renderAfterReady": true,
     "description": "Tableau de bord avec KPIs et statistiques des tâches",
-    "lastUpdatedAt": "2026-02-26T16:21:48.860Z",
+    "lastUpdatedAt": "2026-05-09T06:36:44.644Z",
     "authors": [
       {
         "name": "nic01asfr",

@@ -1,0 +1,2225 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Artefactory AI v11</title>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/ace.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/mode-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/mode-jsx.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/mode-html.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/mode-svg.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/mode-markdown.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/theme-one_dark.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.32.6/ext-language_tools.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --bg: #ffffff;
+            --bg2: #f8fafc;
+            --bg3: #f1f5f9;
+            --border: #e2e8f0;
+            --text: #0f172a;
+            --text2: #64748b;
+            --accent: #3b82f6;
+            --accent2: #2563eb;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+            --code-bg: #282c34;
+            --code-text: #abb2bf;
+            --ai-gradient: linear-gradient(135deg, #3e5de7 0%, #3e5de7 100%);
+            --ai-bg: #f5f3ff;
+            --ai-border: #c4b5fd;
+            --doc-bg: #fef3c7;
+            --doc-border: #fbbf24;
+            --doc-text: #92400e;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: var(--bg2); min-height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Header */
+        .header { background: var(--bg); border-bottom: 1px solid var(--border); padding: 8px 12px; display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+        .header.hidden { display: none; }
+        .header-icon { width: 32px; height: 32px; border-radius: 8px; background: var(--ai-gradient); display: flex; align-items: center; justify-content: center; color: #fff; font-size: 16px; }
+        .header-info { flex: 1; min-width: 0; }
+        .header-title { font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .header-sub { font-size: 10px; color: var(--text2); }
+        .art-select { padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 12px; min-width: 180px; max-width: 260px; }
+        .art-count { padding: 3px 8px; background: var(--bg2); border-radius: 12px; font-size: 11px; color: var(--text2); }
+        
+        .type-badge { padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; text-transform: uppercase; }
+        .type-react { background: #dbeafe; color: #1e40af; }
+        .type-html { background: #fef3c7; color: #92400e; }
+        .type-svg { background: #d1fae5; color: #065f46; }
+        .type-mermaid { background: #ede9fe; color: #5b21b6; }
+        .type-markdown { background: #fce7f3; color: #9d174d; }
+        .type-grist { background: #e0f2f1; color: #00695c; }
+        
+        .doc-badge { padding: 3px 8px; border-radius: 12px; font-size: 10px; font-weight: 600; background: var(--doc-bg); color: var(--doc-text); border: 1px solid var(--doc-border); margin-left: 4px; }
+        
+        /* Toolbar */
+        .toolbar { background: var(--bg); border-bottom: 1px solid var(--border); padding: 6px 12px; display: flex; gap: 4px; flex-wrap: wrap; align-items: center; flex-shrink: 0; }
+        .toolbar.hidden { display: none; }
+        .btn { padding: 5px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); font-size: 11px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all .15s; white-space: nowrap; }
+        .btn:hover { background: var(--bg2); border-color: #cbd5e1; }
+        .btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn.success { background: var(--success); color: #fff; border-color: var(--success); }
+        .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn.primary:hover { background: var(--accent2); }
+        .btn.ai-btn { background: var(--ai-gradient); color: #fff; border: none; font-weight: 600; }
+        .btn.ai-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+        .btn-add { background: var(--ai-gradient); color: #fff; border: none; font-weight: 600; }
+        .toolbar-sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+        .toolbar-spacer { flex: 1; }
+        
+        .device-group { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+        .device-btn { padding: 5px 8px; border: none; background: var(--bg); cursor: pointer; font-size: 11px; }
+        .device-btn:hover { background: var(--bg2); }
+        .device-btn.active { background: var(--accent); color: #fff; }
+        .device-btn + .device-btn { border-left: 1px solid var(--border); }
+        
+        /* Main container */
+        .main { flex: 1; display: flex; overflow: hidden; min-height: 0; }
+        .main-left { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 8px; gap: 8px; min-width: 0; }
+        .main-right { width: 0; overflow: hidden; transition: width 0.3s ease; background: var(--bg2); min-height: 0; position: relative; }
+        .main-right.visible { width: 420px; min-width: 360px; }
+        
+        /* Panels layout */
+        .panels { flex: 1; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+        .panels.split-h { flex-direction: row; }
+        
+        /* Render zone */
+        .render-zone { flex: 1; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; min-height: 0; min-width: 0; }
+        .render-bar { padding: 5px 10px; background: var(--bg2); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--text2); flex-shrink: 0; }
+        .render-bar.hidden { display: none; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); }
+        .status-dot.error { background: var(--error); }
+        .status-dot.loading { background: var(--warning); animation: pulse 1s infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .render-content { flex: 1; position: relative; background: repeating-conic-gradient(var(--bg3) 0% 25%, transparent 0% 50%) 50% / 16px 16px; overflow: hidden; }
+        .render-content.no-pattern { background: var(--bg); }
+        
+        /* Device frames */
+        .device-frame { background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,.1); position: absolute; top: 0; left: 0; right: 0; bottom: 0; overflow: hidden; }
+        .device-frame.desktop { border-radius: 0; box-shadow: none; }
+        .device-frame.tablet { width: 768px; max-width: calc(100% - 20px); top: 10px; left: 50%; transform: translateX(-50%); right: auto; bottom: 10px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,.15); }
+        .device-frame.mobile { width: 375px; max-width: calc(100% - 20px); top: 10px; left: 50%; transform: translateX(-50%); right: auto; bottom: 10px; border-radius: 24px; border: 4px solid #1f2937; box-shadow: 0 4px 20px rgba(0,0,0,.2); }
+        .render-iframe { width: 100%; height: 100%; border: none; display: block; }
+        
+        /* Code zone */
+        .code-zone { display: none; flex-direction: column; background: var(--code-bg); border-radius: 8px; overflow: hidden; min-height: 0; min-width: 0; }
+        .code-zone.visible { display: flex; flex: 1; }
+        .code-bar { padding: 6px 12px; background: #21252b; display: flex; align-items: center; gap: 10px; font-size: 11px; color: #636d83; flex-shrink: 0; border-bottom: 1px solid #181a1f; }
+        .code-bar-left { display: flex; align-items: center; gap: 10px; }
+        .code-bar-right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+        .hot-reload-toggle { display: flex; align-items: center; gap: 4px; font-size: 10px; color: #636d83; cursor: pointer; }
+        .hot-reload-toggle input { width: 14px; height: 14px; }
+        .code-content { flex: 1; overflow: hidden; position: relative; min-height: 0; display: flex; flex-direction: column; }
+        #aceEditor { flex: 1; width: 100%; min-height: 0; }
+        
+        /* Selection indicator */
+        .selection-indicator { padding: 2px 8px; background: #3b82f633; border-radius: 4px; font-size: 10px; color: #93c5fd; display: none; }
+        .selection-indicator.visible { display: inline-flex; align-items: center; gap: 4px; }
+        
+        /* Splitter */
+        .splitter { flex-shrink: 0; background: var(--border); transition: background .15s; }
+        .splitter:hover { background: var(--accent); }
+        .splitter.dragging { background: var(--accent); }
+        .splitter-h { width: 6px; cursor: col-resize; margin: 0 -2px; position: relative; z-index: 10; }
+        
+        /* Console */
+        .console-zone { display: none; background: #1a1a2e; border-radius: 8px; overflow: hidden; flex-shrink: 0; }
+        .console-zone.visible { display: flex; flex-direction: column; height: 140px; }
+        .console-bar { padding: 5px 10px; background: #16213e; display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #a0aec0; flex-shrink: 0; }
+        .console-content { flex: 1; overflow-y: auto; padding: 6px 10px; font-family: 'Consolas', monospace; font-size: 11px; }
+        .console-line { padding: 2px 0; border-bottom: 1px solid #2d3748; }
+        .console-line.log { color: #e2e8f0; }
+        .console-line.warn { color: #f6e05e; }
+        .console-line.error { color: #fc8181; }
+        .console-line.info { color: #63b3ed; }
+        
+        /* AI Panel */
+        .ai-panel { position: absolute; top: 8px; right: 8px; bottom: 8px; left: 8px; display: flex; flex-direction: column; overflow: hidden; background: var(--bg); border-radius: 8px; border: 1px solid var(--border); }
+        .ai-header { padding: 12px 16px; background: var(--ai-gradient); color: #fff; display: flex; align-items: center; gap: 10px; flex-shrink: 0; border-radius: 7px 7px 0 0; }
+        .ai-header h3 { font-size: 14px; font-weight: 600; flex: 1; }
+        .ai-close { background: rgba(255,255,255,0.2); border: none; color: #fff; width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+        .ai-close:hover { background: rgba(255,255,255,0.3); }
+        
+        .ai-config { padding: 12px 16px; background: var(--ai-bg); border-bottom: 1px solid var(--ai-border); flex-shrink: 0; }
+        .ai-config-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+        .ai-config-row:last-child { margin-bottom: 0; }
+        .ai-config label { font-size: 11px; color: var(--text2); min-width: 80px; }
+        .ai-config input, .ai-config select { flex: 1; padding: 6px 10px; border: 1px solid var(--border); border-radius: 6px; font-size: 11px; }
+        .ai-config-toggle { display: flex; align-items: center; gap: 6px; }
+        
+        /* Documentation Section */
+        .ai-docs { padding: 12px 16px; background: var(--doc-bg); border-bottom: 1px solid var(--doc-border); flex-shrink: 0; }
+        .ai-docs-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .ai-docs-title { font-size: 12px; font-weight: 600; color: var(--doc-text); display: flex; align-items: center; gap: 6px; }
+        .ai-docs-toggle { font-size: 10px; color: var(--doc-text); cursor: pointer; text-decoration: underline; }
+        .ai-docs-list { display: flex; flex-wrap: wrap; gap: 6px; max-height: 120px; overflow-y: auto; }
+        .ai-docs-list.collapsed { max-height: 0; overflow: hidden; margin: 0; }
+        .doc-chip { padding: 4px 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 16px; font-size: 10px; cursor: pointer; display: flex; align-items: center; gap: 4px; transition: all 0.15s; }
+        .doc-chip:hover { border-color: var(--accent); }
+        .doc-chip.selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .doc-chip .doc-chip-icon { font-size: 12px; }
+        .doc-chip .doc-chip-remove { margin-left: 4px; opacity: 0.7; }
+        .doc-chip .doc-chip-remove:hover { opacity: 1; }
+        .doc-preview { margin-top: 8px; padding: 8px; background: var(--bg); border-radius: 6px; font-size: 10px; color: var(--text2); max-height: 60px; overflow: hidden; }
+        .ai-docs-empty { font-size: 11px; color: var(--doc-text); opacity: 0.8; font-style: italic; }
+        .ai-docs-count { padding: 2px 6px; background: var(--bg); border-radius: 10px; font-size: 10px; color: var(--doc-text); }
+        
+        .ai-conversation { flex: 1 1 0; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+        .ai-message { max-width: 95%; padding: 10px 14px; border-radius: 12px; font-size: 12px; line-height: 1.5; }
+        .ai-message.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+        .ai-message.assistant { align-self: flex-start; background: var(--bg3); color: var(--text); border-bottom-left-radius: 4px; }
+        .ai-message.system { align-self: center; background: #fef3c7; color: #92400e; font-size: 11px; text-align: center; }
+        .ai-message.error { align-self: center; background: #fee2e2; color: #991b1b; font-size: 11px; }
+        .ai-message pre { background: rgba(0,0,0,0.1); padding: 8px; border-radius: 6px; overflow-x: auto; margin: 8px 0 0; font-size: 11px; }
+        .ai-message code { font-family: 'Consolas', monospace; }
+        
+        .ai-status { padding: 8px 16px; background: var(--bg2); border-top: 1px solid var(--border); font-size: 10px; color: var(--text2); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+        .ai-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--success); }
+        .ai-status-dot.loading { background: var(--warning); animation: pulse 1s infinite; }
+        .ai-status-dot.error { background: var(--error); }
+        
+        .ai-input-area { padding: 12px; background: var(--bg); border-top: 1px solid var(--border); flex-shrink: 0; border-radius: 0 0 7px 7px; }
+        .ai-context-info { font-size: 10px; color: var(--text2); margin-bottom: 8px; padding: 6px 10px; background: var(--bg2); border-radius: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+        .ai-context-tag { padding: 2px 6px; background: var(--accent); color: #fff; border-radius: 4px; font-size: 9px; }
+        .ai-context-tag.doc { background: var(--doc-border); color: var(--doc-text); }
+        .ai-input-row { display: flex; gap: 8px; }
+        .ai-textarea { flex: 1; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 12px; resize: none; min-height: 60px; max-height: 120px; font-family: inherit; }
+        .ai-textarea:focus { outline: none; border-color: var(--accent); }
+        .ai-actions { display: flex; flex-direction: column; gap: 4px; }
+        .ai-send { padding: 8px 16px; background: var(--ai-gradient); color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; }
+        .ai-send:hover { opacity: 0.9; }
+        .ai-send:disabled { opacity: 0.5; cursor: not-allowed; }
+        .ai-screenshot { padding: 6px 10px; background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; font-size: 10px; cursor: pointer; }
+        .ai-screenshot:hover { background: var(--bg3); }
+        .ai-screenshot.active { background: var(--success); color: #fff; border-color: var(--success); }
+        
+        /* Quick prompt popup (Ctrl+K) */
+        .quick-prompt-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-start; justify-content: center; z-index: 1000; padding-top: 12vh; }
+        .quick-prompt-overlay.visible { display: flex; }
+        .quick-prompt { background: var(--bg); border-radius: 12px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); width: 100%; max-width: 640px; overflow: hidden; }
+        .quick-prompt-header { padding: 16px 20px; background: var(--ai-gradient); color: #fff; display: flex; align-items: center; gap: 12px; }
+        .quick-prompt-header h3 { font-size: 15px; font-weight: 600; flex: 1; }
+        .quick-prompt-context { font-size: 10px; background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 20px; }
+        .quick-prompt-body { padding: 20px; }
+        .quick-prompt-input { width: 100%; padding: 14px 16px; border: 2px solid var(--border); border-radius: 10px; font-size: 14px; transition: border-color 0.2s; }
+        .quick-prompt-input:focus { outline: none; border-color: var(--accent); }
+        
+        /* Documentation selection in quick prompt */
+        .quick-prompt-docs { margin-top: 16px; padding: 12px; background: var(--doc-bg); border-radius: 8px; border: 1px solid var(--doc-border); }
+        .quick-prompt-docs-title { font-size: 11px; font-weight: 600; color: var(--doc-text); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+        .quick-prompt-docs-list { display: flex; flex-wrap: wrap; gap: 6px; }
+        
+        .quick-prompt-hints { margin-top: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+        .quick-prompt-hint { padding: 6px 12px; background: var(--bg2); border-radius: 20px; font-size: 11px; color: var(--text2); cursor: pointer; transition: all 0.15s; }
+        .quick-prompt-hint:hover { background: var(--accent); color: #fff; }
+        .quick-prompt-footer { padding: 12px 20px; background: var(--bg2); border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .quick-prompt-shortcut { font-size: 10px; color: var(--text2); }
+        .quick-prompt-shortcut kbd { padding: 2px 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 4px; font-family: inherit; }
+        
+        /* States */
+        .state-box { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 30px; text-align: center; }
+        .state-icon { font-size: 48px; margin-bottom: 16px; }
+        .state-title { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+        .state-desc { font-size: 13px; color: var(--text2); max-width: 280px; }
+        .error-box { color: var(--error); }
+        .error-details { margin-top: 12px; padding: 12px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; font-family: monospace; font-size: 11px; text-align: left; max-width: 400px; max-height: 120px; overflow: auto; color: #991b1b; }
+        
+        /* Status bar */
+        .status-bar { background: var(--bg); border-top: 1px solid var(--border); padding: 4px 12px; display: flex; justify-content: space-between; font-size: 10px; color: #94a3b8; flex-shrink: 0; }
+        .status-bar.hidden { display: none; }
+        .status-left { display: flex; gap: 12px; }
+        
+        /* Modal */
+        .modal-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,.5); display: none; align-items: center; justify-content: center; z-index: 100; padding: 20px; }
+        .modal-overlay.visible { display: flex; }
+        .modal { background: var(--bg); border-radius: 12px; box-shadow: 0 20px 40px rgba(0,0,0,.2); width: 100%; max-width: 600px; max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
+        .modal-header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .modal-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+        .modal-close { width: 32px; height: 32px; border: none; background: var(--bg2); border-radius: 8px; cursor: pointer; font-size: 16px; display: flex; align-items: center; justify-content: center; }
+        .modal-close:hover { background: var(--bg3); }
+        .modal-body { flex: 1; padding: 20px; overflow-y: auto; }
+        .modal-footer { padding: 16px 20px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 8px; }
+        
+        /* Form */
+        .form-group { margin-bottom: 16px; }
+        .form-label { display: block; font-size: 12px; font-weight: 500; color: var(--text); margin-bottom: 6px; }
+        .form-label span { color: var(--error); }
+        .form-input { width: 100%; padding: 10px 14px; border: 1px solid var(--border); border-radius: 8px; font-size: 13px; transition: border-color .15s; }
+        .form-input:focus { outline: none; border-color: var(--accent); }
+        .form-checkbox { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+        .form-checkbox input { width: 16px; height: 16px; }
+        .form-checkbox label { font-size: 12px; color: var(--text2); }
+        
+        /* Type selector */
+        .type-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 8px; }
+        .type-card { padding: 12px 8px; border: 2px solid var(--border); border-radius: 10px; text-align: center; cursor: pointer; transition: all .15s; }
+        .type-card:hover { border-color: var(--accent); background: var(--bg2); }
+        .type-card.selected { border-color: var(--accent); background: #eff6ff; }
+        .type-card-icon { font-size: 24px; margin-bottom: 4px; }
+        .type-card-label { font-size: 11px; font-weight: 500; }
+        
+        /* Init banner */
+        .init-banner { background: var(--ai-gradient); color: #fff; padding: 6px 12px; display: flex; align-items: center; gap: 8px; font-size: 11px; flex-shrink: 0; }
+        .init-banner.hidden { display: none; }
+        .init-banner.ok { background: var(--success); }
+        .init-banner.err { background: var(--error); }
+        .init-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Markdown render */
+        .markdown-body { padding: 20px; max-width: 700px; margin: 0 auto; line-height: 1.6; overflow: auto; height: 100%; }
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 1em 0 .5em; }
+        .markdown-body p { margin-bottom: 1em; }
+        .markdown-body pre { background: var(--bg2); padding: 12px; border-radius: 8px; overflow-x: auto; }
+        .markdown-body code { background: var(--bg2); padding: 2px 6px; border-radius: 4px; }
+        
+        /* Ace customizations */
+        .ace_editor { font-family: 'Consolas', 'Monaco', 'Fira Code', monospace !important; }
+        .ace_gutter { background: #21252b !important; color: #636d83 !important; }
+        .ace_gutter-active-line { background: #2c313a !important; }
+        
+        /* Fullscreen */
+        .fullscreen-exit { position: fixed; top: 12px; right: 12px; z-index: 1000; padding: 8px 14px; background: rgba(0,0,0,.7); color: #fff; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; display: none; }
+        .fullscreen-exit:hover { background: rgba(0,0,0,.85); }
+        body.is-fullscreen .fullscreen-exit { display: block; }
+        
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg2); }
+        ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body>
+    <div class="init-banner" id="initBanner">
+        <div class="init-spinner"></div>
+        <span id="initMsg">Initialisation Artefactory AI...</span>
+    </div>
+    
+    <button class="fullscreen-exit" onclick="toggleFullscreen()">✕ Quitter plein écran</button>
+    
+    <div class="header" id="header">
+        <div class="header-icon">🏭</div>
+        <div class="header-info">
+            <div class="header-title" id="artName">Artefactory AI</div>
+            <div class="header-sub" id="artDesc">POC Factory avec Assistant IA + Documentation</div>
+        </div>
+        <button class="btn btn-add" onclick="openCreateModal()">➕ Nouveau</button>
+        <select class="art-select" id="artSelect" onchange="onSelect()">
+            <option value="">Chargement...</option>
+        </select>
+        <span class="art-count" id="artCount">0</span>
+        <span id="typeBadge" class="type-badge" style="display:none"></span>
+        <span id="docBadge" class="doc-badge" style="display:none">📚 Doc</span>
+    </div>
+    
+    <div class="toolbar" id="toolbar">
+        <button class="btn active" id="btnRender" onclick="setView('render')">▶️ Rendu</button>
+        <button class="btn" id="btnCode" onclick="setView('code')">📝 Code</button>
+        <button class="btn" id="btnSplit" onclick="setView('split')">◧ Split</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn" id="btnConsole" onclick="toggleConsole()">🖥️ Console</button>
+        <button class="btn" id="btnFullscreen" onclick="toggleFullscreen()">⛶</button>
+        <div class="toolbar-sep"></div>
+        <button class="btn ai-btn" id="btnAI" onclick="toggleAIPanel()">🤖 Assistant IA</button>
+        <button class="btn" onclick="openQuickPrompt()" title="Ctrl+K">✨</button>
+        <div class="toolbar-spacer"></div>
+        <div class="device-group">
+            <button class="device-btn active" data-d="desktop" onclick="setDevice('desktop')">🖥️</button>
+            <button class="device-btn" data-d="tablet" onclick="setDevice('tablet')">📱</button>
+            <button class="device-btn" data-d="mobile" onclick="setDevice('mobile')">📲</button>
+        </div>
+        <div class="toolbar-sep"></div>
+        <button class="btn" onclick="saveToGrist()" title="Ctrl+S">💾 Save</button>
+        <button class="btn" onclick="copyCode()">📋</button>
+        <button class="btn" onclick="refresh()">🔄</button>
+    </div>
+    
+    <div class="main" id="main">
+        <div class="main-left">
+            <div class="panels" id="panels">
+                <div class="render-zone" id="renderZone">
+                    <div class="render-bar" id="renderBar">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span id="statusTxt">Prêt</span>
+                        <div style="flex:1"></div>
+                        <label class="hot-reload-toggle">
+                            <input type="checkbox" id="bridgeToggle" checked onchange="toggleBridgeMode()">
+                            <span>🌉 Bridge</span>
+                        </label>
+                    </div>
+                    <div class="render-content" id="renderContent">
+                        <div class="device-frame desktop" id="deviceFrame">
+                            <div class="state-box">
+                                <div class="state-icon">🎨</div>
+                                <div class="state-title">Artefactory AI</div>
+                                <div class="state-desc">Créez ou sélectionnez un artefact, puis utilisez l'assistant IA (Ctrl+K)</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="splitter splitter-h" id="splitter" style="display:none"></div>
+                
+                <div class="code-zone" id="codeZone">
+                    <div class="code-bar">
+                        <div class="code-bar-left">
+                            <span>📝 Éditeur</span>
+                            <span id="codeInfo">0 lignes</span>
+                            <span class="selection-indicator" id="selectionIndicator">
+                                <span>🎯</span>
+                                <span id="selectionText">Sélection</span>
+                            </span>
+                            <span id="codeModified" style="color:#e5c07b;display:none">● Modifié</span>
+                        </div>
+                        <div class="code-bar-right">
+                            <label class="hot-reload-toggle">
+                                <input type="checkbox" id="hotReload" checked>
+                                <span>Auto</span>
+                            </label>
+                            <button class="btn small" onclick="applyCode()">▶️ Run</button>
+                            <button class="btn small" onclick="saveToGrist()">💾</button>
+                        </div>
+                    </div>
+                    <div class="code-content">
+                        <div id="aceEditor"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="console-zone" id="consoleZone">
+                <div class="console-bar">
+                    <span>🖥️ Console</span>
+                    <button class="btn small" onclick="clearConsole()">Effacer</button>
+                </div>
+                <div class="console-content" id="consoleContent"></div>
+            </div>
+        </div>
+        
+        <!-- AI Panel -->
+        <div class="main-right" id="aiPanel">
+            <div class="ai-panel">
+                <div class="ai-header">
+                    <span style="font-size:20px">🤖</span>
+                    <h3>Assistant IA</h3>
+                    <button class="ai-close" onclick="toggleAIPanel()">✕</button>
+                </div>
+                
+                <div class="ai-config" id="aiConfig">
+                    <div class="ai-config-row">
+                        <label>🔗 Webhook n8n</label>
+                        <input type="text" id="webhookUrl" placeholder="https://n8n.example.com/webhook/artefactory" value="">
+                    </div>
+                    <div class="ai-config-row">
+                        <label>🔑 API Key</label>
+                        <input type="password" id="apiKey" placeholder="Optionnel">
+                    </div>
+                    <div class="ai-config-row">
+                        <div class="ai-config-toggle">
+                            <input type="checkbox" id="autoCorrect" checked>
+                            <label for="autoCorrect">🔄 Auto-correction</label>
+                        </div>
+                        <div class="ai-config-toggle" style="margin-left:auto">
+                            <input type="checkbox" id="includeSchema">
+                            <label for="includeSchema">📊 Schéma Grist</label>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Documentation Section -->
+                <div class="ai-docs" id="aiDocs">
+                    <div class="ai-docs-header">
+                        <div class="ai-docs-title">
+                            <span>📚</span>
+                            <span>Documentation contextuelle</span>
+                            <span class="ai-docs-count" id="selectedDocsCount">0 sélectionné(s)</span>
+                        </div>
+                        <span class="ai-docs-toggle" onclick="toggleDocsCollapse()">▼</span>
+                    </div>
+                    <div class="ai-docs-list" id="aiDocsList">
+                        <span class="ai-docs-empty">Aucune documentation disponible. Créez des artefacts Markdown marqués comme documentation.</span>
+                    </div>
+                </div>
+                
+                <div class="ai-conversation" id="aiConversation">
+                    <div class="ai-message system">
+                        👋 Bienvenue ! Je suis votre assistant de développement.<br>
+                        📚 Sélectionnez des documentations pour enrichir le contexte.<br>
+                        Appuyez sur <kbd>Ctrl+K</kbd> pour générer rapidement.
+                    </div>
+                </div>
+                
+                <div class="ai-status" id="aiStatus">
+                    <span class="ai-status-dot" id="aiStatusDot"></span>
+                    <span id="aiStatusText">En attente</span>
+                </div>
+                
+                <div class="ai-input-area">
+                    <div class="ai-context-info" id="aiContextInfo">
+                        <span>📄 Contexte:</span>
+                        <span class="ai-context-tag" id="ctxMode">react</span>
+                        <span class="ai-context-tag" id="ctxLines">0 lignes</span>
+                        <span class="ai-context-tag" id="ctxSelection" style="display:none">Sélection</span>
+                        <span class="ai-context-tag doc" id="ctxDocs" style="display:none">📚 0 docs</span>
+                    </div>
+                    <div class="ai-input-row">
+                        <textarea class="ai-textarea" id="aiInput" placeholder="Décrivez ce que vous voulez créer ou modifier..." onkeydown="onAIInputKeydown(event)"></textarea>
+                        <div class="ai-actions">
+                            <button class="ai-send" id="aiSendBtn" onclick="sendAIRequest()">✨ Générer</button>
+                            <button class="ai-screenshot" id="screenshotBtn" onclick="toggleScreenshot()">📸</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="status-bar" id="statusBar">
+        <div class="status-left">
+            <span id="footerType">📄 -</span>
+            <span id="footerSize">📏 -</span>
+            <span id="footerLines">📝 -</span>
+            <span id="footerCursor">Ln 1, Col 1</span>
+        </div>
+        <span>Artefactory AI v11</span>
+    </div>
+    
+    <!-- Quick Prompt Overlay (Ctrl+K) -->
+    <div class="quick-prompt-overlay" id="quickPromptOverlay" onclick="closeQuickPromptOnOverlay(event)">
+        <div class="quick-prompt">
+            <div class="quick-prompt-header">
+                <span style="font-size:18px">✨</span>
+                <h3>Assistant IA</h3>
+                <span class="quick-prompt-context" id="qpContext">Code complet</span>
+            </div>
+            <div class="quick-prompt-body">
+                <input type="text" class="quick-prompt-input" id="quickPromptInput" 
+                       placeholder="Décrivez ce que vous voulez faire..." 
+                       onkeydown="onQuickPromptKeydown(event)">
+                
+                <!-- Documentation selection in quick prompt -->
+                <div class="quick-prompt-docs" id="qpDocs">
+                    <div class="quick-prompt-docs-title">
+                        <span>📚</span>
+                        <span>Documentation à inclure</span>
+                    </div>
+                    <div class="quick-prompt-docs-list" id="qpDocsList"></div>
+                </div>
+                
+                <div class="quick-prompt-hints">
+                    <span class="quick-prompt-hint" onclick="useHint('Corrige les erreurs dans ce code')">🐛 Corriger erreurs</span>
+                    <span class="quick-prompt-hint" onclick="useHint('Optimise ce code')">⚡ Optimiser</span>
+                    <span class="quick-prompt-hint" onclick="useHint('Ajoute des commentaires explicatifs')">📝 Documenter</span>
+                    <span class="quick-prompt-hint" onclick="useHint('Convertis en composant React')">⚛️ React</span>
+                    <span class="quick-prompt-hint" onclick="useHint('Ajoute la connexion Grist')">📊 Grist API</span>
+                    <span class="quick-prompt-hint" onclick="useHint('Améliore le design avec Tailwind')">🎨 Style</span>
+                </div>
+            </div>
+            <div class="quick-prompt-footer">
+                <span class="quick-prompt-shortcut"><kbd>Entrée</kbd> pour envoyer · <kbd>Échap</kbd> pour fermer</span>
+                <button class="btn primary" onclick="submitQuickPrompt()">✨ Générer</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Modal -->
+    <div class="modal-overlay" id="createModal" onclick="closeModalOnOverlay(event)">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-title">✨ Nouvel artefact</div>
+                <button class="modal-close" onclick="closeCreateModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">Nom <span>*</span></label>
+                    <input type="text" class="form-input" id="newName" placeholder="Mon artefact">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Type</label>
+                    <div class="type-cards">
+                        <div class="type-card selected" data-type="react" onclick="selectType('react')">
+                            <div class="type-card-icon">⚛️</div>
+                            <div class="type-card-label">React</div>
+                        </div>
+                        <div class="type-card" data-type="html" onclick="selectType('html')">
+                            <div class="type-card-icon">🌐</div>
+                            <div class="type-card-label">HTML</div>
+                        </div>
+                        <div class="type-card" data-type="grist" onclick="selectType('grist')">
+                            <div class="type-card-icon">📊</div>
+                            <div class="type-card-label">Widget Grist</div>
+                        </div>
+                        <div class="type-card" data-type="svg" onclick="selectType('svg')">
+                            <div class="type-card-icon">🎨</div>
+                            <div class="type-card-label">SVG</div>
+                        </div>
+                        <div class="type-card" data-type="mermaid" onclick="selectType('mermaid')">
+                            <div class="type-card-icon">📈</div>
+                            <div class="type-card-label">Mermaid</div>
+                        </div>
+                        <div class="type-card" data-type="markdown" onclick="selectType('markdown')">
+                            <div class="type-card-icon">📝</div>
+                            <div class="type-card-label">Markdown</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Description</label>
+                    <input type="text" class="form-input" id="newDesc" placeholder="Description optionnelle">
+                </div>
+                
+                <div class="form-group" id="docOption" style="display:none">
+                    <div class="form-checkbox">
+                        <input type="checkbox" id="newIsDoc">
+                        <label for="newIsDoc">📚 Cet artefact est une documentation (peut être incluse dans le contexte IA)</label>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">💡 Ou décrivez ce que vous voulez créer (IA)</label>
+                    <input type="text" class="form-input" id="newAIPrompt" placeholder="Ex: Un formulaire de contact avec validation...">
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="closeCreateModal()">Annuler</button>
+                <button class="btn primary" onclick="createArtefact()">✨ Créer</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+// ============ CONFIGURATION ============
+const TABLE_NAME = 'Artefacts';
+const TABLE_COLS = [
+    { id: 'Nom', type: 'Text' },
+    { id: 'Type', type: 'Choice', widgetOptions: JSON.stringify({ choices: ['react', 'html', 'grist', 'svg', 'mermaid', 'markdown'] }) },
+    { id: 'Code', type: 'Text' },
+    { id: 'Description', type: 'Text' },
+    { id: 'Tags', type: 'ChoiceList' },
+    { id: 'IsDoc', type: 'Bool' },
+    { id: 'CreatedAt', type: 'DateTime' }
+];
+
+const TYPES = {
+    react: { label: 'React', cls: 'type-react', icon: '⚛️', mode: 'jsx', 
+        template: `const App = () => {
+  const [count, setCount] = React.useState(0);
+  
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-8">
+      <div className="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md mx-auto">
+        <h1 className="text-3xl font-bold text-gray-800 mb-4">Mon Composant</h1>
+        <p className="text-gray-600 mb-6">Compteur: {count}</p>
+        <button 
+          onClick={() => setCount(c => c + 1)}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-medium"
+        >
+          Incrémenter
+        </button>
+      </div>
+    </div>
+  );
+};` },
+    html: { label: 'HTML', cls: 'type-html', icon: '🌐', mode: 'html',
+        template: `<div class="min-h-screen bg-gradient-to-br from-green-50 to-emerald-100 flex items-center justify-center p-8">
+  <div class="bg-white rounded-2xl shadow-xl p-8 text-center max-w-md">
+    <h1 class="text-3xl font-bold text-gray-800 mb-4">Mon HTML</h1>
+    <p class="text-gray-600 mb-6">Éditez ce contenu ou utilisez l'assistant IA.</p>
+    <a href="#" class="inline-block px-6 py-3 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition font-medium">
+      Action
+    </a>
+  </div>
+</div>` },
+    grist: { label: 'Widget Grist', cls: 'type-grist', icon: '📊', mode: 'html',
+        template: `<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Widget Grist</title>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"><\/script>
+    <script src="https://cdn.tailwindcss.com"><\/script>
+</head>
+<body class="bg-gray-50 p-4">
+    <div id="app" class="max-w-2xl mx-auto">
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h1 class="text-2xl font-bold text-gray-800 mb-4">📊 Widget Grist</h1>
+            <div id="status" class="text-gray-600 mb-4">Connexion...</div>
+            <div id="data" class="space-y-2"></div>
+        </div>
+    </div>
+
+    <script>
+        let records = [];
+        let mappings = {};
+
+        grist.ready({
+            requiredAccess: 'read table',
+            columns: ['Nom', 'Status']
+        });
+
+        grist.onRecords((data, maps) => {
+            records = data;
+            mappings = maps;
+            document.getElementById('status').textContent = '✅ ' + records.length + ' enregistrements';
+            renderData();
+        });
+
+        function renderData() {
+            const html = records.slice(0, 10).map(r => \`
+                <div class="p-3 bg-gray-50 rounded-lg flex justify-between items-center">
+                    <span class="font-medium">\${r[mappings.Nom] || r.Nom || 'Sans nom'}</span>
+                    <span class="text-sm text-gray-500">\${r[mappings.Status] || r.Status || '-'}</span>
+                </div>
+            \`).join('');
+            document.getElementById('data').innerHTML = html || '<p class="text-gray-400">Aucune donnée</p>';
+        }
+    <\/script>
+</body>
+</html>` },
+    svg: { label: 'SVG', cls: 'type-svg', icon: '🎨', mode: 'svg',
+        template: `<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#3e5de7"/>
+      <stop offset="100%" style="stop-color:#3e5de7"/>
+    </linearGradient>
+  </defs>
+  <rect width="400" height="300" fill="#f8fafc"/>
+  <circle cx="200" cy="150" r="80" fill="url(#grad)"/>
+  <text x="200" y="160" text-anchor="middle" fill="white" font-size="28" font-family="system-ui">SVG</text>
+</svg>` },
+    mermaid: { label: 'Mermaid', cls: 'type-mermaid', icon: '📈', mode: 'text',
+        template: `flowchart TD
+    A[🚀 Début] --> B{Décision?}
+    B -->|Oui| C[✅ Action 1]
+    B -->|Non| D[❌ Action 2]
+    C --> E[📊 Résultat]
+    D --> E
+    
+    style A fill:#3b82f6,color:#fff
+    style E fill:#10b981,color:#fff` },
+    markdown: { label: 'Markdown', cls: 'type-markdown', icon: '📝', mode: 'markdown',
+        template: `# Documentation
+
+## Objectif
+
+Décrivez ici l'objectif de cette documentation.
+
+## Instructions pour l'IA
+
+Quand cette documentation est incluse dans le contexte, l'assistant IA doit:
+
+- Suivre ces conventions de code
+- Utiliser ce format de sortie
+- Respecter ces contraintes
+
+## Exemples
+
+\`\`\`javascript
+// Exemple de code attendu
+const exemple = "format attendu";
+\`\`\`
+
+## Format de sortie
+
+Décrivez le format de sortie attendu.
+
+---
+
+*Documentation pour Artefactory AI*` }
+};
+
+// ============ STATE ============
+const state = {
+    artefacts: [],
+    current: null,
+    view: 'split',
+    device: 'desktop',
+    showConsole: false,
+    showAIPanel: true,
+    fullscreen: false,
+    code: '',
+    originalCode: '',
+    currentType: 'html',
+    hotReload: true,
+    hotReloadTimer: null,
+    splitRatio: 0.5,
+    isDragging: false,
+    selectedType: 'react',
+    isModified: false,
+    gristBridgeMode: true,
+    gristBridge: null,
+    renderIframe: null,
+    mermaidLoaded: false,
+    // AI State
+    aiConversation: [],
+    aiProcessing: false,
+    aiCorrectionCount: 0,
+    includeScreenshot: false,
+    lastScreenshot: null,
+    selection: null,
+    gristSchema: null,
+    consoleErrors: [],
+    // Documentation State
+    documentations: [],
+    selectedDocs: new Set(),
+    docsCollapsed: false
+};
+
+let aceEditor = null;
+
+// ============ GRIST BRIDGE ============
+class GristBridgeParent {
+    constructor() {
+        this.callbacks = { onRecords: new Map(), onRecord: new Map(), onOptions: new Map() };
+        this.callbackRegistry = new Map();
+        this.nextCallbackId = 1;
+        this.currentIframe = null;
+        window.addEventListener('message', this._handleMessage.bind(this));
+    }
+    
+    setCurrentIframe(iframe) {
+        this.callbackRegistry.clear();
+        Object.values(this.callbacks).forEach(m => m.clear());
+        this.currentIframe = iframe;
+    }
+    
+    async _handleMessage(event) {
+        const data = event.data;
+        if (!data || data.type !== 'grist-bridge') return;
+        if (!this.currentIframe || event.source !== this.currentIframe.contentWindow) return;
+        
+        try {
+            let result;
+            switch (data.action) {
+                case 'ready': result = { success: true, bridgeMode: true }; break;
+                case 'apiCall': result = await this._handleApiCall(data); break;
+                case 'registerCallback': result = await this._handleRegisterCallback(data); break;
+                default: throw new Error('Action inconnue: ' + data.action);
+            }
+            this._sendResponse(data.callId, result, null);
+        } catch (error) {
+            this._sendResponse(data.callId, null, error.message);
+        }
+    }
+    
+    _sendResponse(callId, result, error) {
+        if (!this.currentIframe) return;
+        this.currentIframe.contentWindow.postMessage({ type: 'grist-bridge-response', callId, result, error }, '*');
+    }
+    
+    _sendCallback(callbackId, args) {
+        if (!this.currentIframe) return;
+        this.currentIframe.contentWindow.postMessage({ type: 'grist-bridge-callback', callbackId, args }, '*');
+    }
+    
+    async _handleApiCall(data) {
+        const { path, args } = data;
+        const parts = path.split('.');
+        let target = grist;
+        for (let i = 0; i < parts.length - 1; i++) {
+            target = target[parts[i]];
+            if (!target) throw new Error(`Path invalide: ${path}`);
+        }
+        const method = target[parts[parts.length - 1]];
+        if (typeof method !== 'function') throw new Error(`${path} n'est pas une fonction`);
+        return await method.apply(target, args || []);
+    }
+    
+    async _handleRegisterCallback(data) {
+        const { callbackType } = data;
+        const callbackId = 'cb_' + (this.nextCallbackId++);
+        const self = this;
+        
+        const handlers = {
+            onRecords: (records, mappings) => self._sendCallback(callbackId, [records, mappings]),
+            onRecord: (record, mappings) => self._sendCallback(callbackId, [record, mappings]),
+            onOptions: (options, interaction) => self._sendCallback(callbackId, [options, interaction])
+        };
+        
+        if (handlers[callbackType]) {
+            grist[callbackType](handlers[callbackType]);
+        }
+        
+        this.callbackRegistry.set(callbackId, callbackType);
+        return { callbackId };
+    }
+}
+
+const GRIST_BRIDGE_SCRIPT = `
+(function() {
+    'use strict';
+    const bridgeState = { pendingCalls: new Map(), nextCallId: 1, callbacks: new Map() };
+    
+    window.addEventListener('message', (event) => {
+        const data = event.data;
+        if (!data) return;
+        
+        if (data.type === 'grist-bridge-response') {
+            const pending = bridgeState.pendingCalls.get(data.callId);
+            if (pending) {
+                bridgeState.pendingCalls.delete(data.callId);
+                if (data.error) pending.reject(new Error(data.error));
+                else pending.resolve(data.result);
+            }
+        }
+        
+        if (data.type === 'grist-bridge-callback') {
+            const cb = bridgeState.callbacks.get(data.callbackId);
+            if (cb) cb.fn.apply(null, data.args || []);
+        }
+    });
+    
+    function sendToParent(action, payload) {
+        return new Promise((resolve, reject) => {
+            const callId = 'call_' + (bridgeState.nextCallId++);
+            bridgeState.pendingCalls.set(callId, { resolve, reject });
+            window.parent.postMessage({ type: 'grist-bridge', action, callId, ...payload }, '*');
+            setTimeout(() => {
+                if (bridgeState.pendingCalls.has(callId)) {
+                    bridgeState.pendingCalls.delete(callId);
+                    reject(new Error('Bridge timeout'));
+                }
+            }, 30000);
+        });
+    }
+    
+    async function registerCallback(type, fn) {
+        const result = await sendToParent('registerCallback', { callbackType: type });
+        bridgeState.callbacks.set(result.callbackId, { type, fn });
+        return result.callbackId;
+    }
+    
+    window.grist = {
+        ready: (options) => sendToParent('ready', { options: options || {} }),
+        docApi: {
+            listTables: () => sendToParent('apiCall', { path: 'docApi.listTables', args: [] }),
+            fetchTable: (tableId) => sendToParent('apiCall', { path: 'docApi.fetchTable', args: [tableId] }),
+            applyUserActions: (actions) => sendToParent('apiCall', { path: 'docApi.applyUserActions', args: [actions] }),
+            getAccessToken: (opts) => sendToParent('apiCall', { path: 'docApi.getAccessToken', args: [opts] })
+        },
+        onRecords: (cb) => registerCallback('onRecords', cb),
+        onRecord: (cb) => registerCallback('onRecord', cb),
+        onOptions: (cb) => registerCallback('onOptions', cb),
+        setCursorPos: (pos) => sendToParent('apiCall', { path: 'setCursorPos', args: [pos] }),
+        getTable: (tableId) => ({
+            getTableId: () => tableId,
+            create: (records) => sendToParent('apiCall', { path: 'docApi.applyUserActions', args: [records.records.map(r => ['AddRecord', tableId, null, r.fields])] }),
+            update: (records) => sendToParent('apiCall', { path: 'docApi.applyUserActions', args: [records.records.map(r => ['UpdateRecord', tableId, r.id, r.fields])] })
+        }),
+        mapColumnNames: (record, mappings) => {
+            if (!mappings) return record;
+            const mapped = { id: record.id };
+            Object.entries(mappings).forEach(([key, col]) => { if (record[col] !== undefined) mapped[key] = record[col]; });
+            return mapped;
+        }
+    };
+    
+    console.log('🌉 Grist Bridge proxy ready');
+    window.dispatchEvent(new Event('grist-bridge-ready'));
+})();
+`;
+
+function injectGristBridge(html) {
+    return html.replace(
+        /<script\s+src=["']https:\/\/docs\.getgrist\.com\/grist-plugin-api\.js["']\s*><\/script>/gi,
+        '<script>' + GRIST_BRIDGE_SCRIPT + '<\/script>'
+    );
+}
+
+// ============ INITIALIZATION ============
+async function init() {
+    console.log('🚀 Artefactory AI v11 - Documentation contextuelle');
+    
+    state.gristBridge = new GristBridgeParent();
+    initAceEditor();
+    initSplitter();
+    loadAIConfig();
+    
+    window.addEventListener('message', onMessage);
+    window.addEventListener('keydown', onKeyDown);
+    
+    grist.ready({ requiredAccess: 'full' });
+    
+    try {
+        await ensureTable();
+        await loadArtefacts();
+        // Schéma Grist : chargé à la demande (cf. handler de la checkbox includeSchema)
+        // pour éviter de fetchTable toutes les tables du doc à l'init.
+        showInit('✓ Prêt', 'ok');
+        setTimeout(hideInit, 800);
+    } catch (e) {
+        console.error(e);
+        showInit('Erreur: ' + e.message, 'err');
+    }
+
+    document.getElementById('includeSchema').addEventListener('change', async (e) => {
+        if (e.target.checked && !state.gristSchema) {
+            setAIStatus('loading', 'Chargement schéma...');
+            try {
+                await loadGristSchema();
+                setAIStatus('ok', 'Schéma chargé');
+            } catch (err) {
+                setAIStatus('error', 'Erreur schéma');
+            }
+        }
+        saveAIConfig();
+    });
+    
+    setView('split');
+    if (state.showAIPanel) {
+        document.getElementById('aiPanel').classList.add('visible');
+        document.getElementById('btnAI').classList.add('active');
+    }
+}
+
+function initAceEditor() {
+    aceEditor = ace.edit("aceEditor");
+    aceEditor.setTheme("ace/theme/one_dark");
+    aceEditor.session.setMode("ace/mode/jsx");
+    aceEditor.setOptions({
+        fontSize: "13px",
+        showPrintMargin: false,
+        tabSize: 2,
+        useSoftTabs: true,
+        wrap: true,
+        enableBasicAutocompletion: true,
+        enableLiveAutocompletion: true
+    });
+    
+    aceEditor.session.on('change', onCodeChange);
+    aceEditor.selection.on('changeCursor', onCursorChange);
+    aceEditor.selection.on('changeSelection', onSelectionChange);
+    
+    aceEditor.commands.addCommand({
+        name: 'save', bindKey: { win: 'Ctrl-S', mac: 'Cmd-S' },
+        exec: () => saveToGrist()
+    });
+    aceEditor.commands.addCommand({
+        name: 'aiPrompt', bindKey: { win: 'Ctrl-K', mac: 'Cmd-K' },
+        exec: () => openQuickPrompt()
+    });
+    aceEditor.commands.addCommand({
+        name: 'run', bindKey: { win: 'Ctrl-Enter', mac: 'Cmd-Enter' },
+        exec: () => applyCode()
+    });
+}
+
+async function loadMermaid() {
+    if (state.mermaidLoaded) return true;
+    if (typeof mermaid !== 'undefined') { state.mermaidLoaded = true; return true; }
+    
+    return new Promise((resolve, reject) => {
+        setStatus('loading', 'Chargement Mermaid...');
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js';
+        script.onload = () => {
+            mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'loose' });
+            state.mermaidLoaded = true;
+            resolve(true);
+        };
+        script.onerror = () => reject(new Error('Échec chargement Mermaid'));
+        document.head.appendChild(script);
+    });
+}
+
+async function ensureTable() {
+    showInit('Vérification table...');
+    const tables = await grist.docApi.listTables();
+    if (!tables.includes(TABLE_NAME)) {
+        showInit('Création table...');
+        await grist.docApi.applyUserActions([['AddTable', TABLE_NAME, TABLE_COLS]]);
+    }
+}
+
+async function loadArtefacts() {
+    const data = await grist.docApi.fetchTable(TABLE_NAME);
+    const items = [];
+    const docs = [];
+    const n = data.id ? data.id.length : 0;
+    
+    for (let i = 0; i < n; i++) {
+        const art = {
+            id: data.id[i],
+            Nom: data.Nom?.[i] || '',
+            Type: data.Type?.[i] || '',
+            Code: data.Code?.[i] || '',
+            Description: data.Description?.[i] || '',
+            IsDoc: data.IsDoc?.[i] || false
+        };
+        items.push(art);
+        
+        // Collect documentation artefacts
+        if (art.IsDoc && art.Type?.toLowerCase() === 'markdown') {
+            docs.push(art);
+        }
+    }
+    
+    state.artefacts = items;
+    state.documentations = docs;
+    
+    updateSelect();
+    updateDocsList();
+    
+    if (items.length > 0 && !state.current) selectArtefact(items[0].id);
+}
+
+async function loadGristSchema() {
+    try {
+        const tables = await grist.docApi.listTables();
+        const schema = {};
+        
+        for (const tableName of tables.filter(t => !t.startsWith('_grist'))) {
+            try {
+                const data = await grist.docApi.fetchTable(tableName);
+                const columns = Object.keys(data).filter(k => k !== 'id' && k !== 'manualSort');
+                schema[tableName] = {
+                    name: tableName,
+                    columns: columns,
+                    sampleData: data.id ? data.id.slice(0, 3).map((id, i) => {
+                        const row = { id };
+                        columns.forEach(c => row[c] = data[c]?.[i]);
+                        return row;
+                    }) : []
+                };
+            } catch (e) {
+                console.warn(`Impossible de charger ${tableName}:`, e);
+            }
+        }
+        
+        state.gristSchema = schema;
+        console.log('📊 Schéma Grist chargé:', Object.keys(schema).length, 'tables');
+    } catch (e) {
+        console.warn('Impossible de charger le schéma Grist:', e);
+    }
+}
+
+function loadAIConfig() {
+    const saved = localStorage.getItem('artefactory_ai_config_v11');
+    if (saved) {
+        try {
+            const config = JSON.parse(saved);
+            if (config.webhookUrl) document.getElementById('webhookUrl').value = config.webhookUrl;
+            if (config.apiKey) document.getElementById('apiKey').value = config.apiKey;
+            if (config.autoCorrect !== undefined) document.getElementById('autoCorrect').checked = config.autoCorrect;
+            if (config.includeSchema !== undefined) document.getElementById('includeSchema').checked = config.includeSchema;
+            if (config.selectedDocs) state.selectedDocs = new Set(config.selectedDocs);
+        } catch (e) {}
+    }
+}
+
+function saveAIConfig() {
+    const config = {
+        webhookUrl: document.getElementById('webhookUrl').value,
+        apiKey: document.getElementById('apiKey').value,
+        autoCorrect: document.getElementById('autoCorrect').checked,
+        includeSchema: document.getElementById('includeSchema').checked,
+        selectedDocs: Array.from(state.selectedDocs)
+    };
+    localStorage.setItem('artefactory_ai_config_v11', JSON.stringify(config));
+}
+
+// ============ DOCUMENTATION UI ============
+function updateDocsList() {
+    const container = document.getElementById('aiDocsList');
+    const qpContainer = document.getElementById('qpDocsList');
+    const countEl = document.getElementById('selectedDocsCount');
+    
+    if (state.documentations.length === 0) {
+        container.innerHTML = '<span class="ai-docs-empty">Aucune documentation disponible. Créez des artefacts Markdown marqués comme documentation.</span>';
+        qpContainer.innerHTML = '<span class="ai-docs-empty">Pas de documentation</span>';
+        countEl.textContent = '0';
+        return;
+    }
+    
+    const createChips = (targetContainer) => {
+        targetContainer.innerHTML = '';
+        state.documentations.forEach(doc => {
+            const chip = document.createElement('div');
+            chip.className = 'doc-chip' + (state.selectedDocs.has(doc.id) ? ' selected' : '');
+            chip.innerHTML = `
+                <span class="doc-chip-icon">📄</span>
+                <span>${doc.Nom || 'Sans nom'}</span>
+            `;
+            chip.onclick = () => toggleDoc(doc.id);
+            chip.title = doc.Description || doc.Code?.substring(0, 100) + '...';
+            targetContainer.appendChild(chip);
+        });
+    };
+    
+    createChips(container);
+    createChips(qpContainer);
+    
+    countEl.textContent = state.selectedDocs.size;
+    updateAIContext();
+}
+
+function toggleDoc(docId) {
+    if (state.selectedDocs.has(docId)) {
+        state.selectedDocs.delete(docId);
+    } else {
+        state.selectedDocs.add(docId);
+    }
+    updateDocsList();
+    saveAIConfig();
+}
+
+function toggleDocsCollapse() {
+    state.docsCollapsed = !state.docsCollapsed;
+    document.getElementById('aiDocsList').classList.toggle('collapsed', state.docsCollapsed);
+    document.querySelector('.ai-docs-toggle').textContent = state.docsCollapsed ? '▶' : '▼';
+}
+
+function getSelectedDocsContent() {
+    const docs = [];
+    state.selectedDocs.forEach(id => {
+        const doc = state.documentations.find(d => d.id === id);
+        if (doc && doc.Code) {
+            docs.push({
+                id: doc.id,
+                name: doc.Nom || 'Sans nom',
+                description: doc.Description || '',
+                content: doc.Code
+            });
+        }
+    });
+    return docs;
+}
+
+// ============ UI UPDATES ============
+function showInit(msg, type) {
+    const b = document.getElementById('initBanner');
+    const m = document.getElementById('initMsg');
+    b.classList.remove('hidden', 'ok', 'err');
+    if (type) {
+        b.classList.add(type);
+        b.querySelector('.init-spinner').style.display = 'none';
+    }
+    m.textContent = msg;
+}
+
+function hideInit() {
+    document.getElementById('initBanner').classList.add('hidden');
+}
+
+function updateSelect() {
+    const sel = document.getElementById('artSelect');
+    const cnt = document.getElementById('artCount');
+    sel.innerHTML = '';
+    
+    if (state.artefacts.length === 0) {
+        sel.innerHTML = '<option value="">Aucun artefact</option>';
+    } else {
+        sel.innerHTML = '<option value="">-- Sélectionnez --</option>';
+        
+        // Group: Regular artefacts
+        const regular = state.artefacts.filter(a => !a.IsDoc);
+        const docs = state.artefacts.filter(a => a.IsDoc);
+        
+        if (regular.length > 0) {
+            const grp1 = document.createElement('optgroup');
+            grp1.label = '🎨 Artefacts';
+            regular.forEach(a => {
+                const t = TYPES[a.Type?.toLowerCase()]?.icon || '📄';
+                const opt = document.createElement('option');
+                opt.value = a.id;
+                opt.textContent = `${t} ${a.Nom || 'Sans nom'} (#${a.id})`;
+                grp1.appendChild(opt);
+            });
+            sel.appendChild(grp1);
+        }
+        
+        if (docs.length > 0) {
+            const grp2 = document.createElement('optgroup');
+            grp2.label = '📚 Documentation';
+            docs.forEach(a => {
+                const opt = document.createElement('option');
+                opt.value = a.id;
+                opt.textContent = `📄 ${a.Nom || 'Sans nom'} (#${a.id})`;
+                grp2.appendChild(opt);
+            });
+            sel.appendChild(grp2);
+        }
+    }
+    cnt.textContent = state.artefacts.length;
+    if (state.current) sel.value = state.current.id;
+}
+
+function onSelect() {
+    const id = parseInt(document.getElementById('artSelect').value);
+    if (id) selectArtefact(id);
+}
+
+function selectArtefact(id) {
+    const art = state.artefacts.find(a => a.id === id);
+    if (!art) return;
+    
+    state.current = art;
+    document.getElementById('artSelect').value = id;
+    
+    const code = art.Code || '';
+    const rawType = (art.Type || '').toLowerCase().trim();
+    const type = rawType && TYPES[rawType] ? rawType : detectType(code);
+    
+    state.code = code;
+    state.originalCode = code;
+    state.currentType = type;
+    state.isModified = false;
+    state.consoleErrors = [];
+    
+    updateHeader(art.Nom || 'Artefact', type, art.Description, art.IsDoc);
+    updateEditor(code, type);
+    updateFooter(type, code);
+    updateModifiedIndicator();
+    updateAIContext();
+    clearConsole();
+    
+    if (!code.trim()) {
+        showEmpty('Code vide - Éditez ou utilisez l\'IA');
+        return;
+    }
+    
+    setStatus('loading', 'Chargement...');
+    render(type, code);
+}
+
+function updateHeader(name, type, desc, isDoc) {
+    document.getElementById('artName').textContent = name;
+    document.getElementById('artDesc').textContent = desc || 'Artefact Grist';
+    const badge = document.getElementById('typeBadge');
+    const t = TYPES[type] || TYPES.html;
+    badge.textContent = t.icon + ' ' + t.label;
+    badge.className = 'type-badge ' + t.cls;
+    badge.style.display = 'inline-block';
+    
+    // Show doc badge if it's a documentation
+    const docBadge = document.getElementById('docBadge');
+    docBadge.style.display = isDoc ? 'inline-block' : 'none';
+}
+
+function updateEditor(code, type) {
+    const mode = TYPES[type]?.mode || 'text';
+    aceEditor.session.setMode('ace/mode/' + mode);
+    aceEditor.setValue(code, -1);
+    document.getElementById('codeInfo').textContent = code.split('\n').length + ' lignes';
+}
+
+function updateFooter(type, code) {
+    const t = TYPES[type] || TYPES.html;
+    const lines = code.split('\n').length;
+    const size = new Blob([code]).size;
+    document.getElementById('footerType').textContent = t.icon + ' ' + t.label;
+    document.getElementById('footerSize').textContent = '📏 ' + formatBytes(size);
+    document.getElementById('footerLines').textContent = '📝 ' + lines + ' lignes';
+}
+
+function updateModifiedIndicator() {
+    document.getElementById('codeModified').style.display = state.isModified ? 'inline' : 'none';
+}
+
+function updateAIContext() {
+    const mode = state.currentType || 'html';
+    const lines = state.code ? state.code.split('\n').length : 0;
+    const docsCount = state.selectedDocs.size;
+    
+    document.getElementById('ctxMode').textContent = TYPES[mode]?.label || mode;
+    document.getElementById('ctxLines').textContent = lines + ' lignes';
+    
+    const selCtx = document.getElementById('ctxSelection');
+    if (state.selection) {
+        selCtx.textContent = `L${state.selection.start.row + 1}-${state.selection.end.row + 1}`;
+        selCtx.style.display = 'inline';
+    } else {
+        selCtx.style.display = 'none';
+    }
+    
+    // Show docs context
+    const docsCtx = document.getElementById('ctxDocs');
+    if (docsCount > 0) {
+        docsCtx.textContent = `📚 ${docsCount} doc${docsCount > 1 ? 's' : ''}`;
+        docsCtx.style.display = 'inline';
+    } else {
+        docsCtx.style.display = 'none';
+    }
+}
+
+function setStatus(s, txt) {
+    const dot = document.getElementById('statusDot');
+    dot.className = 'status-dot';
+    if (s === 'error') dot.classList.add('error');
+    if (s === 'loading') dot.classList.add('loading');
+    document.getElementById('statusTxt').textContent = txt;
+}
+
+function showEmpty(msg) {
+    document.getElementById('deviceFrame').innerHTML = `
+        <div class="state-box">
+            <div class="state-icon">🎨</div>
+            <div class="state-title">${msg || 'Aucun artefact'}</div>
+            <div class="state-desc">Utilisez l'assistant IA (Ctrl+K) pour créer du contenu</div>
+        </div>`;
+    setStatus('ok', 'En attente');
+}
+
+function showError(title, msg) {
+    document.getElementById('deviceFrame').innerHTML = `
+        <div class="state-box error-box">
+            <div class="state-icon">⚠️</div>
+            <div class="state-title">${title}</div>
+            <div class="error-details">${msg}</div>
+        </div>`;
+}
+
+function formatBytes(b) {
+    if (b === 0) return '0 B';
+    const k = 1024, s = ['B', 'KB', 'MB'];
+    const i = Math.floor(Math.log(b) / Math.log(k));
+    return (b / Math.pow(k, i)).toFixed(1) + ' ' + s[i];
+}
+
+// ============ CODE EDITOR EVENTS ============
+function onCodeChange() {
+    const code = aceEditor.getValue();
+    state.code = code;
+    state.isModified = code !== state.originalCode;
+    
+    document.getElementById('codeInfo').textContent = code.split('\n').length + ' lignes';
+    updateFooter(state.currentType, code);
+    updateModifiedIndicator();
+    updateAIContext();
+    
+    if (document.getElementById('hotReload').checked && state.view === 'split') {
+        if (state.hotReloadTimer) clearTimeout(state.hotReloadTimer);
+        state.hotReloadTimer = setTimeout(() => {
+            setStatus('loading', 'Compilation...');
+            render(state.currentType, code);
+        }, 800);
+    }
+}
+
+function onCursorChange() {
+    const pos = aceEditor.getCursorPosition();
+    document.getElementById('footerCursor').textContent = `Ln ${pos.row + 1}, Col ${pos.column + 1}`;
+}
+
+function onSelectionChange() {
+    const range = aceEditor.getSelectionRange();
+    const indicator = document.getElementById('selectionIndicator');
+    
+    if (range.start.row !== range.end.row || range.start.column !== range.end.column) {
+        state.selection = range;
+        const lines = range.end.row - range.start.row + 1;
+        document.getElementById('selectionText').textContent = `${lines} ligne${lines > 1 ? 's' : ''}`;
+        indicator.classList.add('visible');
+    } else {
+        state.selection = null;
+        indicator.classList.remove('visible');
+    }
+    updateAIContext();
+}
+
+function applyCode() {
+    const code = aceEditor.getValue();
+    state.code = code;
+    clearConsole();
+    setStatus('loading', 'Compilation...');
+    render(state.currentType, code);
+}
+
+// ============ TYPE DETECTION ============
+function detectType(code) {
+    const c = code.trim();
+    // Ordre du plus spécifique au plus générique. Le Type Grist sur l'artefact
+    // override toujours cette détection (cf. selectArtefact) — fallback only.
+    if (/^<svg[\s>]/i.test(c)) return 'svg';
+    if (/^(graph|flowchart|sequenceDiagram|classDiagram|stateDiagram|erDiagram|gantt|pie|mindmap)\b/m.test(c)) return 'mermaid';
+    if (/grist\.(ready|onRecords|onRecord|docApi)\b/.test(c)) return 'grist';
+    if (/\b(useState|useEffect|useMemo|useCallback)\b/.test(c) || /^\s*const\s+[A-Z]\w*\s*=\s*\(\s*\)\s*=>/m.test(c)) return 'react';
+    if (/^#{1,6}\s/m.test(c)) return 'markdown';
+    return 'html';
+}
+
+function cleanReactCode(code) {
+    // [\s\S]*? autorise les imports multilignes (Babel standalone ne résout pas les modules).
+    let c = code
+        .replace(/^import\s+[\s\S]*?from\s+['"][^'"]+['"];?\s*$/gm, '')
+        .replace(/^export\s+default\s+/gm, '')
+        .replace(/^export\s+/gm, '');
+    
+    const patterns = [
+        /^const\s+([A-Z][a-zA-Z0-9]*)\s*=\s*\(/m,
+        /^function\s+([A-Z][a-zA-Z0-9]*)\s*\(/m
+    ];
+    let name = null;
+    for (const p of patterns) {
+        const m = c.match(p);
+        if (m) { name = m[1]; break; }
+    }
+    if (name && name !== 'App') c += '\nconst App = ' + name + ';';
+    return c.trim();
+}
+
+// ============ RENDER ============
+function render(type, code) {
+    try {
+        switch (type) {
+            case 'react': case 'jsx': renderReact(code); break;
+            case 'html': renderHTML(code); break;
+            case 'grist': renderGristWidget(code); break;
+            case 'svg': renderSVG(code); break;
+            case 'mermaid': renderMermaid(code); break;
+            case 'markdown': case 'md': renderMarkdown(code); break;
+            default: renderHTML(code);
+        }
+    } catch (e) {
+        console.error('Render error:', e);
+        setStatus('error', e.message);
+        showError('Erreur', e.message);
+    }
+}
+
+const REACT_TEMPLATE = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://unpkg.com/react@18/umd/react.development.js"><\/script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"><\/script>
+<script src="https://unpkg.com/@babel/standalone@7/babel.min.js"><\/script>
+<script src="https://cdn.tailwindcss.com"><\/script>
+<script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"><\/script>
+<style>*{box-sizing:border-box}html,body,#root{margin:0;min-height:100%;height:auto}body{font-family:system-ui,sans-serif}.err-box{padding:20px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;margin:16px;color:#991b1b}</style>
+</head><body><div id="root"></div>
+<script type="text/babel" data-presets="react">
+const{useState,useEffect,useRef,useMemo,useCallback,useContext,useReducer,createContext,Fragment}=React;
+const RC=window.Recharts||{};
+const{LineChart,Line,AreaChart,Area,BarChart,Bar,PieChart,Pie,Cell,XAxis,YAxis,CartesianGrid,Tooltip,Legend,ResponsiveContainer}=RC;
+
+const Card=({children,className="",...p})=><div className={"bg-white rounded-lg border shadow-sm "+className}{...p}>{children}</div>;
+const CardHeader=({children,className=""})=><div className={"p-6 pb-2 "+className}>{children}</div>;
+const CardTitle=({children,className=""})=><h3 className={"text-lg font-semibold "+className}>{children}</h3>;
+const CardContent=({children,className=""})=><div className={"p-6 pt-0 "+className}>{children}</div>;
+const Button=({children,variant="default",size="default",className="",...p})=>{const v={default:"bg-blue-600 text-white hover:bg-blue-700",outline:"border border-gray-300 bg-white hover:bg-gray-50",ghost:"hover:bg-gray-100"};const s={default:"px-4 py-2",sm:"px-3 py-1.5 text-sm",lg:"px-6 py-3"};return<button className={"inline-flex items-center justify-center rounded-md font-medium transition-colors disabled:opacity-50 "+(v[variant]||v.default)+" "+(s[size]||s.default)+" "+className}{...p}>{children}</button>};
+const Input=({className="",...p})=><input className={"w-full px-3 py-2 border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 "+className}{...p}/>;
+const Badge=({children,variant="default",className=""})=>{const v={default:"bg-blue-100 text-blue-800",success:"bg-green-100 text-green-800",destructive:"bg-red-100 text-red-800"};return<span className={"inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium "+(v[variant]||v.default)+" "+className}>{children}</span>};
+
+class ErrorBoundary extends React.Component{constructor(p){super(p);this.state={hasError:false,error:null}}static getDerivedStateFromError(e){return{hasError:true,error:e}}componentDidCatch(e,i){console.error("React Error:",e,i);window.parent.postMessage({type:"error",message:e.message},"*")}render(){if(this.state.hasError)return<div className="err-box"><h3>Erreur</h3><pre>{this.state.error?.message}</pre></div>;return this.props.children}}
+
+const _c={...console};["log","warn","error","info"].forEach(m=>{console[m]=(...a)=>{_c[m](...a);window.parent.postMessage({type:"console",method:m,args:a.map(x=>{try{return typeof x==="object"?JSON.stringify(x,null,2):String(x)}catch{return String(x)}})},"*")}});
+
+try{
+%%USER_CODE%%
+
+const C=typeof App!=="undefined"?App:typeof Component!=="undefined"?Component:null;
+if(C){ReactDOM.createRoot(document.getElementById("root")).render(<ErrorBoundary><C/></ErrorBoundary>);window.parent.postMessage({type:"ready"},"*")}
+else{document.getElementById("root").innerHTML="<div class=err-box><h3>Composant non trouvé</h3><p>Nommez-le App ou Component</p></div>"}
+}catch(e){document.getElementById("root").innerHTML="<div class=err-box><h3>Erreur</h3><pre>"+e.message+"</pre></div>";window.parent.postMessage({type:"error",message:e.message},"*")}
+<\/script></body></html>`;
+
+function renderReact(code) {
+    const html = REACT_TEMPLATE.replace('%%USER_CODE%%', cleanReactCode(code));
+    renderFrame(html);
+}
+
+function renderHTML(code) {
+    let html;
+    if (code.includes('<!DOCTYPE') || code.includes('<html')) {
+        html = code;
+    } else {
+        html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdn.tailwindcss.com"><\/script>
+<style>*{box-sizing:border-box}html,body{margin:0;min-height:100%}body{font-family:system-ui,sans-serif;padding:16px;line-height:1.5}</style>
+</head><body>${code}
+<script>const _c={...console};["log","warn","error","info"].forEach(m=>{console[m]=(...a)=>{_c[m](...a);window.parent.postMessage({type:"console",method:m,args:a.map(x=>String(x))},"*")}});window.parent.postMessage({type:"ready"},"*")<\/script>
+</body></html>`;
+    }
+    renderFrame(html);
+}
+
+function renderGristWidget(code) {
+    let html = code;
+    if (state.gristBridgeMode && code.includes('grist-plugin-api.js')) {
+        html = injectGristBridge(code);
+        console.log('🌉 Mode Bridge actif');
+    }
+    renderFrame(html);
+}
+
+function renderFrame(html) {
+    const frame = document.getElementById('deviceFrame');
+    
+    let iframe = state.renderIframe;
+    if (!iframe || !iframe.parentNode) {
+        iframe = document.createElement('iframe');
+        iframe.className = 'render-iframe';
+        iframe.sandbox = 'allow-scripts allow-same-origin';
+        state.renderIframe = iframe;
+        frame.innerHTML = '';
+        frame.appendChild(iframe);
+    }
+    
+    if (state.gristBridgeMode && state.gristBridge) {
+        state.gristBridge.setCurrentIframe(iframe);
+    }
+    
+    iframe.srcdoc = html;
+    iframe.onload = () => {
+        if (state.gristBridgeMode && html.includes('grist-bridge')) {
+            setStatus('ok', '🌉 Bridge actif');
+        } else {
+            setStatus('ok', 'Rendu terminé');
+        }
+    };
+}
+
+function renderSVG(code) {
+    const frame = document.getElementById('deviceFrame');
+    state.renderIframe = null;
+    const clean = code.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '');
+    frame.innerHTML = `<div style="width:100%;height:100%;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px;background:#f8fafc">${clean}</div>`;
+    setStatus('ok', 'SVG');
+}
+
+async function renderMermaid(code) {
+    const frame = document.getElementById('deviceFrame');
+    state.renderIframe = null;
+    
+    try {
+        await loadMermaid();
+    } catch (e) {
+        setStatus('error', 'Erreur Mermaid');
+        showError('Erreur', e.message);
+        return;
+    }
+    
+    const id = 'mm-' + Date.now();
+    frame.innerHTML = `<div style="width:100%;height:100%;overflow:auto;display:flex;align-items:center;justify-content:center;padding:20px;background:#f8fafc"><div id="${id}"></div></div>`;
+    
+    try {
+        const { svg } = await mermaid.render(id + '-svg', code);
+        document.getElementById(id).innerHTML = svg;
+        setStatus('ok', 'Mermaid');
+    } catch (e) {
+        setStatus('error', 'Mermaid: ' + e.message);
+        showError('Erreur Mermaid', e.message);
+    }
+}
+
+function renderMarkdown(code) {
+    const frame = document.getElementById('deviceFrame');
+    state.renderIframe = null;
+    frame.innerHTML = `<div class="markdown-body" style="width:100%;height:100%;overflow:auto">${marked.parse(code)}</div>`;
+    setStatus('ok', 'Markdown');
+}
+
+// ============ SPLITTER ============
+function initSplitter() {
+    const splitter = document.getElementById('splitter');
+    splitter.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', onDrag);
+    document.addEventListener('mouseup', stopDrag);
+}
+
+function startDrag(e) {
+    if (state.view !== 'split') return;
+    state.isDragging = true;
+    document.getElementById('splitter').classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+}
+
+function onDrag(e) {
+    if (!state.isDragging) return;
+    const panels = document.getElementById('panels');
+    const rect = panels.getBoundingClientRect();
+    state.splitRatio = Math.max(0.2, Math.min(0.8, (e.clientX - rect.left) / rect.width));
+    applySplitRatio();
+}
+
+function stopDrag() {
+    if (!state.isDragging) return;
+    state.isDragging = false;
+    document.getElementById('splitter').classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    aceEditor.resize();
+}
+
+function applySplitRatio() {
+    const renderZone = document.getElementById('renderZone');
+    const codeZone = document.getElementById('codeZone');
+    if (state.view === 'split') {
+        renderZone.style.flex = '0 0 ' + (state.splitRatio * 100) + '%';
+        codeZone.style.flex = '0 0 ' + ((1 - state.splitRatio) * 100 - 1) + '%';
+    } else {
+        renderZone.style.flex = '';
+        codeZone.style.flex = '';
+    }
+}
+
+// ============ VIEW CONTROLS ============
+function setView(v) {
+    state.view = v;
+    const panels = document.getElementById('panels');
+    const renderZone = document.getElementById('renderZone');
+    const codeZone = document.getElementById('codeZone');
+    const splitter = document.getElementById('splitter');
+    
+    panels.classList.remove('split-h');
+    codeZone.classList.remove('visible');
+    renderZone.style.display = 'flex';
+    splitter.style.display = 'none';
+    renderZone.style.flex = '';
+    codeZone.style.flex = '';
+    
+    document.querySelectorAll('#toolbar .btn').forEach(b => b.classList.remove('active'));
+    
+    if (v === 'render') {
+        document.getElementById('btnRender').classList.add('active');
+    } else if (v === 'code') {
+        document.getElementById('btnCode').classList.add('active');
+        renderZone.style.display = 'none';
+        codeZone.classList.add('visible');
+        setTimeout(() => aceEditor.resize(), 10);
+    } else if (v === 'split') {
+        document.getElementById('btnSplit').classList.add('active');
+        panels.classList.add('split-h');
+        codeZone.classList.add('visible');
+        splitter.style.display = 'block';
+        applySplitRatio();
+        setTimeout(() => aceEditor.resize(), 10);
+    }
+}
+
+function setDevice(d) {
+    state.device = d;
+    document.querySelectorAll('.device-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector(`[data-d="${d}"]`).classList.add('active');
+    document.getElementById('deviceFrame').className = 'device-frame ' + d;
+    document.getElementById('renderContent').classList.toggle('no-pattern', d === 'desktop');
+}
+
+function toggleConsole() {
+    state.showConsole = !state.showConsole;
+    document.getElementById('consoleZone').classList.toggle('visible', state.showConsole);
+    document.getElementById('btnConsole').classList.toggle('active', state.showConsole);
+}
+
+function toggleBridgeMode() {
+    state.gristBridgeMode = document.getElementById('bridgeToggle').checked;
+    if (state.current && state.code) render(state.currentType, state.code);
+}
+
+function toggleFullscreen() {
+    state.fullscreen = !state.fullscreen;
+    document.body.classList.toggle('is-fullscreen', state.fullscreen);
+    document.getElementById('header').classList.toggle('hidden', state.fullscreen);
+    document.getElementById('toolbar').classList.toggle('hidden', state.fullscreen);
+    document.getElementById('statusBar').classList.toggle('hidden', state.fullscreen);
+    document.getElementById('renderBar').classList.toggle('hidden', state.fullscreen);
+    document.getElementById('btnFullscreen').classList.toggle('active', state.fullscreen);
+}
+
+function toggleAIPanel() {
+    state.showAIPanel = !state.showAIPanel;
+    document.getElementById('aiPanel').classList.toggle('visible', state.showAIPanel);
+    document.getElementById('btnAI').classList.toggle('active', state.showAIPanel);
+    saveAIConfig();
+}
+
+// ============ CONSOLE ============
+function onMessage(e) {
+    const d = e.data;
+    if (!d || !d.type) return;
+    if (d.type === 'ready') setStatus('ok', 'Rendu terminé');
+    if (d.type === 'error') {
+        setStatus('error', d.message);
+        state.consoleErrors.push(d.message);
+        addConsole('error', [d.message]);
+        checkAutoCorrect();
+    }
+    if (d.type === 'console') {
+        addConsole(d.method, d.args);
+        if (d.method === 'error') {
+            state.consoleErrors.push(d.args.join(' '));
+            checkAutoCorrect();
+        }
+    }
+}
+
+function addConsole(method, args) {
+    const el = document.getElementById('consoleContent');
+    const line = document.createElement('div');
+    line.className = 'console-line ' + method;
+    const p = { log: '›', warn: '⚠', error: '✕', info: 'ℹ' }[method] || '›';
+    line.textContent = p + ' ' + args.join(' ');
+    el.appendChild(line);
+    el.scrollTop = el.scrollHeight;
+}
+
+function clearConsole() {
+    document.getElementById('consoleContent').innerHTML = '';
+    state.consoleErrors = [];
+}
+
+// ============ AI ASSISTANT ============
+function toggleScreenshot() {
+    state.includeScreenshot = !state.includeScreenshot;
+    document.getElementById('screenshotBtn').classList.toggle('active', state.includeScreenshot);
+}
+
+async function captureScreenshot() {
+    try {
+        const frame = document.getElementById('deviceFrame');
+        const iframe = frame.querySelector('iframe');
+        
+        if (iframe && iframe.contentDocument) {
+            const canvas = await html2canvas(iframe.contentDocument.body, {
+                useCORS: true,
+                allowTaint: true,
+                scale: 0.5
+            });
+            return canvas.toDataURL('image/jpeg', 0.7);
+        }
+        return null;
+    } catch (e) {
+        console.warn('Screenshot failed:', e);
+        return null;
+    }
+}
+
+function openQuickPrompt() {
+    const overlay = document.getElementById('quickPromptOverlay');
+    const input = document.getElementById('quickPromptInput');
+    const ctx = document.getElementById('qpContext');
+    
+    if (state.selection) {
+        const lines = state.selection.end.row - state.selection.start.row + 1;
+        ctx.textContent = `Sélection: ${lines} ligne${lines > 1 ? 's' : ''}`;
+    } else {
+        ctx.textContent = 'Code complet';
+    }
+    
+    // Update docs list in quick prompt
+    updateDocsList();
+    
+    overlay.classList.add('visible');
+    input.value = '';
+    setTimeout(() => input.focus(), 100);
+}
+
+function closeQuickPrompt() {
+    document.getElementById('quickPromptOverlay').classList.remove('visible');
+}
+
+function closeQuickPromptOnOverlay(e) {
+    if (e.target.classList.contains('quick-prompt-overlay')) closeQuickPrompt();
+}
+
+function useHint(hint) {
+    document.getElementById('quickPromptInput').value = hint;
+    document.getElementById('quickPromptInput').focus();
+}
+
+function onQuickPromptKeydown(e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        submitQuickPrompt();
+    }
+    if (e.key === 'Escape') closeQuickPrompt();
+}
+
+function onAIInputKeydown(e) {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        sendAIRequest();
+    }
+}
+
+async function submitQuickPrompt() {
+    const prompt = document.getElementById('quickPromptInput').value.trim();
+    if (!prompt) return;
+    
+    closeQuickPrompt();
+    
+    if (!state.showAIPanel) toggleAIPanel();
+    
+    document.getElementById('aiInput').value = prompt;
+    
+    await sendAIRequest();
+}
+
+async function sendAIRequest({ isAutoCorrect = false } = {}) {
+    const prompt = document.getElementById('aiInput').value.trim();
+    if (!prompt || state.aiProcessing) return;
+
+    const webhookUrl = document.getElementById('webhookUrl').value.trim();
+    if (!webhookUrl) {
+        addAIMessage('error', '⚠️ Configurez l\'URL du webhook n8n');
+        return;
+    }
+
+    state.aiProcessing = true;
+    // Reset compteur uniquement pour un envoi initié par l'utilisateur :
+    // sinon checkAutoCorrect → sendAIRequest reset à chaque tour et la garde 3/3 ne déclenche jamais.
+    if (!isAutoCorrect) state.aiCorrectionCount = 0;
+    setAIStatus('loading', 'Génération en cours...');
+    document.getElementById('aiSendBtn').disabled = true;
+    
+    addAIMessage('user', prompt);
+    document.getElementById('aiInput').value = '';
+    
+    const context = await buildAIContext(prompt);
+    
+    try {
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                ...(document.getElementById('apiKey').value && {
+                    'Authorization': 'Bearer ' + document.getElementById('apiKey').value
+                })
+            },
+            body: JSON.stringify(context)
+        });
+        
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const result = await response.json();
+        handleAIResponse(result);
+        
+    } catch (e) {
+        console.error('AI request failed:', e);
+        addAIMessage('error', '❌ Erreur: ' + e.message);
+        setAIStatus('error', 'Erreur de connexion');
+    } finally {
+        state.aiProcessing = false;
+        document.getElementById('aiSendBtn').disabled = false;
+    }
+    
+    saveAIConfig();
+}
+
+async function buildAIContext(prompt) {
+    let code = state.code;
+    let codeContext = 'full';
+    
+    if (state.selection) {
+        const selectedText = aceEditor.getSelectedText();
+        if (selectedText) {
+            code = selectedText;
+            codeContext = 'selection';
+        }
+    }
+    
+    const context = {
+        prompt,
+        code,
+        codeContext,
+        mode: state.currentType,
+        artefactName: state.current?.Nom || 'Nouveau',
+        artefactId: state.current?.id,
+        console: state.consoleErrors.slice(-5),
+        timestamp: new Date().toISOString(),
+        useVision: state.includeScreenshot === true
+    };
+    
+    // Selection info
+    if (state.selection) {
+        context.selection = {
+            startLine: state.selection.start.row + 1,
+            endLine: state.selection.end.row + 1,
+            startCol: state.selection.start.column,
+            endCol: state.selection.end.column
+        };
+        context.fullCode = state.code;
+    }
+    
+    // Include selected documentation
+    const selectedDocs = getSelectedDocsContent();
+    if (selectedDocs.length > 0) {
+        context.documentation = selectedDocs;
+        console.log(`📚 ${selectedDocs.length} documentation(s) incluse(s) dans le contexte`);
+    }
+    
+    // Include Grist schema if enabled (chargé lazy à la première demande)
+    if (document.getElementById('includeSchema').checked) {
+        if (!state.gristSchema) {
+            try { await loadGristSchema(); } catch (e) { console.warn('Schéma Grist indisponible:', e); }
+        }
+        if (state.gristSchema) context.gristSchema = state.gristSchema;
+    }
+    
+    // Capture screenshot if enabled
+    if (state.includeScreenshot) {
+        const screenshot = await captureScreenshot();
+        if (screenshot) {
+            context.screenshot = screenshot;
+        } else {
+            context.useVision = false;
+            console.warn('Screenshot capture failed, useVision disabled');
+        }
+    }
+    
+    // Conversation history (last 10 messages)
+    context.conversation = state.aiConversation.slice(-10).map(m => ({
+        role: m.role,
+        content: m.content.substring(0, 500)
+    }));
+    
+    return context;
+}
+
+function handleAIResponse(result) {
+    if (result.error) {
+        addAIMessage('error', '❌ ' + result.error);
+        setAIStatus('error', 'Erreur');
+        return;
+    }
+    
+    const code = result.code || result.content || result.response;
+    const message = result.message || result.explanation;
+    
+    if (code) {
+        if (state.selection && result.replaceSelection !== false) {
+            aceEditor.session.replace(state.selection, code);
+        } else {
+            aceEditor.setValue(code, -1);
+        }
+        
+        state.code = aceEditor.getValue();
+        state.isModified = true;
+        updateModifiedIndicator();
+        
+        clearConsole();
+        setStatus('loading', 'Compilation...');
+        render(state.currentType, state.code);
+        
+        addAIMessage('assistant', message || '✅ Code généré et appliqué');
+        setAIStatus('ok', 'Terminé');
+    } else if (message) {
+        addAIMessage('assistant', message);
+        setAIStatus('ok', 'Réponse reçue');
+    } else {
+        addAIMessage('error', '⚠️ Réponse vide');
+        setAIStatus('error', 'Réponse invalide');
+    }
+}
+
+function checkAutoCorrect() {
+    if (!document.getElementById('autoCorrect').checked) return;
+    if (state.aiProcessing) return;
+    if (state.aiCorrectionCount >= 3) {
+        addAIMessage('system', '⚠️ Limite de corrections automatiques atteinte (3/3)');
+        return;
+    }
+    if (state.consoleErrors.length === 0) return;
+    
+    setTimeout(async () => {
+        if (state.consoleErrors.length === 0 || state.aiProcessing) return;
+        
+        state.aiCorrectionCount++;
+        addAIMessage('system', `🔄 Correction automatique (${state.aiCorrectionCount}/3)...`);
+        
+        document.getElementById('aiInput').value = 'Corrige les erreurs suivantes:\n' + state.consoleErrors.join('\n');
+        await sendAIRequest({ isAutoCorrect: true });
+    }, 1500);
+}
+
+function addAIMessage(role, content) {
+    const conv = document.getElementById('aiConversation');
+    const msg = document.createElement('div');
+    msg.className = 'ai-message ' + role;
+    // Escape HTML : on construit DOM-side au lieu d'innerHTML pour empêcher l'injection
+    // d'éventuel HTML/JS renvoyé par le webhook.
+    const text = String(content == null ? '' : content);
+    const lines = text.split('\n');
+    lines.forEach((line, i) => {
+        if (i > 0) msg.appendChild(document.createElement('br'));
+        msg.appendChild(document.createTextNode(line));
+    });
+    conv.appendChild(msg);
+    conv.scrollTop = conv.scrollHeight;
+
+    state.aiConversation.push({ role, content: text, timestamp: Date.now() });
+}
+
+function setAIStatus(status, text) {
+    const dot = document.getElementById('aiStatusDot');
+    dot.className = 'ai-status-dot';
+    if (status === 'loading') dot.classList.add('loading');
+    if (status === 'error') dot.classList.add('error');
+    document.getElementById('aiStatusText').textContent = text;
+}
+
+// ============ KEYBOARD ============
+function onKeyDown(e) {
+    if (e.key === 'Escape') {
+        if (document.getElementById('quickPromptOverlay').classList.contains('visible')) {
+            closeQuickPrompt();
+        } else if (state.fullscreen) {
+            toggleFullscreen();
+        } else if (document.getElementById('createModal').classList.contains('visible')) {
+            closeCreateModal();
+        }
+    }
+    
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        openQuickPrompt();
+    }
+}
+
+// ============ CREATE / SAVE ============
+function openCreateModal() {
+    document.getElementById('createModal').classList.add('visible');
+    document.getElementById('newName').value = '';
+    document.getElementById('newDesc').value = '';
+    document.getElementById('newAIPrompt').value = '';
+    document.getElementById('newIsDoc').checked = false;
+    selectType('react');
+    setTimeout(() => document.getElementById('newName').focus(), 100);
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').classList.remove('visible');
+}
+
+function closeModalOnOverlay(e) {
+    if (e.target.classList.contains('modal-overlay')) closeCreateModal();
+}
+
+function selectType(type) {
+    state.selectedType = type;
+    document.querySelectorAll('.type-card').forEach(c => c.classList.remove('selected'));
+    document.querySelector(`.type-card[data-type="${type}"]`).classList.add('selected');
+    
+    // Show doc option only for markdown
+    document.getElementById('docOption').style.display = type === 'markdown' ? 'block' : 'none';
+    if (type !== 'markdown') {
+        document.getElementById('newIsDoc').checked = false;
+    }
+}
+
+async function createArtefact() {
+    const name = document.getElementById('newName').value.trim();
+    const desc = document.getElementById('newDesc').value.trim();
+    const aiPrompt = document.getElementById('newAIPrompt').value.trim();
+    const type = state.selectedType;
+    const isDoc = type === 'markdown' && document.getElementById('newIsDoc').checked;
+    
+    if (!name) {
+        alert('Veuillez entrer un nom');
+        return;
+    }
+    
+    let code = TYPES[type]?.template || '';
+    
+    const generateWithAI = !!aiPrompt;
+    
+    try {
+        const result = await grist.docApi.applyUserActions([
+            ['AddRecord', TABLE_NAME, null, {
+                Nom: name,
+                Type: type,
+                Code: code,
+                Description: desc,
+                IsDoc: isDoc,
+                CreatedAt: Date.now() / 1000
+            }]
+        ]);
+        // applyUserActions retourne { retValues: [newId, ...] } : on récupère l'id directement
+        // au lieu de prendre [length-1] qui dépend du tri Grist.
+        const newId = result?.retValues?.[0];
+
+        closeCreateModal();
+        await loadArtefacts();
+
+        const newArt = newId ? state.artefacts.find(a => a.id === newId) : null;
+        if (newArt) {
+            selectArtefact(newArt.id);
+            
+            if (generateWithAI) {
+                setTimeout(() => {
+                    if (!state.showAIPanel) toggleAIPanel();
+                    document.getElementById('aiInput').value = aiPrompt;
+                    sendAIRequest();
+                }, 500);
+            }
+        }
+        
+    } catch (e) {
+        console.error('Erreur création:', e);
+        alert('Erreur: ' + e.message);
+    }
+}
+
+async function saveToGrist() {
+    if (!state.current) {
+        alert('Aucun artefact sélectionné');
+        return;
+    }
+    
+    const code = aceEditor.getValue();
+    
+    try {
+        await grist.docApi.applyUserActions([
+            ['UpdateRecord', TABLE_NAME, state.current.id, {
+                Code: code,
+                Type: state.currentType
+            }]
+        ]);
+        
+        state.originalCode = code;
+        state.isModified = false;
+        updateModifiedIndicator();
+        
+        const art = state.artefacts.find(a => a.id === state.current.id);
+        if (art) art.Code = code;
+        
+        // Refresh docs list if current is a doc
+        if (state.current.IsDoc) {
+            const docIndex = state.documentations.findIndex(d => d.id === state.current.id);
+            if (docIndex >= 0) {
+                state.documentations[docIndex].Code = code;
+            }
+        }
+        
+        setStatus('ok', 'Sauvegardé ✓');
+        
+    } catch (e) {
+        console.error('Erreur sauvegarde:', e);
+        alert('Erreur: ' + e.message);
+    }
+}
+
+function copyCode() {
+    const code = aceEditor.getValue();
+    if (!code) return;
+    navigator.clipboard.writeText(code).then(() => {
+        setStatus('ok', 'Copié ✓');
+    });
+}
+
+function refresh() {
+    if (state.current) {
+        clearConsole();
+        selectArtefact(state.current.id);
+    } else {
+        loadArtefacts();
+    }
+}
+
+// ============ INIT ============
+document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

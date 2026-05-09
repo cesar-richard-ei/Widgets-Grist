@@ -1,0 +1,17 @@
+{
+  "name": "artefactory",
+  "version": "1.0.0",
+  "description": "IDE no-code embarqué dans Grist : créer, éditer et prévisualiser ses widgets (React, HTML, SVG, Mermaid, Markdown) avec assistant IA optionnel",
+  "authors": [
+    {
+      "name": "nic01asfr",
+      "url": "https://github.com/nic01asfr"
+    }
+  ],
+  "grist": {
+    "widgetId": "artefactory",
+    "name": "Artefactory",
+    "accessLevel": "full",
+    "description": "IDE no-code dans Grist : créer/éditer ses widgets (React, HTML, SVG, Mermaid, Markdown) avec assistant IA optionnel"
+  }
+}
