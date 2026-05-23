@@ -1,0 +1,2028 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EclExt — Éclairage Public</title>
+<link href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://unpkg.com/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/suncalc@1.9.0/suncalc.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js"></script>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+    --bg-deep: #0a0e1a; --bg-panel: #111827; --bg-card: #1a2236;
+    --bg-input: #1e293b; --bg-hover: #253352;
+    --text-primary: #f1f5f9; --text-secondary: #94a3b8; --text-muted: #64748b;
+    --accent-amber: #f59e0b; --accent-warm: #fb923c; --accent-cool: #38bdf8;
+    --accent-blue: #3b82f6; --accent-purple: #8b5cf6;
+    --success: #10b981; --error: #ef4444; --warning: #f59e0b;
+    --glow-warm: rgba(251,146,60,0.15); --glow-cool: rgba(56,189,248,0.15);
+    --toolbar-h: 56px; --header-h: 44px; --panel-w: 360px;
+    --radius: 8px; --transition: 200ms ease;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family:'DM Sans',sans-serif; background:var(--bg-deep); color:var(--text-primary); height:100vh; overflow:hidden; }
+.app { display:flex; flex-direction:column; height:100vh; }
+.header { height:var(--header-h); background:linear-gradient(135deg,#1a1a2e 0%,#16213e 100%); border-bottom:1px solid rgba(251,146,60,0.2); display:flex; align-items:center; justify-content:space-between; padding:0 16px; z-index:200; }
+.header-brand { display:flex; align-items:center; gap:10px; font-weight:700; font-size:14px; }
+.header-brand .icon { font-size:20px; }
+.header-brand .badge { font-size:9px; background:var(--accent-amber); color:#000; padding:2px 6px; border-radius:4px; font-weight:700; letter-spacing:0.5px; }
+.header-stats { display:flex; gap:16px; font-size:11px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; }
+.header-stat { display:flex; align-items:center; gap:4px; }
+.header-stat .dot { width:6px; height:6px; border-radius:50%; }
+.header-stat .dot.on { background:var(--accent-amber); box-shadow:0 0 6px var(--accent-amber); }
+.header-stat .dot.off { background:var(--text-muted); }
+.main { flex:1; display:flex; position:relative; overflow:hidden; }
+#map { flex:1; }
+.panel { width:var(--panel-w); background:var(--bg-panel); border-left:1px solid rgba(255,255,255,0.06); display:flex; flex-direction:column; overflow:hidden; transition:transform var(--transition); }
+.panel.hidden { display:none; }
+.panel-head { padding:14px 16px; border-bottom:1px solid rgba(255,255,255,0.06); display:flex; align-items:center; justify-content:space-between; }
+.panel-title { font-weight:600; font-size:14px; display:flex; align-items:center; gap:8px; }
+.panel-close { background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; }
+.panel-body { flex:1; overflow-y:auto; padding:16px; }
+.toolbar { height:var(--toolbar-h); background:var(--bg-panel); border-top:1px solid rgba(251,146,60,0.15); display:flex; align-items:center; justify-content:space-between; padding:0 16px; z-index:200; }
+.toolbar-modules { display:flex; gap:2px; }
+.tb-btn { display:flex; flex-direction:column; align-items:center; padding:6px 14px; background:none; border:none; border-radius:6px; color:var(--text-muted); cursor:pointer; transition:var(--transition); font-family:inherit; }
+.tb-btn:hover { background:var(--bg-hover); color:var(--text-primary); }
+.tb-btn.active { background:rgba(251,146,60,0.15); color:var(--accent-amber); }
+.tb-btn .ico { font-size:18px; margin-bottom:2px; }
+.tb-btn .lbl { font-size:10px; font-weight:600; letter-spacing:0.3px; }
+.time-ctrl { display:flex; align-items:center; gap:10px; }
+.time-slider { width:160px; height:4px; appearance:none; background:linear-gradient(90deg,#1e293b 0%,var(--accent-amber) 50%,#1e293b 100%); border-radius:2px; cursor:pointer; }
+.time-slider::-webkit-slider-thumb { appearance:none; width:16px; height:16px; background:var(--accent-amber); border-radius:50%; box-shadow:0 0 8px rgba(245,158,11,0.5); cursor:pointer; }
+.time-display { font-family:'JetBrains Mono',monospace; font-size:14px; font-weight:600; color:var(--accent-amber); min-width:50px; text-align:center; }
+.time-date { font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--text-muted); }
+.section { margin-bottom:20px; }
+.section-title { font-size:10px; text-transform:uppercase; letter-spacing:0.8px; color:var(--text-muted); margin-bottom:10px; font-weight:700; }
+.input-group { margin-bottom:12px; }
+.input-label { display:block; font-size:11px; color:var(--text-secondary); margin-bottom:4px; font-weight:500; }
+.input-field { width:100%; padding:8px 10px; background:var(--bg-input); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius); color:var(--text-primary); font-size:12px; font-family:inherit; transition:var(--transition); }
+.input-field:focus { outline:none; border-color:var(--accent-amber); box-shadow:0 0 0 2px rgba(245,158,11,0.15); }
+.btn { padding:8px 14px; border-radius:var(--radius); font-size:12px; font-weight:600; cursor:pointer; border:none; display:inline-flex; align-items:center; gap:6px; transition:var(--transition); font-family:inherit; }
+.btn-primary { background:var(--accent-amber); color:#000; }
+.btn-primary:hover { background:#d97706; }
+.btn-ghost { background:rgba(255,255,255,0.06); color:var(--text-primary); }
+.btn-ghost:hover { background:rgba(255,255,255,0.1); }
+.btn-full { width:100%; justify-content:center; }
+.btn-sm { padding:5px 10px; font-size:11px; }
+.toggle-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; }
+.toggle-label { font-size:12px; }
+.toggle { width:36px; height:20px; background:var(--bg-input); border-radius:10px; position:relative; cursor:pointer; transition:var(--transition); border:1px solid rgba(255,255,255,0.1); }
+.toggle.on { background:var(--accent-amber); border-color:var(--accent-amber); }
+.toggle::after { content:''; position:absolute; width:16px; height:16px; background:#fff; border-radius:50%; top:1px; left:1px; transition:var(--transition); }
+.toggle.on::after { transform:translateX(16px); }
+.card { background:var(--bg-card); border-radius:var(--radius); border:1px solid rgba(255,255,255,0.06); padding:12px; margin-bottom:8px; transition:var(--transition); cursor:pointer; }
+.card:hover { border-color:rgba(251,146,60,0.3); }
+.card.active { border-color:var(--accent-amber); background:rgba(251,146,60,0.08); }
+.slider-group { margin-bottom:14px; }
+.slider-head { display:flex; justify-content:space-between; margin-bottom:6px; }
+.slider-lbl { font-size:11px; color:var(--text-secondary); }
+.slider-val { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent-cool); }
+.slider { width:100%; height:4px; appearance:none; background:var(--bg-input); border-radius:2px; cursor:pointer; }
+.slider::-webkit-slider-thumb { appearance:none; width:14px; height:14px; background:var(--accent-blue); border-radius:50%; cursor:pointer; }
+.status-bar { position:absolute; bottom:68px; left:12px; background:rgba(17,24,39,0.9); padding:6px 12px; border-radius:6px; font-size:10px; color:var(--text-muted); font-family:'JetBrains Mono',monospace; backdrop-filter:blur(8px); z-index:50; border:1px solid rgba(255,255,255,0.06); }
+.sun-badge { display:inline-flex; align-items:center; gap:6px; background:rgba(251,146,60,0.1); border:1px solid rgba(251,146,60,0.2); padding:4px 10px; border-radius:20px; font-size:11px; color:var(--accent-amber); }
+.layer-item { display:flex; align-items:center; gap:10px; padding:10px; background:var(--bg-card); border-radius:var(--radius); border:1px solid rgba(255,255,255,0.04); margin-bottom:6px; cursor:pointer; transition:var(--transition); }
+.layer-item:hover { border-color:rgba(255,255,255,0.1); }
+.layer-item .color-dot { width:10px; height:10px; border-radius:3px; flex-shrink:0; }
+.layer-item .info { flex:1; }
+.layer-item .name { font-size:12px; font-weight:600; }
+.layer-item .meta { font-size:10px; color:var(--text-muted); }
+.timeline { background:var(--bg-card); border-radius:var(--radius); padding:12px; margin-bottom:12px; position:relative; height:60px; overflow:hidden; }
+.timeline-bar { position:absolute; top:8px; bottom:8px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:9px; font-weight:700; color:rgba(0,0,0,0.7); overflow:hidden; }
+.grist-status { display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:var(--radius); font-size:11px; margin-bottom:12px; }
+.grist-status.connected { background:rgba(16,185,129,0.1); color:var(--success); border:1px solid rgba(16,185,129,0.2); }
+.grist-status.disconnected { background:rgba(239,68,68,0.1); color:var(--error); border:1px solid rgba(239,68,68,0.2); }
+.toast-box { position:fixed; bottom:70px; right:16px; z-index:9000; display:flex; flex-direction:column; gap:6px; }
+.toast { display:flex; align-items:center; gap:8px; padding:10px 14px; background:var(--bg-panel); border-radius:var(--radius); box-shadow:0 4px 20px rgba(0,0,0,0.4); font-size:12px; animation:toastIn 0.3s ease; border-left:3px solid var(--accent-amber); }
+.toast.error { border-left-color:var(--error); }
+.toast.success { border-left-color:var(--success); }
+@keyframes toastIn { from { transform:translateX(100%); opacity:0; } to { transform:translateX(0); opacity:1; } }
+.loading { position:absolute; inset:0; background:rgba(10,14,26,0.85); display:flex; align-items:center; justify-content:center; z-index:500; }
+.loading.hidden { display:none; }
+.spinner { width:32px; height:32px; border:3px solid var(--bg-hover); border-top-color:var(--accent-amber); border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.maplibregl-ctrl-group { background:var(--bg-panel) !important; border:1px solid rgba(255,255,255,0.08) !important; }
+.maplibregl-ctrl-group button { background:transparent !important; }
+.maplibregl-ctrl-group button:hover { background:var(--bg-hover) !important; }
+.maplibregl-ctrl-group button+button { border-top:1px solid rgba(255,255,255,0.06) !important; }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.form-grid .span-2 { grid-column:span 2; }
+.form-select { width:100%; padding:8px 10px; background:var(--bg-input); border:1px solid rgba(255,255,255,0.08); border-radius:var(--radius); color:var(--text-primary); font-size:12px; font-family:inherit; cursor:pointer; transition:var(--transition); appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2394a3b8' d='M2 4l4 4 4-4'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 10px center; }
+.form-select:focus { outline:none; border-color:var(--accent-amber); }
+.form-select option { background:var(--bg-panel); color:var(--text-primary); }
+.form-toggle-row { display:flex; align-items:center; justify-content:space-between; padding:6px 0; border-bottom:1px solid rgba(255,255,255,0.04); }
+.form-separator { height:1px; background:linear-gradient(90deg,transparent,rgba(251,146,60,0.3),transparent); margin:16px 0; }
+.form-section-head { font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.8px; color:var(--accent-amber); margin:16px 0 10px; display:flex; align-items:center; gap:6px; }
+.kelvin-preview { display:inline-block; width:18px; height:18px; border-radius:50%; vertical-align:middle; margin-left:6px; border:2px solid rgba(255,255,255,0.2); }
+.model-picker { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-top:8px; }
+.model-card { background:var(--bg-card); border:2px solid rgba(255,255,255,0.06); border-radius:var(--radius); padding:8px 4px; text-align:center; cursor:pointer; transition:var(--transition); }
+.model-card:hover { border-color:rgba(255,255,255,0.15); }
+.model-card.selected { border-color:var(--accent-amber); background:rgba(251,146,60,0.08); }
+.model-card .model-icon { font-size:22px; margin-bottom:2px; }
+.model-card .model-name { font-size:9px; color:var(--text-muted); line-height:1.2; }
+.coords-display { background:var(--bg-card); border-radius:var(--radius); padding:10px; font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--accent-cool); text-align:center; border:1px dashed rgba(56,189,248,0.3); margin-bottom:12px; }
+.place-btn { background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple)); color:#fff; border:none; border-radius:var(--radius); padding:10px 16px; width:100%; font-size:13px; font-weight:600; cursor:pointer; transition:var(--transition); font-family:inherit; display:flex; align-items:center; justify-content:center; gap:8px; }
+.place-btn:hover { opacity:0.9; transform:translateY(-1px); }
+.place-btn.placing { background:linear-gradient(135deg,var(--error),#dc2626); animation:pulseBg 1.5s ease infinite; }
+@keyframes pulseBg { 50% { opacity:0.8; } }
+.map-click-banner { position:absolute; top:12px; left:50%; transform:translateX(-50%); background:linear-gradient(135deg,var(--accent-blue),var(--accent-purple)); color:#fff; padding:10px 20px; border-radius:24px; font-size:13px; font-weight:600; z-index:150; box-shadow:0 4px 20px rgba(59,130,246,0.4); display:flex; align-items:center; gap:10px; animation:slideDown 0.3s ease; }
+.map-click-banner button { background:rgba(255,255,255,0.2); border:none; color:#fff; padding:4px 12px; border-radius:12px; cursor:pointer; font-size:11px; }
+@keyframes slideDown { from { opacity:0; transform:translateX(-50%) translateY(-20px); } to { opacity:1; transform:translateX(-50%) translateY(0); } }
+.sel-bar { position:fixed; bottom:70px; left:50%; transform:translateX(-50%); background:var(--bg-panel); border:1px solid var(--accent-amber); border-radius:10px; padding:6px 14px; display:flex; align-items:center; gap:10px; font-size:12px; color:var(--text-primary); z-index:50; box-shadow:0 4px 20px rgba(0,0,0,0.4); backdrop-filter:blur(12px); transition:opacity 0.2s; }
+.sel-bar .sel-count { font-weight:700; color:var(--accent-amber); font-size:16px; }
+.sel-bar .sel-btn { font-size:11px; padding:4px 10px; border-radius:6px; cursor:pointer; border:none; }
+.sel-bar .sel-assign { background:var(--accent-amber); color:#000; font-weight:600; }
+.sel-bar .sel-clear { background:rgba(255,255,255,0.08); color:var(--text-secondary); }
+.sel-bar .sel-btn:hover { filter:brightness(1.15); }
+.box-select-overlay { position:absolute; border:2px dashed var(--accent-amber); background:rgba(251,146,60,0.08); pointer-events:none; z-index:40; border-radius:2px; }
+/* Performance indicator */
+#perf-badge { position:absolute; top:8px; left:12px; background:rgba(10,14,26,0.85); border:1px solid rgba(16,185,129,0.3); padding:3px 8px; border-radius:4px; font-size:9px; font-family:'JetBrains Mono',monospace; color:var(--success); z-index:60; pointer-events:none; }
+/* OPTIM #11 — Responsive : panneau plein écran + toolbar défilable sur petit conteneur (panneau Grist étroit) */
+@media (max-width: 720px) {
+    .panel { position:absolute; right:0; top:0; bottom:var(--toolbar-h); width:100%; z-index:300; border-left:none; }
+    .header-stats { gap:8px; font-size:10px; }
+    .header-stat#stat-models, .header-stat#stat-draw { display:none; }
+    .toolbar { overflow-x:auto; gap:8px; }
+    .toolbar-modules { flex-shrink:0; }
+    .tb-btn { padding:6px 10px; }
+    .time-ctrl { flex-shrink:0; }
+    .time-slider { width:90px; }
+    #time-date-picker { display:none; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="header">
+    <div class="header-brand">
+      <span class="icon">💡</span>
+      <span>EclExt</span>
+      <span class="badge">CNIG v1.1</span>
+    </div>
+    <div class="header-stats">
+      <div class="header-stat"><span class="dot" id="grist-dot"></span><span id="grist-label">Grist</span></div>
+      <div class="header-stat" id="stat-points">0 pts</div>
+      <div class="header-stat" id="stat-profils">0 profils</div>
+      <div class="header-stat" id="stat-models">0 GLB</div>
+      <div class="header-stat" id="stat-draw" style="color:var(--success);"></div>
+    </div>
+  </header>
+  <div class="main">
+    <div id="map"></div>
+    <div id="perf-badge">3 draw calls</div>
+    <div class="status-bar" id="status-bar">—</div>
+    <div class="panel hidden" id="panel">
+      <div class="panel-head">
+        <div class="panel-title" id="panel-title">—</div>
+        <button class="panel-close" onclick="closePanel()">✕</button>
+      </div>
+      <div class="panel-body" id="panel-body"></div>
+    </div>
+    <div class="loading hidden" id="loading"><div class="spinner"></div></div>
+  </div>
+  <div id="sel-bar" class="sel-bar" style="display:none;">
+    <span class="sel-count" id="sel-count">0</span>
+    <span style="color:var(--text-muted);">sélectionnés</span>
+    <select id="sel-profil-pick" class="form-select" style="font-size:10px;padding:4px 6px;width:auto;max-width:140px;"><option value="">Profil…</option></select>
+    <button class="sel-btn sel-assign" onclick="assignSelectionProfil()">📌 Attribuer</button>
+    <button class="sel-btn sel-clear" onclick="clearSelection()">✕</button>
+  </div>
+  <footer class="toolbar">
+    <div class="toolbar-modules">
+      <button class="tb-btn" data-mod="donnees" onclick="openModule('donnees')"><span class="ico">📊</span><span class="lbl">Données</span></button>
+      <button class="tb-btn" data-mod="profils" onclick="openModule('profils')"><span class="ico">🌙</span><span class="lbl">Profils</span></button>
+      <button class="tb-btn" data-mod="rendu" onclick="openModule('rendu')"><span class="ico">💡</span><span class="lbl">Rendu</span></button>
+      <button class="tb-btn" data-mod="modeles" onclick="openModule('modeles')"><span class="ico">📦</span><span class="lbl">Modèles</span></button>
+      <button class="tb-btn" data-mod="saisie" onclick="openModule('saisie')"><span class="ico">✏️</span><span class="lbl">Saisie</span></button>
+      <button class="tb-btn" data-mod="carte" onclick="openModule('carte')"><span class="ico">🗺️</span><span class="lbl">Carte</span></button>
+    </div>
+    <div class="time-ctrl">
+      <input type="date" id="time-date-picker" class="input-field" style="width:110px;padding:4px 6px;font-size:10px;background:var(--bg-input);border:1px solid rgba(255,255,255,0.08);" onchange="setSimulationDate(this.value)">
+      <div class="time-date" id="time-date"></div>
+      <input type="range" class="time-slider" id="time-slider" min="0" max="1440" value="1320" step="5" oninput="onTimeChange(this.value)">
+      <div class="time-display" id="time-display">22:00</div>
+    </div>
+  </footer>
+</div>
+<div class="toast-box" id="toast-box"></div>
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CONFIG = {
+    ign: {
+        plan:  'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+        ortho: 'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=ORTHOIMAGERY.ORTHOPHOTOS&STYLE=normal&FORMAT=image/jpeg&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}',
+        dark:  'https://data.geopf.fr/wmts?SERVICE=WMTS&REQUEST=GetTile&VERSION=1.0.0&LAYER=GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2&STYLE=normal&FORMAT=image/png&TILEMATRIXSET=PM&TILEMATRIX={z}&TILEROW={y}&TILECOL={x}'
+    },
+    terrain: {
+        ignMNT: 'float32dem://data.geopf.fr/wms-r?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetMap&LAYERS=IGNF_LIDAR-HD_MNT_ELEVATION.ELEVATIONGRIDCOVERAGE.LAMB93&STYLES=&FORMAT=image/geotiff&CRS=EPSG:3857&BBOX={bbox-epsg-3857}&WIDTH=512&HEIGHT=512'
+    },
+    defaultCenter: [5.38, 43.30],
+    defaultZoom: 15,
+    glbBaseUrl: ''
+};
+
+// ============================================================
+// OPTIM #1 — TERRAIN: décodage GeoTIFF Float32 → TerrainRGB dans un
+// pool de Web Workers (hors thread principal). Une seule source DEM
+// partagée terrain + hillshade (cf. style → plus de double décodage).
+// ============================================================
+function makeTerrainDecoderPool() {
+    const workerSrc = `
+        self.importScripts('https://cdn.jsdelivr.net/npm/geotiff@2.1.3/dist-browser/geotiff.js');
+        self.onmessage = async (e) => {
+            const { id, buffer } = e.data;
+            try {
+                const tiff = await GeoTIFF.fromArrayBuffer(buffer);
+                const image = await tiff.getImage();
+                const rasters = await image.readRasters();
+                const w = image.getWidth(), h = image.getHeight();
+                const elev = rasters[0];
+                const rgba = new Uint8ClampedArray(w*h*4);
+                for (let i=0;i<elev.length;i++){
+                    let v = elev[i];
+                    if (!isFinite(v) || v < -500 || v > 9000) v = 0;
+                    const enc = Math.round((v + 10000) / 0.1);
+                    rgba[i*4]=(enc>>16)&255; rgba[i*4+1]=(enc>>8)&255; rgba[i*4+2]=enc&255; rgba[i*4+3]=255;
+                }
+                const c = new OffscreenCanvas(w,h);
+                c.getContext('2d').putImageData(new ImageData(rgba,w,h),0,0);
+                const b = await c.convertToBlob({type:'image/png'});
+                const out = new Uint8Array(await b.arrayBuffer());
+                self.postMessage({ id, ok:true, data: out }, [out.buffer]);
+            } catch(err) {
+                self.postMessage({ id, ok:false, error: String(err && err.message || err) });
+            }
+        };`;
+    const url = URL.createObjectURL(new Blob([workerSrc], { type: 'application/javascript' }));
+    const N = Math.min(3, navigator.hardwareConcurrency || 2);
+    const workers = []; const pending = new Map(); let seq = 0, rr = 0;
+    for (let i=0;i<N;i++) {
+        const w = new Worker(url);
+        w.onmessage = (e) => {
+            const { id, ok, data, error } = e.data;
+            const p = pending.get(id); if (!p) return;
+            pending.delete(id);
+            ok ? p.resolve(data) : p.reject(new Error(error));
+        };
+        workers.push(w);
+    }
+    return { decode(buffer) { return new Promise((resolve, reject) => { const id = ++seq; pending.set(id, { resolve, reject }); workers[rr++ % N].postMessage({ id, buffer }, [buffer]); }); } };
+}
+
+(function registerTerrainProtocol() {
+    if (typeof maplibregl === 'undefined') return;
+    const pool = makeTerrainDecoderPool();
+    let _flatTile = null;
+    async function flatTile() {
+        if (_flatTile) return _flatTile;
+        const size = 256, rgba = new Uint8ClampedArray(size*size*4), enc0 = Math.round(10000/0.1);
+        for (let i=0;i<size*size;i++){ rgba[i*4]=(enc0>>16)&255; rgba[i*4+1]=(enc0>>8)&255; rgba[i*4+2]=enc0&255; rgba[i*4+3]=255; }
+        const c = new OffscreenCanvas(size,size); c.getContext('2d').putImageData(new ImageData(rgba,size,size),0,0);
+        const b = await c.convertToBlob({type:'image/png'}); _flatTile = new Uint8Array(await b.arrayBuffer());
+        return _flatTile;
+    }
+    maplibregl.addProtocol('float32dem', async (params, abortController) => {
+        const url = 'https://' + params.url.replace('float32dem://', '');
+        try {
+            const response = await fetch(url, { signal: abortController.signal, headers: { 'Accept': 'image/tiff, image/geotiff' } });
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const arrayBuffer = await response.arrayBuffer();
+            const header = new Uint8Array(arrayBuffer, 0, 4);
+            const isTiff = (header[0] === 0x49 && header[1] === 0x49) || (header[0] === 0x4D && header[1] === 0x4D);
+            if (!isTiff || arrayBuffer.byteLength < 100) throw new Error('Not a valid TIFF');
+            const data = await pool.decode(arrayBuffer); // décodage hors thread principal
+            return { data };
+        } catch (e) {
+            if (abortController.signal.aborted) throw e;
+            return { data: await flatTile() };
+        }
+    });
+    console.log('✅ Protocole float32dem enregistré (pool de workers)');
+})();
+
+// ============================================================
+// STATE
+// ============================================================
+const STATE = {
+    grist: { ready: false },
+    points: [], profils: [], plages: [], models: [],
+    time: 1320, date: new Date(),
+    settings: {
+        style: 'dark', markersVisible: true, models3DVisible: true,
+        cones3DVisible: true, terrainEnabled: true, terrainExaggeration: 1.0,
+        animating: false
+    },
+    selection: new Set()
+};
+
+let map = null;
+
+// OPTIM #7 — Échappement HTML pour toute donnée Grist injectée en innerHTML/value
+function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// ============================================================
+// ECLEXT TABLE SCHEMAS
+// ============================================================
+const ECLEXT_TABLES = {
+    Modeles_Luminaires: { columns: [
+        { id:'nom', type:'Text' }, { id:'fabricant', type:'Text' }, { id:'reference', type:'Text' },
+        { id:'structureEclExt', type:'Choice', widgetOptions: JSON.stringify({ choices:['APP','BOR','BL','COL','EN','LANT','PROJ','REGL','TUBE','VASQ','AU','XX'] }) },
+        { id:'glbUrl', type:'Text' }, { id:'thumbnailUrl', type:'Text' }, { id:'isDefault', type:'Bool' },
+        { id:'scale', type:'Numeric' }, { id:'rotationX', type:'Numeric' }, { id:'rotationY', type:'Numeric' }, { id:'rotationZ', type:'Numeric' },
+        { id:'hauteurSource', type:'Numeric' }, { id:'emissiveMeshName', type:'Text' },
+        { id:'fluxNominal', type:'Numeric' }, { id:'tempCouleurDefaut', type:'Int' }, { id:'puissanceDefaut', type:'Numeric' },
+        { id:'cie3Defaut', type:'Numeric' }, { id:'ulrNominal', type:'Numeric' }, { id:'iesUrl', type:'Text' }
+    ]},
+    ProfilNocturne: { columns: [
+        { id:'nomProfil', type:'Text' }, { id:'allumageSoir', type:'Text' }, { id:'extinctionMatin', type:'Text' }
+    ]},
+    PlageVariation: { columns: [
+        { id:'profilNocturne', type:'Ref:ProfilNocturne' }, { id:'nomPlage', type:'Text' },
+        { id:'grandeurVariation', type:'Choice', widgetOptions: JSON.stringify({ choices:['EX','F','P','TC'] }) },
+        { id:'heureDebut', type:'Text' }, { id:'heureFin', type:'Text' },
+        { id:'formatVariation', type:'Choice', widgetOptions: JSON.stringify({ choices:['%','VA'] }) },
+        { id:'valeur', type:'Numeric' }, { id:'valideDe', type:'Date' }, { id:'valideJusque', type:'Date' }
+    ]},
+    PointLumineux: { columns: [
+        { id:'latitude', type:'Numeric' }, { id:'longitude', type:'Numeric' },
+        { id:'statut', type:'Choice', widgetOptions: JSON.stringify({ choices:['functional','decommissioned','dismantled','projected','underCommissionning','underConstruction'] }) },
+        { id:'eclairagePublic', type:'Bool' },
+        { id:'usage', type:'Choice', widgetOptions: JSON.stringify({ choices:['A','B1','B2','B3','B4','C','D','E','F','G','PU','IN','AU','XX'] }) },
+        { id:'typeSource', type:'Choice', widgetOptions: JSON.stringify({ choices:['LED','SHP','SBP','IM','VM','HAL','FLUO','INC','IND','XEN','AU','XX'] }) },
+        { id:'structure', type:'Choice', widgetOptions: JSON.stringify({ choices:['APP','BOR','BL','COL','EN','LANT','PROJ','REGL','TUBE','VASQ','AU','XX'] }) },
+        { id:'support', type:'Choice', widgetOptions: JSON.stringify({ choices:['BUS','CAT','ENS','MAT','MUR','OUV','PAN','POT','SOL','AU','XX'] }) },
+        { id:'temperatureCouleur', type:'Int' }, { id:'puissance', type:'Numeric' }, { id:'valideDe', type:'Date' },
+        { id:'extinctionNuit', type:'Bool' }, { id:'estAdaptatif', type:'Bool' },
+        { id:'profilNocturne', type:'Ref:ProfilNocturne' }, { id:'fabricant', type:'Text' },
+        { id:'modele', type:'Ref:Modeles_Luminaires' }, { id:'hauteurFeu', type:'Numeric' },
+        { id:'fluxSource', type:'Numeric' }, { id:'fluxLuminaire', type:'Numeric' },
+        { id:'cie3', type:'Numeric' }, { id:'ulrNominal', type:'Numeric' }, { id:'ulrInstalle', type:'Numeric' },
+        { id:'inclinaisonInstallee', type:'Numeric' },
+        { id:'eclairageAdaptatif', type:'Choice', widgetOptions: JSON.stringify({ choices:['AV','CO','EN','TG'] }) }
+    ]}
+};
+
+// ============================================================
+// KELVIN → RGB
+// ============================================================
+function kelvinToHex(K) {
+    const t = Math.max(1000, Math.min(15000, K || 3000)) / 100;
+    let r, g, b;
+    if (t <= 66) {
+        r = 255;
+        g = Math.max(0, Math.min(255, 99.47 * Math.log(t) - 161.12));
+        b = t <= 19 ? 0 : Math.max(0, Math.min(255, 138.52 * Math.log(t-10) - 305.04));
+    } else {
+        r = Math.max(0, Math.min(255, 329.70 * Math.pow(t-60, -0.1332)));
+        g = Math.max(0, Math.min(255, 288.12 * Math.pow(t-60, -0.0755)));
+        b = 255;
+    }
+    return '#' + [r,g,b].map(v => Math.round(v).toString(16).padStart(2,'0')).join('');
+}
+function kelvinToRGB(K) {
+    const hex = kelvinToHex(K);
+    return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16)];
+}
+
+// ============================================================
+// ECLEXT TIME PARSER
+// ============================================================
+function parseEclExtTime(timeStr, date, lat, lng) {
+    if (!timeStr || typeof timeStr !== 'string') return null;
+    const s = timeStr.trim();
+    const fixed = s.match(/^(\d{1,2}):(\d{2})(HL|TU)$/);
+    if (fixed) {
+        let m = parseInt(fixed[1])*60 + parseInt(fixed[2]);
+        if (fixed[3] === 'TU') m -= (date||new Date()).getTimezoneOffset();
+        return ((m%1440)+1440)%1440;
+    }
+    const offset = s.match(/^([+-]?\d+)(CS|LS|MN)$/);
+    if (offset && typeof SunCalc !== 'undefined') {
+        const delta = parseInt(offset[1]), ref = offset[2];
+        const d = date||new Date(), la = lat||43.3, lo = lng||5.38;
+        const times = SunCalc.getTimes(d, la, lo);
+        const toMin = dt => { if (!dt||isNaN(dt.getTime())) return 720; return dt.getHours()*60+dt.getMinutes(); };
+        let refMin;
+        if (ref==='CS') refMin = toMin(times.sunset);
+        else if (ref==='LS') refMin = toMin(times.sunrise);
+        else { const sr=toMin(times.sunrise), ss=toMin(times.sunset); refMin=ss+((1440-ss+sr)/2); if(refMin>=1440) refMin-=1440; }
+        return ((refMin+delta)%1440+1440)%1440;
+    }
+    return null;
+}
+
+// OPTIM #5 — Retourne TOUTES les plages actives (permet P/F/EX + TC simultanés)
+function getActivePlages(profilId, currentMin, date, lat, lng) {
+    const out = [];
+    const plages = STATE.plages.filter(p => p.profilNocturne === profilId);
+    for (const pl of plages) {
+        const deb = parseEclExtTime(pl.heureDebut, date, lat, lng);
+        const fin = parseEclExtTime(pl.heureFin, date, lat, lng);
+        if (deb===null||fin===null) continue;
+        const active = deb<fin ? (currentMin>=deb&&currentMin<fin) : (currentMin>=deb||currentMin<fin);
+        if (active) out.push(pl);
+    }
+    return out;
+}
+function intensityPlage(plages) {
+    if (!plages) return null;
+    return plages.find(p => p.grandeurVariation==='EX' || p.grandeurVariation==='P' || p.grandeurVariation==='F') || null;
+}
+
+// OPTIM #5 — gère %, VA (valeur absolue), et l'absence de plage d'intensité (TC seul)
+function computeIntensity(point, plages) {
+    if (!point.profilNocturne||point.profilNocturne===0) return 1.0;
+    if (!plages||plages.length===0) return 0;
+    const plage = intensityPlage(plages);
+    if (!plage) return 1.0; // seules des plages TC actives → luminaire allumé à 100%
+    if (plage.grandeurVariation==='EX') return 0;
+    const v = plage.valeur;
+    if (plage.formatVariation==='VA') {
+        if (plage.grandeurVariation==='F') { const nom=point.fluxSource||point.fluxLuminaire||8000; return Math.max(0,Math.min(1,(v||nom)/nom)); }
+        const nomP=point.puissance||75; return Math.max(0,Math.min(1,(v||nomP)/nomP));
+    }
+    return Math.max(0, Math.min(1, (v==null?100:v)/100));
+}
+
+// OPTIM #5 — override de température de couleur par plage TC active
+function getActiveKelvin(point, plages) {
+    const base = point.temperatureCouleur||3000;
+    if (!plages||plages.length===0) return base;
+    const tc = plages.find(p => p.grandeurVariation==='TC');
+    if (!tc || tc.valeur==null) return base;
+    if (tc.formatVariation==='VA') return Math.round(tc.valeur);          // Kelvin absolu
+    return Math.round(base * tc.valeur / 100);                            // % de la base
+}
+
+// ============================================================
+// GRIST INITIALIZATION
+// ============================================================
+let _onRecordsTimer = null; // OPTIM #8
+async function initGrist() {
+    if (typeof grist === 'undefined') { console.log('⚠️ Grist non disponible — mode démo'); setGristStatus(false); loadDemoData(); return; }
+    try {
+        grist.ready({ requiredAccess:'full', allowSelectBy:true });
+        STATE.grist.ready = true; setGristStatus(true); console.log('✅ Grist connecté');
+        await ensureEclExtTables();
+        await loadEclExtData();
+        // OPTIM #8 — debounce: éviter 4 fetchTable à chaque frappe dans Grist
+        grist.onRecords(() => { clearTimeout(_onRecordsTimer); _onRecordsTimer = setTimeout(loadEclExtData, 400); });
+    } catch(e) { console.error('Grist init error:',e); setGristStatus(false); loadDemoData(); }
+}
+
+async function ensureEclExtTables() {
+    if (!STATE.grist.ready) return;
+    try {
+        const existing = await grist.docApi.listTables();
+        const order = ['Modeles_Luminaires','ProfilNocturne','PlageVariation','PointLumineux'];
+        for (const name of order) {
+            if (!existing.includes(name)) {
+                console.log(`📦 Création table ${name}...`);
+                await grist.docApi.applyUserActions([['AddTable', name, ECLEXT_TABLES[name].columns]]);
+                console.log(`✅ Table ${name} créée`);
+            }
+        }
+        await migrateColumnTypes();
+    } catch(e) { console.error('Table creation error:',e); }
+}
+
+async function migrateColumnTypes() {
+    try {
+        const tablesRaw = await grist.docApi.fetchTable('_grist_Tables');
+        const colsRaw   = await grist.docApi.fetchTable('_grist_Tables_column');
+        const tableIdMap = {};
+        for (let i=0; i<(tablesRaw.id?.length||0); i++) tableIdMap[tablesRaw.id[i]] = tablesRaw.tableId[i];
+        const actualTypes = {};
+        for (let i=0; i<(colsRaw.id?.length||0); i++) {
+            const tn = tableIdMap[colsRaw.parentId[i]];
+            if (!tn) continue;
+            if (!actualTypes[tn]) actualTypes[tn] = {};
+            actualTypes[tn][colsRaw.colId[i]] = colsRaw.type[i];
+        }
+        const fixes = [];
+        for (const [tableName, def] of Object.entries(ECLEXT_TABLES)) {
+            const actual = actualTypes[tableName]; if (!actual) continue;
+            for (const col of def.columns) {
+                const et = col.type, at = actual[col.id]; if (!at) continue;
+                const needsFix = (et.startsWith('Ref:')&&!at.startsWith('Ref:'))||(et==='Date'&&at==='Text')||(et==='DateTime'&&at==='Text')||(et==='Bool'&&at==='Text')||(et==='Int'&&at==='Text')||(et==='Numeric'&&at==='Text')||(et==='Choice'&&at==='Text');
+                if (needsFix) { const cf={type:et}; if(col.widgetOptions) cf.widgetOptions=col.widgetOptions; fixes.push(['ModifyColumn',tableName,col.id,cf]); }
+            }
+        }
+        if (fixes.length>0) { console.log(`🔧 ${fixes.length} colonne(s) à migrer...`); await grist.docApi.applyUserActions(fixes); console.log('✅ Migration terminée'); }
+        else console.log('✅ Types de colonnes conformes');
+    } catch(e) { console.warn('⚠️ Migration types non critique:',e.message); }
+}
+
+async function loadEclExtData() {
+    if (!STATE.grist.ready) return;
+    try {
+        try {
+            const modRaw = await grist.docApi.fetchTable('Modeles_Luminaires');
+            STATE.models = (modRaw.id||[]).map((id,i) => { const m={_id:id}; for(const col of ECLEXT_TABLES.Modeles_Luminaires.columns) m[col.id]=modRaw[col.id]?.[i]??null; return m; });
+            if (STATE.models.length===0) { await populateDefaultModels(); const mr2=await grist.docApi.fetchTable('Modeles_Luminaires'); STATE.models=(mr2.id||[]).map((id,i)=>{const m={_id:id};for(const col of ECLEXT_TABLES.Modeles_Luminaires.columns)m[col.id]=mr2[col.id]?.[i]??null;return m;}); }
+        } catch(e) { console.warn('Table Modeles_Luminaires pas encore prête:',e.message); STATE.models=[]; }
+        const profRaw = await grist.docApi.fetchTable('ProfilNocturne');
+        STATE.profils = (profRaw.id||[]).map((id,i) => ({ id, nomProfil:profRaw.nomProfil?.[i]||'', allumageSoir:profRaw.allumageSoir?.[i]||'', extinctionMatin:profRaw.extinctionMatin?.[i]||'' }));
+        const plRaw = await grist.docApi.fetchTable('PlageVariation');
+        STATE.plages = (plRaw.id||[]).map((id,i) => ({ id, profilNocturne:plRaw.profilNocturne?.[i], nomPlage:plRaw.nomPlage?.[i]||'', grandeurVariation:plRaw.grandeurVariation?.[i]||'P', heureDebut:plRaw.heureDebut?.[i]||'', heureFin:plRaw.heureFin?.[i]||'', formatVariation:plRaw.formatVariation?.[i]||'%', valeur:plRaw.valeur?.[i] }));
+        const ptRaw = await grist.docApi.fetchTable('PointLumineux');
+        STATE.points = (ptRaw.id||[]).map((id,i) => { const pt={_id:id}; for(const col of ECLEXT_TABLES.PointLumineux.columns) pt[col.id]=ptRaw[col.id]?.[i]??null; return pt; }).filter(pt=>pt.latitude&&pt.longitude);
+        console.log(`📊 ${STATE.points.length} points, ${STATE.profils.length} profils, ${STATE.plages.length} plages, ${STATE.models.length} modèles`);
+        updateStats(); renderAllLayers();
+    } catch(e) { console.error('Data load error:',e); toast('Erreur chargement données','error'); }
+}
+
+// ============================================================
+// DEFAULT MODELS CATALOG
+// ============================================================
+const DEFAULT_MODELS_CATALOG = [
+    { nom:'Lampadaire mât standard', structureEclExt:'MAT', glbUrl:'https://nic01asfr.github.io/3D-Models/Lantern.glb', isDefault:true, scale:1.5, hauteurSource:8, tempCouleurDefaut:3000, puissanceDefaut:75, fluxNominal:8000, cie3Defaut:0.85, ulrNominal:0.02 },
+    { nom:'Lanterne / Lampadaire', structureEclExt:'LANT', glbUrl:'https://nic01asfr.github.io/3D-Models/Lantern.glb', isDefault:true, scale:1.5, hauteurSource:8, tempCouleurDefaut:3000, puissanceDefaut:75, fluxNominal:8000, cie3Defaut:0.85, ulrNominal:0.02 },
+    { nom:'Applique murale', structureEclExt:'APP', glbUrl:'https://nic01asfr.github.io/3D-Models/Lantern.glb', isDefault:true, scale:0.8, hauteurSource:4, tempCouleurDefaut:3000, puissanceDefaut:35, fluxNominal:3500, cie3Defaut:0.75, ulrNominal:0.03 },
+    { nom:'Borne lumineuse', structureEclExt:'BOR', glbUrl:'https://nic01asfr.github.io/3D-Models/B0.glb', isDefault:true, scale:1, hauteurSource:1.2, tempCouleurDefaut:3000, puissanceDefaut:20, fluxNominal:2000, cie3Defaut:0.50, ulrNominal:0.01 },
+    { nom:'Projecteur orientable', structureEclExt:'PROJ', glbUrl:'https://nic01asfr.github.io/3D-Models/AB4.glb', isDefault:true, scale:0.8, hauteurSource:10, tempCouleurDefaut:4000, puissanceDefaut:250, fluxNominal:25000, cie3Defaut:0.92, ulrNominal:0.01 },
+    { nom:'Colonne lumineuse', structureEclExt:'COL', glbUrl:'https://nic01asfr.github.io/3D-Models/Lantern.glb', isDefault:true, scale:1.2, hauteurSource:5, tempCouleurDefaut:3000, puissanceDefaut:60, fluxNominal:6000, cie3Defaut:0.65, ulrNominal:0.03 },
+    { nom:'Boule / Vasque', structureEclExt:'VASQ', glbUrl:'https://nic01asfr.github.io/3D-Models/B0.glb', isDefault:true, scale:1, hauteurSource:4, tempCouleurDefaut:2700, puissanceDefaut:70, fluxNominal:7000, cie3Defaut:0.40, ulrNominal:0.15 },
+    { nom:'Boule lumineuse', structureEclExt:'BL', glbUrl:'https://nic01asfr.github.io/3D-Models/B0.glb', isDefault:true, scale:0.8, hauteurSource:4, tempCouleurDefaut:2700, puissanceDefaut:50, fluxNominal:5000, cie3Defaut:0.35, ulrNominal:0.20 },
+    { nom:'Encastré de sol', structureEclExt:'EN', glbUrl:'', isDefault:true, scale:1, hauteurSource:0.1, tempCouleurDefaut:4000, puissanceDefaut:15, fluxNominal:1500, cie3Defaut:0.95, ulrNominal:0.0 },
+    { nom:'Tube / Réglette', structureEclExt:'TUBE', glbUrl:'', isDefault:true, scale:1, hauteurSource:3, tempCouleurDefaut:4000, puissanceDefaut:40, fluxNominal:4000, cie3Defaut:0.70, ulrNominal:0.02 }
+];
+
+async function populateDefaultModels() {
+    if (!STATE.grist.ready) return;
+    try {
+        const fields = {};
+        const cols = ECLEXT_TABLES.Modeles_Luminaires.columns.map(c=>c.id);
+        cols.forEach(col => { fields[col] = DEFAULT_MODELS_CATALOG.map(r => r[col]??null); });
+        await grist.docApi.applyUserActions([['BulkAddRecord','Modeles_Luminaires',new Array(DEFAULT_MODELS_CATALOG.length).fill(null),fields]]);
+        console.log(`✅ ${DEFAULT_MODELS_CATALOG.length} modèles par défaut peuplés`);
+    } catch(e) { console.error('Erreur peuplement modèles:',e); }
+}
+
+// ============================================================
+// DEMO DATA
+// ============================================================
+function loadDemoData() {
+    STATE.models = DEFAULT_MODELS_CATALOG.map((m,i) => ({ _id:i+1, ...m }));
+    STATE.profils = [
+        { id:1, nomProfil:'Residentiel_standard', allumageSoir:'-15CS', extinctionMatin:'+15LS' },
+        { id:2, nomProfil:'Eco_renforce', allumageSoir:'-15CS', extinctionMatin:'+15LS' },
+        { id:3, nomProfil:'Patrimonial', allumageSoir:'21:00HL', extinctionMatin:'01:00HL' }
+    ];
+    STATE.plages = [
+        { id:1, profilNocturne:1, nomPlage:'Pleine_puissance', grandeurVariation:'P', heureDebut:'-15CS', heureFin:'+15LS', formatVariation:'%', valeur:100 },
+        { id:2, profilNocturne:2, nomPlage:'Soir_reduit', grandeurVariation:'P', heureDebut:'-15CS', heureFin:'23:00HL', formatVariation:'%', valeur:70 },
+        { id:3, profilNocturne:2, nomPlage:'Nuit_eteint', grandeurVariation:'EX', heureDebut:'23:00HL', heureFin:'05:00HL', formatVariation:'%', valeur:0 },
+        { id:4, profilNocturne:2, nomPlage:'Matin_reduit', grandeurVariation:'P', heureDebut:'05:00HL', heureFin:'+15LS', formatVariation:'%', valeur:70 },
+        { id:5, profilNocturne:3, nomPlage:'Mise_en_lumiere', grandeurVariation:'P', heureDebut:'21:00HL', heureFin:'01:00HL', formatVariation:'%', valeur:100 }
+    ];
+    const center = CONFIG.defaultCenter;
+    const structures=['MAT','LANT','PROJ','BOR','COL'], sources=['LED','SHP','LED','LED','LED'];
+    const temps=[3000,2200,4000,2700,3000], puissances=[75,150,250,35,100], flux=[8000,12000,25000,3500,10000];
+    const hauteurs=[8,10,12,1.2,6], cie3s=[0.88,0.75,0.92,0.60,0.80];
+    const demoPoints = [];
+    for (let i=0; i<40; i++) {
+        const angle=(i/40)*Math.PI*2, radius=0.002+Math.random()*0.003, jitter=(Math.random()-0.5)*0.001, idx=i%5;
+        demoPoints.push({ _id:i+1, latitude:center[1]+Math.sin(angle)*radius+jitter, longitude:center[0]+Math.cos(angle)*radius+jitter, statut:'functional', eclairagePublic:true, usage:'A', typeSource:sources[idx], structure:structures[idx], support:'MAT', temperatureCouleur:temps[idx], puissance:puissances[idx], fluxSource:flux[idx], hauteurFeu:hauteurs[idx], cie3:cie3s[idx], ulrInstalle:idx===1?0.08:0.02, inclinaisonInstallee:idx===2?15:0, extinctionNuit:idx===1, profilNocturne:idx<=2?1:(idx===3?2:3), fabricant:['Schréder','Ragni','Eclatec','Technilum','Comatelec'][idx], modele:[1,2,5,4,6][idx] });
+    }
+    STATE.points = demoPoints;
+    console.log(`📊 Démo: ${STATE.points.length} points, ${STATE.profils.length} profils`);
+    updateStats(); renderAllLayers();
+}
+
+// ============================================================
+// MAP INITIALIZATION
+// ============================================================
+function initMap() {
+    loadSettings();
+    const savedStyle = STATE.settings.style||'dark';
+    const initTileUrl = savedStyle==='ortho' ? CONFIG.ign.ortho : (savedStyle==='plan' ? CONFIG.ign.plan : CONFIG.ign.dark);
+    map = new maplibregl.Map({
+        container:'map',
+        style: {
+            version:8, glyphs:'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+            sources: {
+                'ign-base-src':{ type:'raster', tiles:[initTileUrl], tileSize:256, attribution:'© IGN' },
+                // OPTIM #1 — une seule source DEM (terrain + hillshade) → décodage simple
+                'terrain-dem':{ type:'raster-dem', tiles:[CONFIG.terrain.ignMNT], tileSize:512, encoding:'mapbox', minzoom:0, maxzoom:16 }
+            },
+            terrain: STATE.settings.terrainEnabled ? { source:'terrain-dem', exaggeration:STATE.settings.terrainExaggeration||1.0 } : undefined,
+            layers: [
+                { id:'ign-base', type:'raster', source:'ign-base-src', paint:{ 'raster-brightness-max':0.12, 'raster-saturation':-0.7, 'raster-contrast':0.2 } },
+                { id:'terrain-hillshade', type:'hillshade', source:'terrain-dem', layout:{ visibility:'visible' }, paint:{ 'hillshade-exaggeration':0.3, 'hillshade-shadow-color':'#1a1a2e', 'hillshade-illumination-direction':315 } }
+            ]
+        },
+        center:CONFIG.defaultCenter, zoom:CONFIG.defaultZoom, pitch:55, bearing:-10, maxPitch:85, antialias:true
+    });
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+    map.addControl(new maplibregl.ScaleControl(), 'bottom-left');
+
+    map.on('load', () => {
+        console.log('✅ Carte chargée');
+        initGrist();
+        updateTimeDisplay(STATE.time);
+        map.on('moveend', onMapMoveEnd);
+        map.on('zoomend', onMapMoveEnd);
+        setupMapClickHandler();
+    });
+
+    map.on('mousemove', e => { document.getElementById('status-bar').textContent = `${e.lngLat.lat.toFixed(5)}°N  ${e.lngLat.lng.toFixed(5)}°E`; });
+
+    map.on('click', 'eclext-points', e => {
+        if (SAISIE.placementMode) return;
+        if (!e.features?.length) return;
+        const ptId = e.features[0].properties._id;
+        const pt = STATE.points.find(p => p._id===ptId);
+        if (!pt) return;
+        if (e.originalEvent.ctrlKey||e.originalEvent.metaKey) { togglePointSelection(ptId); return; }
+        if (STATE.selection.size>0) clearSelection();
+        const intensityPct = Math.round((pt._intensity||0)*100);
+        const profil = STATE.profils.find(p=>p.id===pt.profilNocturne);
+        const label = getPointLabel(pt);
+        const resolvedModel = resolveModelForPoint(pt);
+        new maplibregl.Popup({ maxWidth:'280px' })
+            .setLngLat(e.lngLat)
+            .setHTML(`<div style="font-family:'DM Sans',sans-serif;">
+                <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${esc(label)}</div>
+                <div style="font-size:11px;color:#888;margin-bottom:6px;">${esc(pt.structure||'—')} · ${esc(pt.typeSource||'—')} · ${esc(pt.puissance||'?')}W · <span style="color:${kelvinToHex(pt.temperatureCouleur||3000)}">${esc(pt.temperatureCouleur||'?')}K</span></div>
+                ${resolvedModel?`<div style="font-size:10px;color:#38bdf8;margin-bottom:6px;">📦 ${esc(resolvedModel.nom)} ${resolvedModel.glbUrl?'(GLB)':'(symbolique)'}</div>`:''}
+                <div style="font-size:11px;margin-bottom:8px;">Profil: ${esc(profil?.nomProfil||'—')} · <b style="color:${intensityPct>0?'#f59e0b':'#666'}">${intensityPct}%</b> ${pt._activePlage?`(${esc(pt._activePlage.nomPlage)})`:''}</div>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="editPoint(${pt._id}); document.querySelector('.maplibregl-popup-close-button')?.click();" style="flex:2;padding:6px;background:#f59e0b;color:#000;border:none;border-radius:6px;font-weight:600;font-size:12px;cursor:pointer;">✏️ Modifier</button>
+                    <button onclick="togglePointSelection(${pt._id}); document.querySelector('.maplibregl-popup-close-button')?.click();" style="flex:1;padding:6px;background:rgba(255,255,255,0.1);color:var(--text-primary);border:1px solid rgba(255,255,255,0.2);border-radius:6px;font-size:12px;cursor:pointer;">☑ Select</button>
+                </div></div>`)
+            .addTo(map);
+    });
+    map.on('mouseenter','eclext-points', () => { map.getCanvas().style.cursor='pointer'; });
+    map.on('mouseleave','eclext-points', () => { map.getCanvas().style.cursor=''; });
+
+    // Box selection
+    let boxStart=null, boxDiv=null;
+    map.getCanvas().addEventListener('mousedown', e => {
+        if (!e.shiftKey||SAISIE.placementMode) return;
+        e.preventDefault(); boxStart={x:e.clientX,y:e.clientY};
+        boxDiv=document.createElement('div'); boxDiv.className='box-select-overlay';
+        document.body.appendChild(boxDiv); map.dragPan.disable();
+    });
+    document.addEventListener('mousemove', e => {
+        if (!boxStart||!boxDiv) return;
+        const x=Math.min(boxStart.x,e.clientX), y=Math.min(boxStart.y,e.clientY);
+        boxDiv.style.cssText=`left:${x}px;top:${y}px;width:${Math.abs(e.clientX-boxStart.x)}px;height:${Math.abs(e.clientY-boxStart.y)}px;`;
+    });
+    document.addEventListener('mouseup', e => {
+        if (!boxStart||!boxDiv) return;
+        const rect=boxDiv.getBoundingClientRect(); boxDiv.remove(); boxDiv=null;
+        const start=boxStart; boxStart=null; map.dragPan.enable();
+        if (rect.width<10||rect.height<10) return;
+        const mapRect=map.getCanvas().getBoundingClientRect();
+        const sw=map.unproject([rect.left-mapRect.left, rect.bottom-mapRect.top]);
+        const ne=map.unproject([rect.right-mapRect.left, rect.top-mapRect.top]);
+        const bounds=new maplibregl.LngLatBounds(sw,ne);
+        if (!e.ctrlKey&&!e.metaKey) STATE.selection.clear();
+        STATE.points.forEach(pt => { if(pt.longitude>=bounds.getWest()&&pt.longitude<=bounds.getEast()&&pt.latitude>=bounds.getSouth()&&pt.latitude<=bounds.getNorth()) STATE.selection.add(pt._id); });
+        updateSelectionUI(); renderSelectionHighlight();
+    });
+}
+
+// ============================================================
+// POINT SELECTION SYSTEM
+// ============================================================
+function togglePointSelection(ptId) { if(STATE.selection.has(ptId)) STATE.selection.delete(ptId); else STATE.selection.add(ptId); updateSelectionUI(); renderSelectionHighlight(); }
+function clearSelection() { STATE.selection.clear(); updateSelectionUI(); renderSelectionHighlight(); }
+function selectAllVisible() {
+    if (!map) return; const bounds=map.getBounds(); STATE.selection.clear();
+    STATE.points.forEach(pt => { if(pt.longitude>=bounds.getWest()&&pt.longitude<=bounds.getEast()&&pt.latitude>=bounds.getSouth()&&pt.latitude<=bounds.getNorth()) STATE.selection.add(pt._id); });
+    updateSelectionUI(); renderSelectionHighlight();
+}
+function updateSelectionUI() {
+    const bar=document.getElementById('sel-bar'), count=STATE.selection.size;
+    if (count===0) { bar.style.display='none'; return; }
+    bar.style.display='flex'; document.getElementById('sel-count').textContent=count;
+    const pick=document.getElementById('sel-profil-pick');
+    pick.innerHTML='<option value="">Profil…</option>'+STATE.profils.map(p=>`<option value="${p.id}">🌙 ${esc(p.nomProfil)}</option>`).join('');
+}
+function renderSelectionHighlight() {
+    if (!map) return;
+    const geojson={type:'FeatureCollection',features:STATE.points.filter(p=>STATE.selection.has(p._id)).map(pt=>({type:'Feature',geometry:{type:'Point',coordinates:[pt.longitude,pt.latitude]},properties:{_id:pt._id}}))};
+    if (map.getSource('sel-highlight-src')) { map.getSource('sel-highlight-src').setData(geojson); }
+    else {
+        map.addSource('sel-highlight-src',{type:'geojson',data:geojson});
+        map.addLayer({id:'sel-highlight-ring',type:'circle',source:'sel-highlight-src',paint:{'circle-radius':16,'circle-color':'transparent','circle-stroke-width':3,'circle-stroke-color':'#f59e0b','circle-stroke-opacity':0.9}});
+        map.addLayer({id:'sel-highlight-pulse',type:'circle',source:'sel-highlight-src',paint:{'circle-radius':22,'circle-color':'transparent','circle-stroke-width':1.5,'circle-stroke-color':'#f59e0b','circle-stroke-opacity':0.4}});
+    }
+}
+async function assignSelectionProfil() {
+    const profilId=parseInt(document.getElementById('sel-profil-pick')?.value);
+    if (!profilId) { toast('Sélectionnez un profil','warning'); return; }
+    const ids=[...STATE.selection]; if(ids.length===0) return;
+    try {
+        if (STATE.grist.ready) { await grist.docApi.applyUserActions([['BulkUpdateRecord','PointLumineux',ids,{profilNocturne:ids.map(()=>profilId)}]]); await loadEclExtData(); }
+        else ids.forEach(id=>{const pt=STATE.points.find(p=>p._id===id);if(pt)pt.profilNocturne=profilId;});
+        const prof=STATE.profils.find(p=>p.id===profilId);
+        toast(`${ids.length} points → ${prof?.nomProfil||'profil'}`, 'success');
+        clearSelection(); renderAllLayers();
+    } catch(error) { toast('Erreur: '+error.message,'error'); }
+}
+
+// ============================================================
+// OPTIM #5/#2 — calcul intensité+température et features 2D
+// ============================================================
+function computePointStates() {
+    const center = map ? map.getCenter() : { lat:CONFIG.defaultCenter[1], lng:CONFIG.defaultCenter[0] };
+    const lat = center.lat, lng = center.lng;
+    let onCount = 0;
+    STATE.points.forEach(pt => {
+        const plages = getActivePlages(pt.profilNocturne, STATE.time, STATE.date, lat, lng);
+        pt._intensity = computeIntensity(pt, plages);
+        pt._kelvin = getActiveKelvin(pt, plages);
+        pt._activePlage = intensityPlage(plages) || plages[0] || null;
+        if (pt._intensity > 0) onCount++;
+    });
+    return onCount;
+}
+function build2DFeatures() {
+    return { type:'FeatureCollection', features: STATE.points.map(pt => ({
+        type:'Feature', geometry:{type:'Point',coordinates:[pt.longitude,pt.latitude]},
+        properties:{ _id:pt._id, _color:kelvinToHex(pt._kelvin||pt.temperatureCouleur||3000), _intensity:pt._intensity||0, _radius:Math.max(4,Math.min(12,(pt.puissance||50)/20)), _structure:pt.structure||'XX' }
+    })) };
+}
+
+// ============================================================
+// RENDER ALL LAYERS
+// ============================================================
+function renderAllLayers() {
+    if (!map||!map.isStyleLoaded()) {
+        if (!renderAllLayers._pending) { renderAllLayers._pending=true; map?.once('idle',()=>{renderAllLayers._pending=false;renderAllLayers();}); }
+        return;
+    }
+    renderAllLayers._pending=false;
+    const onCount = computePointStates();
+    if (onCount===0 && STATE.points.length>0) console.warn(`⚠️ 0/${STATE.points.length} allumés à ${formatTime(STATE.time)}`);
+    renderPointsGeoJSON(build2DFeatures());
+    render3DModels();
+    updateStats();
+}
+
+// ============================================================
+// RENDER: POINTS (clustered MapLibre)
+// ============================================================
+function renderPointsGeoJSON(geojson) {
+    if (map.getSource('eclext-points-src')) { map.getSource('eclext-points-src').setData(geojson); }
+    else {
+        map.addSource('eclext-points-src',{type:'geojson',data:geojson,cluster:true,clusterMaxZoom:14,clusterRadius:50});
+        map.addLayer({id:'eclext-clusters',type:'circle',source:'eclext-points-src',filter:['has','point_count'],paint:{'circle-radius':['step',['get','point_count'],14,50,20,200,28,500,36],'circle-color':['step',['get','point_count'],'rgba(251,146,60,0.7)',50,'rgba(245,158,11,0.8)',200,'rgba(234,88,12,0.85)',500,'rgba(220,38,38,0.9)'],'circle-stroke-width':2,'circle-stroke-color':'rgba(255,255,255,0.3)'}});
+        map.addLayer({id:'eclext-cluster-count',type:'symbol',source:'eclext-points-src',filter:['has','point_count'],layout:{'text-field':'{point_count_abbreviated}','text-size':11},paint:{'text-color':'#ffffff'}});
+        map.addLayer({id:'eclext-points-glow',type:'circle',source:'eclext-points-src',filter:['!',['has','point_count']],paint:{'circle-radius':['*',['get','_radius'],3],'circle-color':['get','_color'],'circle-opacity':['*',['get','_intensity'],0.15],'circle-blur':1}});
+        map.addLayer({id:'eclext-points',type:'circle',source:'eclext-points-src',filter:['!',['has','point_count']],paint:{'circle-radius':['get','_radius'],'circle-color':['case',['>',['get','_intensity'],0],['get','_color'],'#555555'],'circle-opacity':['case',['>',['get','_intensity'],0],0.95,0.3],'circle-stroke-width':2,'circle-stroke-color':['case',['>',['get','_intensity'],0],'rgba(255,255,255,0.8)','rgba(255,255,255,0.15)']}});
+        map.on('click','eclext-clusters', e=>{const cid=e.features[0].properties.cluster_id;map.getSource('eclext-points-src').getClusterExpansionZoom(cid,(err,z)=>{if(!err)map.easeTo({center:e.lngLat,zoom:z+1});});});
+        map.on('mouseenter','eclext-clusters',()=>{map.getCanvas().style.cursor='pointer';});
+        map.on('mouseleave','eclext-clusters',()=>{map.getCanvas().style.cursor='';});
+    }
+    const vis=STATE.settings.markersVisible?'visible':'none';
+    ['eclext-points','eclext-points-glow','eclext-clusters','eclext-cluster-count'].forEach(id=>{if(map.getLayer(id))map.setLayoutProperty(id,'visibility',vis);});
+}
+
+// ============================================================
+// INSTANCED COLOUR HELPERS  (zéro allocation par frame)
+// ============================================================
+const _tmpC  = new THREE.Color();
+const _BLACK = new THREE.Color(0, 0, 0);
+
+function _setInstColor(mesh, i, kelvin, brightness) {
+    const [r, g, b] = kelvinToRGB(kelvin);
+    _tmpC.setRGB((r/255)*brightness, (g/255)*brightness, (b/255)*brightness);
+    mesh.setColorAt(i, _tmpC);
+}
+function _setInstColorRGB(mesh, i, r, g, b, brightness) {
+    _tmpC.setRGB(r*brightness, g*brightness, b*brightness);
+    mesh.setColorAt(i, _tmpC);
+}
+
+// ============================================================
+// GLB CACHE
+// ============================================================
+const GLB_CACHE = new Map();
+let luminaireLayer = null;
+
+function loadGLB(url) {
+    if (!url) return Promise.resolve(null);
+    if (GLB_CACHE.has(url)) return GLB_CACHE.get(url);
+    const p = new Promise(resolve => {
+        const loader = new THREE.GLTFLoader();
+        loader.load(url, gltf => { console.log(`✅ GLB: ${url.replace(/.*\//,'')}`); resolve(gltf.scene); }, undefined, err => { console.warn(`❌ GLB: ${url}`, err); resolve(null); });
+    });
+    GLB_CACHE.set(url, p); return p;
+}
+
+// ============================================================
+// AMBIENT LIGHTING
+// ============================================================
+function lerp(a, b, t) { return a + (b-a) * Math.max(0, Math.min(1, t)); }
+function lerpColor(c1, c2, t) {
+    t = Math.max(0, Math.min(1, t));
+    return '#' + [0,1,2].map(i => Math.round(c1[i]+(c2[i]-c1[i])*t).toString(16).padStart(2,'0')).join('');
+}
+const MOON_PHASE_ICONS = ['🌑','🌒','🌓','🌔','🌕','🌖','🌗','🌘'];
+function computeMoonParams(date, lat, lng) {
+    if (typeof SunCalc === 'undefined') return null;
+    const moonPos = SunCalc.getMoonPosition(date, lat, lng);
+    const moonIllum = SunCalc.getMoonIllumination(date);
+    const altDeg = moonPos.altitude * 180/Math.PI;
+    const azDeg  = ((moonPos.azimuth * 180/Math.PI) + 180) % 360;
+    const fraction = moonIllum.fraction, phase = moonIllum.phase, distance = moonPos.distance;
+    const phaseIcon = MOON_PHASE_ICONS[Math.round(phase*8)%8];
+    let altFactor = 0;
+    if (altDeg > 0) { const sa = Math.sin(altDeg*Math.PI/180); altFactor = altDeg<20 ? sa*(altDeg/20) : sa; }
+    const distFactor = Math.pow(384400/distance, 2);
+    const surgeFactor = (phase>0.48&&phase<0.52) ? 1.4 : 1.0;
+    const moonLux = 0.3 * fraction * altFactor * distFactor * surgeFactor;
+    return { altDeg, azDeg, distance, fraction, phase, phaseIcon, moonLux, moonIntensity:Math.min(1.0,moonLux/0.3), isUp:altDeg>0,
+        phaseName: phase<0.03?'Nouvelle lune':phase<0.22?'Croissant':phase<0.28?'Premier quartier':phase<0.47?'Gibbeuse croissante':phase<0.53?'Pleine lune':phase<0.72?'Gibbeuse décroissante':phase<0.78?'Dernier quartier':'Croissant décroissant' };
+}
+
+function computeAmbientParams(altDeg, moonParams) {
+    const C_DAY=[255,255,255], C_GOLD=[255,210,140], C_TWIL=[180,120,100], C_NAUT=[40,50,100], C_NIGHT=[10,16,48];
+    let sunColor, sunIntensity, ambientColor, ambientIntensity, rasterBrightness, rasterSaturation, rasterHueRotate;
+    if (altDeg>10) { sunColor='#ffffff'; sunIntensity=0.8; ambientColor='#e8e0d8'; ambientIntensity=0.55; rasterBrightness=0.85; rasterSaturation=0; rasterHueRotate=0; }
+    else if (altDeg>0) { const t=altDeg/10; sunColor=lerpColor(C_GOLD,C_DAY,t); sunIntensity=lerp(0.5,0.8,t); ambientColor=lerpColor(C_GOLD,[232,224,216],t); ambientIntensity=lerp(0.35,0.55,t); rasterBrightness=lerp(0.55,0.85,t); rasterSaturation=lerp(-0.15,0,t); rasterHueRotate=lerp(10,0,t); }
+    else if (altDeg>-6) { const t=(altDeg+6)/6; sunColor=lerpColor(C_TWIL,C_GOLD,t); sunIntensity=lerp(0.15,0.5,t); ambientColor=lerpColor(C_NAUT,C_GOLD,t); ambientIntensity=lerp(0.18,0.35,t); rasterBrightness=lerp(0.30,0.55,t); rasterSaturation=lerp(-0.35,-0.15,t); rasterHueRotate=lerp(20,10,t); }
+    else if (altDeg>-12) { const t=(altDeg+12)/6; sunColor=lerpColor(C_NAUT,C_TWIL,t); sunIntensity=lerp(0.02,0.15,t); ambientColor=lerpColor(C_NIGHT,C_NAUT,t); ambientIntensity=lerp(0.10,0.18,t); rasterBrightness=lerp(0.18,0.30,t); rasterSaturation=lerp(-0.55,-0.35,t); rasterHueRotate=lerp(25,20,t); }
+    else if (altDeg>-18) { const t=(altDeg+18)/6; sunColor='#0a1030'; sunIntensity=lerp(0.0,0.02,t); ambientColor=lerpColor(C_NIGHT,C_NIGHT,t); ambientIntensity=lerp(0.06,0.10,t); rasterBrightness=lerp(0.12,0.18,t); rasterSaturation=lerp(-0.70,-0.55,t); rasterHueRotate=lerp(25,25,t); }
+    else { sunColor='#0a1030'; sunIntensity=0.0; ambientColor='#0a1030'; ambientIntensity=0.06; rasterBrightness=0.12; rasterSaturation=-0.70; rasterHueRotate=25; }
+    let moonLightIntensity=0, moonLightColor='#b0c4de', moonAzRad=0, moonAltRad=0;
+    if (moonParams && altDeg<0 && moonParams.isUp) {
+        const mi=moonParams.moonIntensity;
+        ambientIntensity+=mi*0.04; rasterBrightness+=mi*0.05;
+        if (mi>0.1) { const COL_MOONLIT=[35,45,75], mb=Math.min(0.4,mi*0.4); const baseRGB=[parseInt(ambientColor.slice(1,3),16),parseInt(ambientColor.slice(3,5),16),parseInt(ambientColor.slice(5,7),16)]; ambientColor=lerpColor(baseRGB,COL_MOONLIT,mb); }
+        rasterSaturation+=mi*0.08;
+        moonLightIntensity=mi*0.12; moonAzRad=moonParams.azDeg*Math.PI/180; moonAltRad=moonParams.altDeg*Math.PI/180;
+    }
+    return { sunColor, sunIntensity, ambientColor, ambientIntensity, rasterBrightness, rasterSaturation, rasterHueRotate, moonLightIntensity, moonLightColor, moonAzRad, moonAltRad, altDeg, isNight:altDeg<-6, isDusk:altDeg>=-6&&altDeg<=0 };
+}
+
+function updateMapAmbient(altDeg, moonParams) {
+    if (!map) return;
+    const amb=computeAmbientParams(altDeg, moonParams);
+    const style=STATE.settings.style;
+    const bm=style==='plan'?1.3:style==='ortho'?1.1:1.0, so=style==='plan'?0.15:style==='ortho'?0.08:0;
+    if (map.getLayer('ign-base')) { try { map.setPaintProperty('ign-base','raster-brightness-max',Math.min(1.0,amb.rasterBrightness*bm)); map.setPaintProperty('ign-base','raster-saturation',Math.max(-1.0,Math.min(0,amb.rasterSaturation+so))); } catch(e){} }
+    try { map.setLight({ anchor:'viewport', color:amb.ambientColor, intensity:Math.max(0.15,amb.ambientIntensity) }); } catch(e) {}
+    const bgColor = altDeg>5?'#87CEEB':altDeg>0?'#c4825a':altDeg>-6?'#3d2b4f':altDeg>-12?'#121830':'#080c1a';
+    document.getElementById('map').style.background = bgColor;
+}
+
+// ============================================================
+// LUMINAIRE CUSTOM LAYER — InstancedMesh (3 draw calls pour N luminaires)
+// ============================================================
+class LuminaireCustomLayer {
+    constructor() {
+        this.id='eclext-3d-models'; this.type='custom'; this.renderingMode='3d';
+        this.scene=new THREE.Scene(); this.camera=new THREE.Camera();
+        this.renderer=null; this.map=null;
+        this.originLngLat=null; this.originMC=null; this.originScale=null;
+        // InstancedMesh — 3 draw calls total
+        this.MAX_INST=25000;
+        this.iCones=null; this.iGlows=null; this.iULR=null;
+        // GLB individuels (viewport-culled)
+        this.glbGroups=new Map(); this.glbVisible=new Set();
+        // Pré-alloués (zéro GC dans render loop)
+        this._m4L=new THREE.Matrix4(); this._m4VP=new THREE.Matrix4();
+        this._mRot=new THREE.Matrix4().makeRotationX(Math.PI/2);
+        this._vS=new THREE.Vector3(); this._obj=new THREE.Object3D();
+        // Cache élévation terrain (~100 m précision)
+        this._elevCache=new Map();
+        this.sunLight=null; this.ambientLight=null; this.moonLight=null;
+    }
+
+    onAdd(m, gl) {
+        this.map=m;
+        this.renderer=new THREE.WebGLRenderer({ canvas:m.getCanvas(), context:gl, antialias:true });
+        this.renderer.autoClear=false;
+        this.sunLight=new THREE.DirectionalLight(0xffffff,0.8); this.sunLight.position.set(0,-70,100).normalize(); this.scene.add(this.sunLight);
+        const d2=new THREE.DirectionalLight(0xffffff,0.5); d2.position.set(0,70,100).normalize(); this.scene.add(d2);
+        this.ambientLight=new THREE.AmbientLight(0xffffff,0.6); this.scene.add(this.ambientLight);
+        this.moonLight=new THREE.DirectionalLight(0xb0c4de,0); this.moonLight.position.set(0,70,-100).normalize(); this.scene.add(this.moonLight);
+        this._buildInstancedMeshes();
+    }
+    onRemove() { this.clearAll(); this.renderer?.dispose?.(); this.renderer=null; } // OPTIM #6 — dispose WebGLRenderer
+
+    _buildInstancedMeshes() {
+        const N=this.MAX_INST;
+        const mk=(geo,mat)=>{
+            const m=new THREE.InstancedMesh(geo,mat,N);
+            m.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+            m.setColorAt(0,_BLACK); // alloue instanceColor une seule fois
+            m.count=0; m.frustumCulled=false; return m;
+        };
+        this.iCones=mk(new THREE.ConeGeometry(1,1,12,1,true), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false }));
+        this.iGlows=mk(new THREE.CircleGeometry(1,12), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false }));
+        this.iULR=mk(new THREE.ConeGeometry(1,1,8,1,true), new THREE.MeshBasicMaterial({ color:0xffffff, transparent:true, opacity:1, side:THREE.DoubleSide, blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false }));
+        this.iCones.visible = this.iGlows.visible = this.iULR.visible = STATE.settings.cones3DVisible;
+        this.scene.add(this.iCones, this.iGlows, this.iULR);
+    }
+
+    render(gl, matrix) {
+        if (!this.renderer||!this.originLngLat) return;
+        const elev=this.map.queryTerrainElevation(this.originLngLat)||0;
+        // Si l'élévation de l'origine a changé (tuiles DEM chargées en cours),
+        // les matrices instanced sont périmées → forcer un updateAll différé
+        if (this._lastRenderElev !== undefined && Math.abs(elev - this._lastRenderElev) > 0.5) {
+            clearTimeout(this._terrainDriftTimer);
+            this._terrainDriftTimer = setTimeout(() => {
+                if (!luminaireLayer) return;
+                const mc2 = new Map();
+                for (const p of STATE.points) mc2.set(p._id, resolveModelForPoint(p));
+                luminaireLayer.updateAll(STATE.points, mc2);
+            }, 200);
+        }
+        this._lastRenderElev = elev;
+        const mc=maplibregl.MercatorCoordinate.fromLngLat(this.originLngLat, elev);
+        const s=mc.meterInMercatorCoordinateUnits();
+        this._m4L.makeTranslation(mc.x,mc.y,mc.z);
+        this._vS.set(s,-s,s); this._m4L.scale(this._vS); this._m4L.multiply(this._mRot);
+        this._m4VP.fromArray(matrix);
+        this.camera.projectionMatrix.copy(this._m4VP.multiply(this._m4L));
+        this.renderer.resetState();
+        this.renderer.render(this.scene, this.camera);
+    }
+
+    setOrigin(lng, lat) {
+        this.originLngLat=[lng,lat];
+        this.originMC=maplibregl.MercatorCoordinate.fromLngLat([lng,lat],0);
+        this.originScale=this.originMC.meterInMercatorCoordinateUnits();
+    }
+    lngLatToLocalMeters(lng, lat) {
+        if (!this.originMC) return {x:0,y:0};
+        const mc=maplibregl.MercatorCoordinate.fromLngLat([lng,lat],0), s=this.originScale;
+        return { x:(mc.x-this.originMC.x)/s, y:-(mc.y-this.originMC.y)/s };
+    }
+    _elev(lngLat) {
+        if (!this.map) return 0;
+        const k=`${(lngLat[0]*1e4|0)},${(lngLat[1]*1e4|0)}`;
+        if (this._elevCache.has(k)) return this._elevCache.get(k);
+        const v=this.map.queryTerrainElevation(lngLat)||0;
+        if (this._elevCache.size>10000) this._elevCache.clear();
+        this._elevCache.set(k,v); return v;
+    }
+    invalidateElevCache() { this._elevCache.clear(); }
+
+    // ── MISE À JOUR COMPLÈTE (matrices + couleurs) ──────────────────────────
+    updateAll(points, modelCache) {
+        if (!this.originLngLat||!this.iCones) return;
+        const showCones=STATE.settings.cones3DVisible;
+        const terrainOn=STATE.settings.terrainEnabled;
+        // OPTIM #3 — terrain désactivé : élévations toutes nulles, pas de query
+        const _q = terrainOn ? (ll)=>this._elev(ll) : ()=>0;
+        const originElev=_q(this.originLngLat);
+        const obj=this._obj;
+        const N=Math.min(points.length, this.MAX_INST);
+        let ci=0, gi=0, ui=0;
+        for (let i=0; i<N; i++) {
+            const pt=points[i];
+            const mi=(modelCache?modelCache.get(pt._id):resolveModelForPoint(pt))||{};
+            const scale=mi.scale||1, intensity=pt._intensity||0, kelvin=pt._kelvin||pt.temperatureCouleur||3000;
+            const h=Math.max(0.5,(pt.hauteurFeu||mi.hauteurSource||8)*scale);
+            const cie3=Math.max(0,Math.min(1,pt.cie3||mi.cie3Defaut||0.85));
+            const cR=h*Math.tan((20+(1-cie3)*55)*Math.PI/180);
+            const flux=Math.min(1,(pt.fluxSource||mi.fluxNominal||5000)/15000);
+            const incl=(pt.inclinaisonInstallee||0)*Math.PI/180;
+            const ulr=pt.ulrInstalle||mi.ulrNominal||0;
+            const lm=this.lngLatToLocalMeters(pt.longitude,pt.latitude);
+            const eOff=_q([pt.longitude,pt.latitude])-originElev;
+            if (showCones&&ci<this.MAX_INST) {
+                // Cône lumineux
+                obj.position.set(lm.x, eOff+h*0.5, -lm.y);
+                obj.scale.set(cR,h,cR); obj.rotation.set(incl,0,0); obj.updateMatrix();
+                this.iCones.setMatrixAt(ci, obj.matrix);
+                _setInstColor(this.iCones,ci,kelvin, intensity>0?Math.min(0.5,0.08+flux*0.35)*intensity:0);
+                ci++;
+                // Disque de sol
+                obj.position.set(lm.x, eOff+0.05, -lm.y);
+                obj.scale.set(cR*1.2,cR*1.2,1); obj.rotation.set(-Math.PI/2,0,0); obj.updateMatrix();
+                this.iGlows.setMatrixAt(gi, obj.matrix);
+                _setInstColor(this.iGlows,gi,kelvin, intensity>0?Math.min(0.3,flux*0.25)*intensity:0);
+                gi++;
+                // Cône ULR
+                if (ulr>0.04&&ui<this.MAX_INST) {
+                    const uH=h*ulr*5, uR=h*0.15;
+                    obj.position.set(lm.x, eOff+h+uH*0.5, -lm.y);
+                    obj.scale.set(uR,uH,uR); obj.rotation.set(Math.PI,0,0); obj.updateMatrix();
+                    this.iULR.setMatrixAt(ui, obj.matrix);
+                    _setInstColorRGB(this.iULR,ui,1.0,0.13,0.13, Math.min(0.3,ulr*2)*intensity);
+                    ui++;
+                }
+            }
+        }
+        this.iCones.count=ci; this.iGlows.count=gi; this.iULR.count=ui;
+        this._pushToGPU(true);
+        // Update performance badge
+        const badge=document.getElementById('perf-badge');
+        if (badge) badge.textContent=`3 draw calls · ${N} luminaires`;
+    }
+
+    // ── FAST PATH couleurs seulement (time slider) — 0 recalcul matriciel ───
+    fastUpdateColors(points, modelCache) {
+        if (!this.iCones||this.iCones.count===0) return;
+        const N=Math.min(points.length, this.iCones.count);
+        let ui=0;
+        for (let i=0; i<N; i++) {
+            const pt=points[i];
+            const mi=(modelCache?modelCache.get(pt._id):resolveModelForPoint(pt))||{};
+            const intensity=pt._intensity||0, kelvin=pt._kelvin||pt.temperatureCouleur||3000;
+            const flux=Math.min(1,(pt.fluxSource||mi.fluxNominal||5000)/15000);
+            const ulr=pt.ulrInstalle||mi.ulrNominal||0;
+            _setInstColor(this.iCones,i,kelvin, intensity>0?Math.min(0.5,0.08+flux*0.35)*intensity:0);
+            _setInstColor(this.iGlows,i,kelvin, intensity>0?Math.min(0.3,flux*0.25)*intensity:0);
+            if (ulr>0.04&&ui<this.iULR.count) { _setInstColorRGB(this.iULR,ui,1.0,0.13,0.13,Math.min(0.3,ulr*2)*intensity); ui++; }
+        }
+        this._pushToGPU(false);
+    }
+
+    _pushToGPU(withMatrices) {
+        if (withMatrices) { this.iCones.instanceMatrix.needsUpdate=true; this.iGlows.instanceMatrix.needsUpdate=true; this.iULR.instanceMatrix.needsUpdate=true; }
+        if (this.iCones.instanceColor) this.iCones.instanceColor.needsUpdate=true;
+        if (this.iGlows.instanceColor) this.iGlows.instanceColor.needsUpdate=true;
+        if (this.iULR.instanceColor)   this.iULR.instanceColor.needsUpdate=true;
+        this.map?.triggerRepaint();
+    }
+
+    // ── GLBs viewport-culled ────────────────────────────────────────────────
+    async updateGLBModels(points, modelCache) {
+        if (!this.map) return;
+        if (!STATE.settings.models3DVisible||this.map.getZoom()<14.5) {
+            for (const [,e] of this.glbGroups) e.group.visible=false; return;
+        }
+        const bounds=this.map.getBounds(), buf=0.003;
+        const originElev=this._elev(this.originLngLat);
+        const wantVisible=new Set();
+        for (const pt of points) {
+            const mi=modelCache?modelCache.get(pt._id):resolveModelForPoint(pt);
+            if (!mi?.glbUrl) continue;
+            if (pt.longitude<bounds.getWest()-buf||pt.longitude>bounds.getEast()+buf) continue;
+            if (pt.latitude<bounds.getSouth()-buf||pt.latitude>bounds.getNorth()+buf) continue;
+            wantVisible.add(pt._id);
+        }
+        for (const id of this.glbVisible) {
+            if (!wantVisible.has(id)) { const e=this.glbGroups.get(id); if(e) e.group.visible=false; this.glbVisible.delete(id); }
+        }
+        const toLoad=[];
+        for (const ptId of wantVisible) {
+            const pt=points.find(p=>p._id===ptId); if (!pt) continue;
+            const mi=modelCache?modelCache.get(ptId):resolveModelForPoint(pt);
+            const hash=`${mi?.glbUrl}|${pt.hauteurFeu}|${pt.cie3}|${mi?.scale}`;
+            const existing=this.glbGroups.get(ptId);
+            if (existing&&existing.hash===hash) { existing.group.visible=true; this._applyGLBEmissive(existing.group,pt._kelvin||pt.temperatureCouleur||3000,pt._intensity||0,mi?.emissiveMeshName); this.glbVisible.add(ptId); }
+            else toLoad.push({pt,mi,hash});
+        }
+        if (toLoad.length>0) {
+            const uniqueUrls=[...new Set(toLoad.map(x=>x.mi?.glbUrl).filter(Boolean))];
+            await Promise.all(uniqueUrls.map(u=>loadGLB(u)));
+            for (const {pt,mi,hash} of toLoad) { await this._addGLBForPoint(pt,mi,hash,originElev); this.glbVisible.add(pt._id); }
+        }
+    }
+
+    async _addGLBForPoint(pt, mi, hash, originElev) {
+        const old=this.glbGroups.get(pt._id);
+        if (old) { this._disposeGroup(old.group); this.scene.remove(old.group); }
+        const prototype=mi?.glbUrl?await loadGLB(mi.glbUrl):null; if(!prototype) return;
+        const group=new THREE.Group();
+        const model=prototype.clone(true);
+        const s=mi.scale||1; model.scale.set(s,s,s);
+        this._applyGLBEmissive(model, pt._kelvin||pt.temperatureCouleur||3000, pt._intensity||0, mi?.emissiveMeshName);
+        group.add(model);
+        const lm=this.lngLatToLocalMeters(pt.longitude,pt.latitude);
+        const eOff=this._elev([pt.longitude,pt.latitude])-originElev;
+        group.position.set(lm.x,eOff,-lm.y);
+        this.scene.add(group); this.glbGroups.set(pt._id,{group,hash});
+    }
+
+    // OPTIM #4 — clone du matériau UNE seule fois (flag _eclextCloned), puis mutation
+    // → plus de fuite VRAM à chaque rafraîchissement émissif.
+    _applyGLBEmissive(model, kelvin, intensity, emissiveMeshName) {
+        const color=new THREE.Color(kelvinToHex(kelvin));
+        model.traverse(child => {
+            if (!child.isMesh) return;
+            if (!child.material._eclextCloned) { child.material = child.material.clone(); child.material._eclextCloned = true; }
+            const isTarget=emissiveMeshName&&child.name.toLowerCase().includes(emissiveMeshName.toLowerCase());
+            if (child.material.emissive) child.material.emissive.copy(color);
+            child.material.emissiveIntensity=intensity>0?(isTarget?Math.max(1,intensity*5):Math.max(0.3,intensity*1.5)):0;
+        });
+    }
+    _disposeGroup(group) {
+        group.traverse(child => {
+            child.geometry?.dispose();
+            (Array.isArray(child.material)?child.material:[child.material??null]).filter(Boolean).forEach(m=>m.dispose());
+        });
+    }
+
+    updateSunLight(azDeg, altDeg, moonParams) {
+        if (!this.sunLight) return;
+        const az=azDeg*Math.PI/180, al=altDeg*Math.PI/180;
+        this.sunLight.position.set(Math.sin(az)*Math.cos(al), Math.sin(al), Math.cos(az)*Math.cos(al));
+        const amb=computeAmbientParams(altDeg, moonParams);
+        this.sunLight.color.set(amb.sunColor); this.sunLight.intensity=amb.sunIntensity;
+        if (this.ambientLight) { this.ambientLight.color.set(amb.ambientColor); this.ambientLight.intensity=amb.ambientIntensity; }
+        if (this.scene.children[1]?.isDirectionalLight) { this.scene.children[1].intensity=amb.sunIntensity*0.4; this.scene.children[1].color.set(amb.ambientColor); }
+        if (this.moonLight) {
+            this.moonLight.intensity=amb.moonLightIntensity;
+            if (amb.moonLightIntensity>0) { this.moonLight.color.set(amb.moonLightColor); this.moonLight.position.set(Math.sin(amb.moonAzRad)*Math.cos(amb.moonAltRad),Math.sin(amb.moonAltRad),Math.cos(amb.moonAzRad)*Math.cos(amb.moonAltRad)); }
+        }
+    }
+
+    clearAll() {
+        if(this.iCones) this.iCones.count=0; if(this.iGlows) this.iGlows.count=0; if(this.iULR) this.iULR.count=0;
+        for (const [,e] of this.glbGroups) { this._disposeGroup(e.group); this.scene.remove(e.group); }
+        this.glbGroups.clear(); this.glbVisible.clear();
+        this.originLngLat=null; this.originMC=null; this._elevCache.clear();
+    }
+}
+
+// ============================================================
+// ensure3DLayer
+// ============================================================
+function ensure3DLayer() {
+    if (luminaireLayer&&map.getLayer('eclext-3d-models')) return luminaireLayer;
+    if (map.getLayer('eclext-3d-models')) { try { map.removeLayer('eclext-3d-models'); } catch(e){} }
+    luminaireLayer=new LuminaireCustomLayer();
+    try { map.addLayer(luminaireLayer); console.log('✅ Three.js CustomLayer (instanced) ajouté'); }
+    catch(e) { console.error('❌ CustomLayer error:',e); luminaireLayer=null; }
+    return luminaireLayer;
+}
+
+// ============================================================
+// render3DModels — pré-cache modèles O(n+m), updateAll + GLBs culled
+// ============================================================
+async function render3DModels() {
+    if (!STATE.settings.models3DVisible&&!STATE.settings.cones3DVisible) { if(luminaireLayer) luminaireLayer.clearAll(); return; }
+    const layer=ensure3DLayer(); if (!layer) return;
+    if (!layer.originLngLat) {
+        const fp=STATE.points[0], c=map.getCenter();
+        layer.setOrigin(fp?fp.longitude:c.lng, fp?fp.latitude:c.lat);
+        console.log(`📍 Scene origin: ${layer.originLngLat}`);
+    }
+    // Pré-cache modèles (O(n+m) au lieu de O(n×m))
+    const modelCache=new Map();
+    for (const pt of STATE.points) modelCache.set(pt._id, resolveModelForPoint(pt));
+    layer.updateAll(STATE.points, modelCache);
+    await layer.updateGLBModels(STATE.points, modelCache);
+    if (typeof SunCalc!=='undefined'&&map) {
+        const c=map.getCenter(), d=new Date(STATE.date);
+        d.setHours(Math.floor(STATE.time/60), STATE.time%60, 0);
+        try { const sp=SunCalc.getPosition(d,c.lat,c.lng), mp=computeMoonParams(d,c.lat,c.lng); layer.updateSunLight(((sp.azimuth*180/Math.PI)+180)%360, sp.altitude*180/Math.PI, mp); } catch(e){}
+    }
+}
+
+// ============================================================
+// onTimeChange — FAST PATH 3D immédiat ; 2D débouncé (anti re-cluster)
+// ============================================================
+let _render2DTimer = null;
+function scheduleRender2D() {
+    clearTimeout(_render2DTimer);
+    _render2DTimer = setTimeout(() => { if (map?.getSource('eclext-points-src')) renderPointsGeoJSON(build2DFeatures()); }, 90);
+}
+function onTimeChange(val) {
+    STATE.time=parseInt(val);
+    updateTimeDisplay(STATE.time);
+    const center=map.getCenter(), lat=center.lat, lng=center.lng;
+    // Recalcul intensités + températures (immédiat)
+    computePointStates();
+    // OPTIM #2 — 2D débouncé : on évite de re-clusteriser tout le dataset à chaque tick
+    scheduleRender2D();
+    map?.triggerRepaint();
+    updateStats();
+    // Ambiance solaire (immédiat)
+    if (typeof SunCalc!=='undefined'&&map) {
+        const d=new Date(STATE.date); d.setHours(Math.floor(STATE.time/60),STATE.time%60,0);
+        const sp=SunCalc.getPosition(d,lat,lng), mp=computeMoonParams(d,lat,lng);
+        updateMapAmbient(sp.altitude*180/Math.PI, mp);
+        if (luminaireLayer) luminaireLayer.updateSunLight(((sp.azimuth*180/Math.PI)+180)%360, sp.altitude*180/Math.PI, mp);
+    }
+    // 3D : FAST PATH — couleurs uniquement, 0 recalcul de matrices (immédiat)
+    if (luminaireLayer&&luminaireLayer.iCones?.count>0) {
+        const modelCache=new Map();
+        for (const pt of STATE.points) modelCache.set(pt._id, resolveModelForPoint(pt));
+        luminaireLayer.fastUpdateColors(STATE.points, modelCache);
+        // GLBs emissifs en différé
+        clearTimeout(onTimeChange._glbTimer);
+        onTimeChange._glbTimer=setTimeout(()=>{ if(luminaireLayer) luminaireLayer.updateGLBModels(STATE.points, modelCache); }, 200);
+    }
+}
+
+// ============================================================
+// onMapMoveEnd — invalidate terrain cache + GLB culling update
+// OPTIM #3 — sans terrain, les matrices sont invariantes au pan → pas d'updateAll
+// ============================================================
+function onMapMoveEnd() {
+    if (!luminaireLayer) return;
+    luminaireLayer.invalidateElevCache();
+    clearTimeout(onMapMoveEnd._timer);
+    onMapMoveEnd._timer=setTimeout(async () => {
+        if (!luminaireLayer) return;
+        const modelCache=new Map();
+        for (const pt of STATE.points) modelCache.set(pt._id, resolveModelForPoint(pt));
+        await luminaireLayer.updateGLBModels(STATE.points, modelCache);
+        if (STATE.settings.terrainEnabled) luminaireLayer.updateAll(STATE.points, modelCache);
+    }, 400);
+}
+
+// ============================================================
+// RESOLVE MODEL FOR POINT
+// ============================================================
+function resolveModelForPoint(pt) {
+    if (!pt) return null;
+    if (pt.modele && pt.modele > 0) {
+        const m = STATE.models.find(m => m._id === pt.modele);
+        if (m) return m;
+    }
+    const struct = pt.structure || 'XX';
+    const byStruct = STATE.models.find(m => m.structureEclExt === struct && m.isDefault);
+    if (byStruct) return byStruct;
+    return STATE.models.find(m => m.isDefault) || STATE.models[0] || null;
+}
+
+// ============================================================
+// SETTINGS persistence
+// ============================================================
+function saveSettings() { try { localStorage.setItem('eclext-settings', JSON.stringify(STATE.settings)); } catch(e){} }
+function loadSettings() { try { const s=localStorage.getItem('eclext-settings'); if(s) Object.assign(STATE.settings,JSON.parse(s)); } catch(e){} }
+
+// ============================================================
+// UI HELPERS
+// ============================================================
+function formatTime(minutes) {
+    const h=Math.floor(((minutes||0)%1440)/60), m=(minutes||0)%60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+}
+function updateTimeDisplay(t) {
+    document.getElementById('time-display').textContent = formatTime(t);
+    const d = STATE.date instanceof Date ? STATE.date : new Date(STATE.date);
+    document.getElementById('time-date').textContent = d.toLocaleDateString('fr-FR',{weekday:'short',day:'2-digit',month:'short'});
+    const slider = document.getElementById('time-slider');
+    if (slider) slider.value = t;
+    const dp = document.getElementById('time-date-picker');
+    if (dp && !dp.value) dp.value = d.toISOString().split('T')[0];
+}
+function setSimulationDate(val) {
+    if (!val) return;
+    STATE.date = new Date(val);
+    // Immédiat: intensités + couleurs 3D + ambiance
+    onTimeChange(STATE.time);
+    // Rebuild complet différé (matrices si nécessaire)
+    clearTimeout(setSimulationDate._t);
+    setSimulationDate._t = setTimeout(()=>renderAllLayers(), 50);
+}
+function updateStats() {
+    const on = STATE.points.filter(p=>(p._intensity||0)>0).length;
+    document.getElementById('stat-points').textContent = `${STATE.points.length} pts`;
+    document.getElementById('stat-profils').textContent = `${STATE.profils.length} profils`;
+    document.getElementById('stat-models').textContent = `${STATE.models.length} mod.`;
+    const dot = document.getElementById('grist-dot');
+    if (dot) { dot.className='dot '+(STATE.grist.ready?'on':'off'); }
+    const gl = document.getElementById('grist-label');
+    if (gl) gl.textContent = STATE.grist.ready?'Grist':'Démo';
+    // Header stats enrichis
+    const statDraw = document.getElementById('stat-draw');
+    if (statDraw) statDraw.textContent = luminaireLayer?.iCones?.count>0 ? `⚡ 3 DC · ${on}/${STATE.points.length} ON` : `${on}/${STATE.points.length} ON`;
+}
+function setGristStatus(connected) {
+    STATE.grist.ready = connected;
+    const dot = document.getElementById('grist-dot');
+    if (dot) { dot.className='dot '+(connected?'on':'off'); }
+}
+function getPointLabel(pt) {
+    return `#${pt._id} — ${pt.structure||'?'} ${pt.fabricant?'· '+pt.fabricant:''}`;
+}
+function toast(msg, type='info') {
+    const box = document.getElementById('toast-box');
+    const t = document.createElement('div');
+    t.className = `toast ${type}`;
+    t.innerHTML = `<span>${type==='success'?'✅':type==='error'?'❌':type==='warning'?'⚠️':'ℹ️'}</span><span>${esc(msg)}</span>`;
+    box.appendChild(t);
+    setTimeout(()=>t.remove(), 3500);
+}
+function showLoading(v) { document.getElementById('loading').classList.toggle('hidden',!v); }
+function closePanel() {
+    const panel = document.getElementById('panel');
+    panel.classList.add('hidden');
+    panel._currentMod = null;
+    document.querySelectorAll('.tb-btn').forEach(b=>b.classList.remove('active'));
+}
+document.addEventListener('mousedown', e => {
+    const panel = document.getElementById('panel');
+    if (panel.classList.contains('hidden')) return;
+    if (panel.contains(e.target)) return;
+    if (e.target.closest('.tb-btn')) return;
+    if (e.target.closest('.maplibregl-popup')) return;
+    if (e.target.closest('.sel-bar')) return;
+    closePanel();
+});
+function openModule(mod, {toggle=true}={}) {
+    const panel = document.getElementById('panel');
+    const body = document.getElementById('panel-body');
+    const title = document.getElementById('panel-title');
+    document.querySelectorAll('.tb-btn').forEach(b=>b.classList.toggle('active',b.dataset.mod===mod));
+    const icons = {donnees:'📊',profils:'🌙',rendu:'💡',modeles:'📦',saisie:'✏️',carte:'🗺️'};
+    const names = {donnees:'Données',profils:'Profils Nocturnes',rendu:'Rendu & Affichage',modeles:'Modèles Luminaires',saisie:'Saisie',carte:'Fond de carte'};
+    title.innerHTML = `${icons[mod]||''} ${names[mod]||mod}`;
+    if (toggle) {
+        const alreadyOpen = !panel.classList.contains('hidden');
+        const sameModule = panel._currentMod === mod;
+        if (alreadyOpen && sameModule) { closePanel(); return; }
+        panel.classList.remove('hidden');
+    }
+    panel._currentMod = mod;
+    body.innerHTML = '';
+    if (mod==='donnees') renderModuleDonnees(body);
+    else if (mod==='profils') renderModuleProfils(body);
+    else if (mod==='rendu') renderModuleRendu(body);
+    else if (mod==='modeles') renderModuleModeles(body);
+    else if (mod==='saisie') renderModuleSaisie(body);
+    else if (mod==='carte') renderModuleCarte(body);
+}
+
+// ============================================================
+// MODULE: DONNÉES
+// ============================================================
+function renderModuleDonnees(body) {
+    const on = STATE.points.filter(p=>(p._intensity||0)>0).length;
+    const off = STATE.points.length - on;
+    const avgPuissance = STATE.points.length ? Math.round(STATE.points.reduce((s,p)=>s+(p.puissance||0),0)/STATE.points.length) : 0;
+    body.innerHTML = `
+    <div class="section">
+        <div class="grist-status ${STATE.grist.ready?'connected':'disconnected'}">
+            <span>${STATE.grist.ready?'🟢':'🔴'}</span>
+            <span>${STATE.grist.ready?'Connecté à Grist':'Mode démo (Grist non disponible)'}</span>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+            <div class="card" style="text-align:center;cursor:default;"><div style="font-size:24px;font-weight:700;color:var(--accent-amber)">${STATE.points.length}</div><div style="font-size:11px;color:var(--text-muted)">Points lumineux</div></div>
+            <div class="card" style="text-align:center;cursor:default;"><div style="font-size:24px;font-weight:700;color:var(--success)">${on}</div><div style="font-size:11px;color:var(--text-muted)">Allumés</div></div>
+            <div class="card" style="text-align:center;cursor:default;"><div style="font-size:24px;font-weight:700;color:var(--text-muted)">${off}</div><div style="font-size:11px;color:var(--text-muted)">Éteints</div></div>
+            <div class="card" style="text-align:center;cursor:default;"><div style="font-size:24px;font-weight:700;color:var(--accent-cool)">${avgPuissance}W</div><div style="font-size:11px;color:var(--text-muted)">Puissance moy.</div></div>
+        </div>
+        <div class="section-title">Import / Export</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px;">
+            <button class="btn btn-ghost btn-full" onclick="importOSM()">🌐 OSM Overpass</button>
+            <button class="btn btn-ghost btn-full" onclick="document.getElementById('csv-import-input').click()">📂 CSV / GeoJSON</button>
+        </div>
+        <input type="file" id="csv-import-input" accept=".csv,.geojson,.json" style="display:none" onchange="importFile(event)">
+        <div class="section-title">Actions</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+            <button class="btn btn-ghost btn-full" onclick="selectAllVisible()">☑ Tout sélectionner (vue)</button>
+            <button class="btn btn-ghost btn-full" onclick="exportGeoJSON()">💾 Export GeoJSON</button>
+            <button class="btn btn-primary btn-full" onclick="renderAllLayers()">🔄 Actualiser</button>
+            <button class="btn btn-ghost btn-full" onclick="fitToBounds()">🎯 Centrer carte</button>
+        </div>
+    </div>`;
+}
+
+// ============================================================
+// MODULE: PROFILS NOCTURNES
+// ============================================================
+function renderModuleProfils(body) {
+    const center = map ? map.getCenter() : {lat:43.3, lng:5.38};
+    let html = `<div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div class="section-title" style="margin:0">Profils (${STATE.profils.length})</div>
+            <button class="btn btn-primary btn-sm" onclick="editProfil(null)">+ Nouveau</button>
+        </div>`;
+    if (STATE.profils.length===0) { html+=`<div style="color:var(--text-muted);font-size:12px;text-align:center;padding:20px;">Aucun profil. Créez-en un avec le bouton +</div>`; }
+    else {
+        for (const profil of STATE.profils) {
+            const pts = STATE.points.filter(p=>p.profilNocturne===profil.id).length;
+            const debMin = parseEclExtTime(profil.allumageSoir, STATE.date, center.lat, center.lng);
+            const finMin = parseEclExtTime(profil.extinctionMatin, STATE.date, center.lat, center.lng);
+            html+=`<div class="card" onclick="editProfil(${profil.id})">
+                <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+                    <div style="font-weight:600;font-size:13px;">🌙 ${esc(profil.nomProfil)}</div>
+                    <div style="font-size:10px;color:var(--text-muted)">${pts} point${pts>1?'s':''}</div>
+                </div>
+                <div style="font-size:11px;color:var(--text-secondary)">
+                    Allumage: ${esc(profil.allumageSoir||'—')} ${debMin!==null?'('+formatTime(debMin)+')':''}
+                    <br>Extinction: ${esc(profil.extinctionMatin||'—')} ${finMin!==null?'('+formatTime(finMin)+')':''}
+                </div>
+                <div style="margin-top:6px;">
+                    ${STATE.plages.filter(p=>p.profilNocturne===profil.id).map(pl=>`<span style="display:inline-block;font-size:9px;padding:2px 6px;border-radius:4px;margin:2px;background:rgba(251,146,60,0.15);color:var(--accent-amber);">${esc(pl.nomPlage)} ${pl.grandeurVariation==='EX'?'🔴':(pl.valeur||100)+'%'}</span>`).join('')}
+                </div>
+            </div>`;
+        }
+    }
+    html+=`</div>`;
+    body.innerHTML=html;
+}
+
+function editProfil(profilId) {
+    const profil = profilId ? STATE.profils.find(p=>p.id===profilId) : null;
+    const center = map ? map.getCenter() : {lat:43.3, lng:5.38};
+    const body = document.getElementById('panel-body');
+    const myPlages = profil ? STATE.plages.filter(p=>p.profilNocturne===profilId) : [];
+    body.innerHTML = `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="renderModuleProfils(document.getElementById('panel-body'))">← Retour</button>
+        <strong>${profil?'Modifier':'Nouveau profil'}</strong>
+    </div>
+    <div class="input-group"><label class="input-label">Nom du profil</label><input class="input-field" id="prof-nom" value="${esc(profil?.nomProfil||'')}" placeholder="Ex: Residentiel_standard"></div>
+    <div class="form-grid">
+        <div class="input-group"><label class="input-label">Allumage soir (EclExt)</label><input class="input-field" id="prof-soir" value="${esc(profil?.allumageSoir||'-15CS')}" placeholder="-15CS"></div>
+        <div class="input-group"><label class="input-label">Extinction matin (EclExt)</label><input class="input-field" id="prof-matin" value="${esc(profil?.extinctionMatin||'+15LS')}" placeholder="+15LS"></div>
+    </div>
+    <div style="font-size:10px;color:var(--text-muted);margin-bottom:16px;">Formats: -15CS (−15min/coucher), +30LS (lever+30), 22:30HL, MN (minuit solaire)</div>
+    ${profil?`<div class="section-title">Plages (${myPlages.length})</div>
+        ${myPlages.map(pl=>`<div class="card" style="font-size:12px;display:flex;justify-content:space-between;align-items:center;" onclick="editPlage(${pl.id},${profil.id})">
+            <div>${esc(pl.nomPlage)} · ${pl.grandeurVariation==='EX'?'<span style="color:var(--error)">Extinction</span>':`${pl.valeur||100}% ${esc(pl.formatVariation||'%')}`}</div>
+            <div style="font-size:10px;color:var(--text-muted)">${esc(pl.heureDebut||'?')} → ${esc(pl.heureFin||'?')}</div>
+        </div>`).join('')}
+        <button class="btn btn-ghost btn-full btn-sm" onclick="editPlage(null,${profil.id})" style="margin-top:6px;">+ Plage de variation</button>`:''}
+    <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" style="flex:2" onclick="saveProfil(${profilId||'null'})">💾 Enregistrer</button>
+        ${profil?`<button class="btn btn-ghost" onclick="deleteProfil(${profil.id})">🗑</button>`:''}
+    </div>`;
+}
+
+async function saveProfil(profilId) {
+    const nom=document.getElementById('prof-nom')?.value?.trim();
+    const soir=document.getElementById('prof-soir')?.value?.trim();
+    const matin=document.getElementById('prof-matin')?.value?.trim();
+    if (!nom) { toast('Nom requis','warning'); return; }
+    try {
+        if (STATE.grist.ready) {
+            if (profilId) {
+                await grist.docApi.applyUserActions([['UpdateRecord','ProfilNocturne',profilId,{nomProfil:nom,allumageSoir:soir,extinctionMatin:matin}]]);
+                const p=STATE.profils.find(x=>x.id===profilId); if(p){p.nomProfil=nom;p.allumageSoir=soir;p.extinctionMatin=matin;}
+            } else {
+                const res=await grist.docApi.applyUserActions([['AddRecord','ProfilNocturne',null,{nomProfil:nom,allumageSoir:soir,extinctionMatin:matin}]]);
+                STATE.profils.push({id:res.rowIds[0],nomProfil:nom,allumageSoir:soir,extinctionMatin:matin});
+            }
+        } else {
+            if (profilId) { const p=STATE.profils.find(x=>x.id===profilId); if(p){p.nomProfil=nom;p.allumageSoir=soir;p.extinctionMatin=matin;} }
+            else { const id=Math.max(0,...STATE.profils.map(x=>x.id))+1; STATE.profils.push({id,nomProfil:nom,allumageSoir:soir,extinctionMatin:matin}); }
+        }
+        toast(`Profil "${nom}" enregistré`,'success');
+        renderModuleProfils(document.getElementById('panel-body'));
+        renderAllLayers();
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+async function deleteProfil(profilId) {
+    if (!confirm('Supprimer ce profil ?')) return;
+    try {
+        if (STATE.grist.ready) await grist.docApi.applyUserActions([['RemoveRecord','ProfilNocturne',profilId]]);
+        STATE.profils = STATE.profils.filter(p=>p.id!==profilId);
+        STATE.plages = STATE.plages.filter(p=>p.profilNocturne!==profilId);
+        toast('Profil supprimé','success'); renderModuleProfils(document.getElementById('panel-body')); renderAllLayers();
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+function editPlage(plageId, profilId) {
+    const pl = plageId ? STATE.plages.find(p=>p.id===plageId) : null;
+    const body = document.getElementById('panel-body');
+    body.innerHTML = `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="editProfil(${profilId})">← Profil</button>
+        <strong>${pl?'Modifier plage':'Nouvelle plage'}</strong>
+    </div>
+    <div class="input-group"><label class="input-label">Nom de la plage</label><input class="input-field" id="pl-nom" value="${esc(pl?.nomPlage||'')}" placeholder="Ex: Nuit_réduit"></div>
+    <div class="form-grid">
+        <div class="input-group"><label class="input-label">Début (EclExt)</label><input class="input-field" id="pl-deb" value="${esc(pl?.heureDebut||'')}" placeholder="-15CS"></div>
+        <div class="input-group"><label class="input-label">Fin (EclExt)</label><input class="input-field" id="pl-fin" value="${esc(pl?.heureFin||'')}" placeholder="+15LS"></div>
+        <div class="input-group"><label class="input-label">Type</label>
+            <select class="form-select" id="pl-type" onchange="document.getElementById('pl-val-row').style.display=this.value==='EX'?'none':'block'">
+                <option value="P" ${pl?.grandeurVariation==='P'?'selected':''}>P — Puissance</option>
+                <option value="F" ${pl?.grandeurVariation==='F'?'selected':''}>F — Flux</option>
+                <option value="EX" ${pl?.grandeurVariation==='EX'?'selected':''}>EX — Extinction</option>
+                <option value="TC" ${pl?.grandeurVariation==='TC'?'selected':''}>TC — Température</option>
+            </select>
+        </div>
+        <div class="input-group" id="pl-val-row" style="display:${pl?.grandeurVariation==='EX'?'none':'block'}">
+            <label class="input-label">Valeur (%)</label><input class="input-field" id="pl-val" type="number" min="0" max="100" value="${pl?.valeur||100}">
+        </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" style="flex:2" onclick="savePlage(${plageId||'null'},${profilId})">💾 Enregistrer</button>
+        ${pl?`<button class="btn btn-ghost" onclick="deletePlage(${pl.id},${profilId})">🗑</button>`:''}
+    </div>`;
+}
+
+async function savePlage(plageId, profilId) {
+    const nom=document.getElementById('pl-nom')?.value?.trim();
+    const deb=document.getElementById('pl-deb')?.value?.trim();
+    const fin=document.getElementById('pl-fin')?.value?.trim();
+    const type=document.getElementById('pl-type')?.value;
+    const val=parseFloat(document.getElementById('pl-val')?.value||100);
+    if (!nom||!deb||!fin) { toast('Tous les champs sont requis','warning'); return; }
+    try {
+        const data={nomPlage:nom,heureDebut:deb,heureFin:fin,grandeurVariation:type,formatVariation:'%',valeur:val,profilNocturne:profilId};
+        if (STATE.grist.ready) {
+            if (plageId) { await grist.docApi.applyUserActions([['UpdateRecord','PlageVariation',plageId,data]]); const p=STATE.plages.find(x=>x.id===plageId); if(p) Object.assign(p,data); }
+            else { const res=await grist.docApi.applyUserActions([['AddRecord','PlageVariation',null,data]]); STATE.plages.push({id:res.rowIds[0],...data}); }
+        } else {
+            if (plageId) { const p=STATE.plages.find(x=>x.id===plageId); if(p) Object.assign(p,data); }
+            else { const id=Math.max(0,...STATE.plages.map(x=>x.id))+1; STATE.plages.push({id,...data}); }
+        }
+        toast(`Plage "${nom}" enregistrée`,'success'); editProfil(profilId); renderAllLayers();
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+async function deletePlage(plageId, profilId) {
+    if (!confirm('Supprimer cette plage ?')) return;
+    try {
+        if (STATE.grist.ready) await grist.docApi.applyUserActions([['RemoveRecord','PlageVariation',plageId]]);
+        STATE.plages = STATE.plages.filter(p=>p.id!==plageId);
+        toast('Plage supprimée','success'); editProfil(profilId); renderAllLayers();
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+// ============================================================
+// MODULE: RENDU
+// ============================================================
+function renderModuleRendu(body) {
+    body.innerHTML = `<div class="section">
+        <div class="section-title">Visibilité des couches</div>
+        <div class="toggle-row"><span class="toggle-label">📍 Marqueurs 2D</span><div class="toggle ${STATE.settings.markersVisible?'on':''}" onclick="toggleSetting('markersVisible')"></div></div>
+        <div class="toggle-row"><span class="toggle-label">💡 Cônes 3D</span><div class="toggle ${STATE.settings.cones3DVisible?'on':''}" onclick="toggleSetting('cones3DVisible')"></div></div>
+        <div class="toggle-row"><span class="toggle-label">📦 Modèles GLB</span><div class="toggle ${STATE.settings.models3DVisible?'on':''}" onclick="toggleSetting('models3DVisible')"></div></div>
+        <div class="toggle-row"><span class="toggle-label">🏔 Relief 3D</span><div class="toggle ${STATE.settings.terrainEnabled?'on':''}" onclick="toggleSetting('terrainEnabled')"></div></div>
+        <div class="form-separator"></div>
+        <div class="section-title">Terrain</div>
+        <div class="slider-group">
+            <div class="slider-head"><span class="slider-lbl">Exagération verticale</span><span class="slider-val" id="val-exag">${STATE.settings.terrainExaggeration||1}×</span></div>
+            <input type="range" class="slider" min="0.5" max="3" step="0.1" value="${STATE.settings.terrainExaggeration||1}" oninput="setTerrainExaggeration(this.value)">
+        </div>
+        <div class="form-separator"></div>
+        <div class="section-title">Performance 3D (instanced)</div>
+        <div style="background:var(--bg-card);border-radius:var(--radius);padding:12px;font-family:'JetBrains Mono',monospace;font-size:11px;border:1px solid rgba(16,185,129,0.2);">
+            <div style="color:var(--success);font-weight:700;margin-bottom:6px;">✅ OPTIMISÉ — InstancedMesh</div>
+            <div style="color:var(--text-secondary);">Draw calls : <span style="color:var(--accent-amber)">3</span> (vs ${STATE.points.length*3} original)</div>
+            <div style="color:var(--text-secondary);">Time slider : <span style="color:var(--accent-amber)">~1 ms</span> (fast path couleurs)</div>
+            <div style="color:var(--text-secondary);">GLBs actifs : <span style="color:var(--accent-amber)">${luminaireLayer?.glbVisible?.size||0}</span> (viewport culled)</div>
+            <div style="color:var(--text-secondary);">Cache terrain : <span style="color:var(--accent-amber)">${luminaireLayer?._elevCache?.size||0}</span> entrées</div>
+            <div style="color:var(--text-secondary);">Décodage MNT : <span style="color:var(--accent-amber)">Web Worker</span> · DEM partagé</div>
+        </div>
+    </div>`;
+}
+
+function setTerrainExaggeration(v) {
+    STATE.settings.terrainExaggeration = parseFloat(v);
+    document.getElementById('val-exag').textContent = parseFloat(v).toFixed(1)+'×';
+    saveSettings();
+    if (map && STATE.settings.terrainEnabled) { try { map.setTerrain({ source:'terrain-dem', exaggeration:parseFloat(v) }); } catch(e){} }
+}
+
+// ============================================================
+// toggleSetting — toggle direct sur InstancedMesh (pas de rebuild)
+// ============================================================
+function toggleSetting(key) {
+    STATE.settings[key] = !STATE.settings[key];
+    saveSettings();
+    if (key==='terrainEnabled') {
+        try { map.setTerrain(STATE.settings.terrainEnabled?{source:'terrain-dem',exaggeration:STATE.settings.terrainExaggeration||1.0}:null); } catch(e){}
+        if (luminaireLayer) { luminaireLayer.clearAll(); luminaireLayer=null; }
+        setTimeout(()=>renderAllLayers(), 500); return;
+    }
+    if (luminaireLayer) {
+        if (key==='cones3DVisible') {
+            // Toggle direct — zéro rebuild
+            luminaireLayer.iCones.visible = STATE.settings.cones3DVisible;
+            luminaireLayer.iGlows.visible = STATE.settings.cones3DVisible;
+            luminaireLayer.iULR.visible   = STATE.settings.cones3DVisible;
+            map?.triggerRepaint();
+        } else if (key==='models3DVisible') {
+            for (const [,e] of luminaireLayer.glbGroups) e.group.visible = STATE.settings.models3DVisible;
+            map?.triggerRepaint();
+        } else { renderAllLayers(); }
+    } else { renderAllLayers(); }
+    const activeBtn=document.querySelector('.tb-btn.active');
+    if (activeBtn) openModule(activeBtn.dataset.mod, {toggle:false});
+}
+
+// ============================================================
+// MODULE: MODÈLES LUMINAIRES
+// ============================================================
+function renderModuleModeles(body) {
+    const structs=[...new Set(STATE.models.map(m=>m.structureEclExt))];
+    body.innerHTML = `<div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <div class="section-title" style="margin:0">Modèles (${STATE.models.length})</div>
+            <button class="btn btn-primary btn-sm" onclick="editModele(null)">+ Nouveau</button>
+        </div>
+        ${structs.map(st=>`
+        <div style="margin-bottom:12px;">
+            <div style="font-size:10px;font-weight:700;color:var(--accent-amber);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px;">${esc(st)}</div>
+            ${STATE.models.filter(m=>m.structureEclExt===st).map(m=>`
+            <div class="card" onclick="editModele(${m._id})">
+                <div style="display:flex;justify-content:space-between;align-items:start;">
+                    <div>
+                        <div style="font-size:12px;font-weight:600;">${esc(m.nom||'—')}</div>
+                        <div style="font-size:10px;color:var(--text-muted);">${esc(m.fabricant||'')} ${m.reference?'·'+esc(m.reference):''}</div>
+                        <div style="font-size:10px;color:var(--text-secondary);margin-top:2px;">${m.glbUrl?'📦 GLB':'📐 Symbolique'} · ${m.fluxNominal||0} lm · ${m.puissanceDefaut||0}W · ${m.tempCouleurDefaut||3000}K · H:${m.hauteurSource||8}m</div>
+                    </div>
+                    ${m.glbUrl?'<span style="font-size:18px;">📦</span>':'<span style="font-size:18px;">💡</span>'}
+                </div>
+            </div>`).join('')}
+        </div>`).join('')}
+    </div>`;
+}
+
+function editModele(modelId) {
+    const m = modelId ? STATE.models.find(x=>x._id===modelId) : null;
+    const body = document.getElementById('panel-body');
+    body.innerHTML = `
+    <div style="margin-bottom:12px;display:flex;align-items:center;gap:8px;">
+        <button class="btn btn-ghost btn-sm" onclick="renderModuleModeles(document.getElementById('panel-body'))">← Retour</button>
+        <strong>${m?'Modifier modèle':'Nouveau modèle'}</strong>
+    </div>
+    <div class="input-group"><label class="input-label">Nom</label><input class="input-field" id="mod-nom" value="${esc(m?.nom||'')}"></div>
+    <div class="form-grid">
+        <div class="input-group"><label class="input-label">Fabricant</label><input class="input-field" id="mod-fab" value="${esc(m?.fabricant||'')}"></div>
+        <div class="input-group"><label class="input-label">Référence</label><input class="input-field" id="mod-ref" value="${esc(m?.reference||'')}"></div>
+        <div class="input-group span-2"><label class="input-label">Structure EclExt</label>
+            <select class="form-select" id="mod-struct">
+                ${['APP','BOR','BL','COL','EN','LANT','PROJ','REGL','TUBE','VASQ','AU','XX'].map(s=>`<option value="${s}" ${m?.structureEclExt===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+        </div>
+        <div class="input-group span-2"><label class="input-label">URL GLB</label><input class="input-field" id="mod-glb" value="${esc(m?.glbUrl||'')}" placeholder="https://..."></div>
+        <div class="input-group"><label class="input-label">Échelle</label><input class="input-field" id="mod-scale" type="number" step="0.1" value="${m?.scale||1}"></div>
+        <div class="input-group"><label class="input-label">Hauteur source (m)</label><input class="input-field" id="mod-h" type="number" step="0.5" value="${m?.hauteurSource||8}"></div>
+        <div class="input-group"><label class="input-label">Flux nominal (lm)</label><input class="input-field" id="mod-flux" type="number" value="${m?.fluxNominal||5000}"></div>
+        <div class="input-group"><label class="input-label">Puissance (W)</label><input class="input-field" id="mod-puiss" type="number" value="${m?.puissanceDefaut||75}"></div>
+        <div class="input-group"><label class="input-label">Temp. couleur (K)</label><input class="input-field" id="mod-temp" type="number" value="${m?.tempCouleurDefaut||3000}"></div>
+        <div class="input-group"><label class="input-label">CIE3 (0-1)</label><input class="input-field" id="mod-cie3" type="number" step="0.01" min="0" max="1" value="${m?.cie3Defaut||0.85}"></div>
+        <div class="input-group"><label class="input-label">ULR nominal (0-1)</label><input class="input-field" id="mod-ulr" type="number" step="0.01" min="0" max="1" value="${m?.ulrNominal||0.02}"></div>
+        <div class="input-group"><label class="input-label">Mesh émissif (nom)</label><input class="input-field" id="mod-emissive" value="${esc(m?.emissiveMeshName||'')}" placeholder="Globe"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px;">
+        <button class="btn btn-primary" style="flex:2" onclick="saveModele(${modelId||'null'})">💾 Enregistrer</button>
+        ${m&&!m.isDefault?`<button class="btn btn-ghost" onclick="deleteModele(${m._id})">🗑</button>`:''}
+    </div>`;
+}
+
+async function saveModele(modelId) {
+    const data = {
+        nom:document.getElementById('mod-nom')?.value?.trim()||'',
+        fabricant:document.getElementById('mod-fab')?.value?.trim()||'',
+        reference:document.getElementById('mod-ref')?.value?.trim()||'',
+        structureEclExt:document.getElementById('mod-struct')?.value||'XX',
+        glbUrl:document.getElementById('mod-glb')?.value?.trim()||'',
+        scale:parseFloat(document.getElementById('mod-scale')?.value||1),
+        hauteurSource:parseFloat(document.getElementById('mod-h')?.value||8),
+        fluxNominal:parseFloat(document.getElementById('mod-flux')?.value||5000),
+        puissanceDefaut:parseFloat(document.getElementById('mod-puiss')?.value||75),
+        tempCouleurDefaut:parseInt(document.getElementById('mod-temp')?.value||3000),
+        cie3Defaut:parseFloat(document.getElementById('mod-cie3')?.value||0.85),
+        ulrNominal:parseFloat(document.getElementById('mod-ulr')?.value||0.02),
+        emissiveMeshName:document.getElementById('mod-emissive')?.value?.trim()||''
+    };
+    try {
+        if (STATE.grist.ready) {
+            if (modelId) { await grist.docApi.applyUserActions([['UpdateRecord','Modeles_Luminaires',modelId,data]]); const m=STATE.models.find(x=>x._id===modelId); if(m) Object.assign(m,data); }
+            else { const res=await grist.docApi.applyUserActions([['AddRecord','Modeles_Luminaires',null,data]]); STATE.models.push({_id:res.rowIds[0],...data}); }
+        } else {
+            if (modelId) { const m=STATE.models.find(x=>x._id===modelId); if(m) Object.assign(m,data); }
+            else { const id=Math.max(0,...STATE.models.map(x=>x._id))+1; STATE.models.push({_id:id,...data}); }
+        }
+        toast(`Modèle "${data.nom}" enregistré`,'success');
+        renderModuleModeles(document.getElementById('panel-body'));
+        if (luminaireLayer) { luminaireLayer.clearAll(); luminaireLayer=null; }
+        renderAllLayers();
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+async function deleteModele(modelId) {
+    if (!confirm('Supprimer ce modèle ?')) return;
+    try {
+        if (STATE.grist.ready) await grist.docApi.applyUserActions([['RemoveRecord','Modeles_Luminaires',modelId]]);
+        STATE.models = STATE.models.filter(m=>m._id!==modelId);
+        toast('Modèle supprimé','success'); renderModuleModeles(document.getElementById('panel-body'));
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+// ============================================================
+// MODULE: CARTE
+// ============================================================
+function renderModuleCarte(body) {
+    const styles=[{k:'dark',lbl:'Sombre (IGN)',ico:'🌑'},{k:'plan',lbl:'Plan IGN',ico:'🗺️'},{k:'ortho',lbl:'Orthophoto',ico:'🛰️'}];
+    body.innerHTML = `<div class="section">
+        <div class="section-title">Fond de carte</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;">
+            ${styles.map(s=>`<div class="card ${STATE.settings.style===s.k?'active':''}" onclick="setMapStyle('${s.k}')" style="text-align:center;padding:12px;">
+                <div style="font-size:24px;margin-bottom:4px;">${s.ico}</div>
+                <div style="font-size:11px;font-weight:600;">${s.lbl}</div>
+            </div>`).join('')}
+        </div>
+        <div class="section-title">Navigation</div>
+        <button class="btn btn-ghost btn-full" style="margin-bottom:8px;" onclick="map.easeTo({pitch:55,bearing:-10,duration:800})">📐 Vue 3D par défaut</button>
+        <button class="btn btn-ghost btn-full" style="margin-bottom:8px;" onclick="map.easeTo({pitch:0,bearing:0,duration:800})">📋 Vue 2D (orthogonal)</button>
+        <button class="btn btn-ghost btn-full" onclick="fitToBounds()">🎯 Centrer sur les données</button>
+    </div>`;
+}
+
+function setMapStyle(style) {
+    STATE.settings.style = style; saveSettings();
+    const tileUrl = style==='ortho'?CONFIG.ign.ortho:style==='plan'?CONFIG.ign.plan:CONFIG.ign.dark;
+    if (map.getSource('ign-base-src')) {
+        map.getSource('ign-base-src').setTiles([tileUrl]);
+        const bm=style==='plan'?1.3:style==='ortho'?1.1:1.0, so=style==='plan'?0.15:style==='ortho'?0.08:0;
+        if (map.getLayer('ign-base')) { map.setPaintProperty('ign-base','raster-brightness-max',Math.min(1.0,0.85*bm)); map.setPaintProperty('ign-base','raster-saturation',Math.max(-1.0,Math.min(0,-0.7+so))); }
+    }
+    const activeBtn=document.querySelector('.tb-btn.active');
+    if (activeBtn) openModule(activeBtn.dataset.mod, {toggle:false});
+}
+
+function fitToBounds() {
+    if (!STATE.points.length||!map) return;
+    const lngs=STATE.points.map(p=>p.longitude), lats=STATE.points.map(p=>p.latitude);
+    map.fitBounds([[Math.min(...lngs),Math.min(...lats)],[Math.max(...lngs),Math.max(...lats)]],{padding:60,pitch:55,bearing:-10});
+}
+
+// ============================================================
+// MODULE: SAISIE
+// ============================================================
+const SAISIE = { placementMode:false, editingId:null };
+
+function renderModuleSaisie(body) {
+    body.innerHTML = `<div class="section">
+        <button class="place-btn ${SAISIE.placementMode?'placing':''}" id="place-btn" onclick="togglePlacementMode()">
+            ${SAISIE.placementMode?'⛔ Annuler le placement':'📍 Placer un nouveau point'}
+        </button>
+        ${SAISIE.placementMode?'<div style="font-size:11px;color:var(--accent-cool);text-align:center;margin-top:8px;">Cliquez sur la carte pour placer le luminaire</div>':''}
+    </div>`;
+}
+
+function togglePlacementMode() {
+    SAISIE.placementMode = !SAISIE.placementMode;
+    map.getCanvas().style.cursor = SAISIE.placementMode ? 'crosshair' : '';
+    const banner = document.getElementById('click-banner');
+    if (SAISIE.placementMode) {
+        if (!banner) {
+            const b = document.createElement('div');
+            b.id='click-banner'; b.className='map-click-banner';
+            b.innerHTML='📍 Cliquez sur la carte pour placer le luminaire <button onclick="togglePlacementMode()">Annuler</button>';
+            document.querySelector('.main').appendChild(b);
+        }
+    } else { document.getElementById('click-banner')?.remove(); }
+    const btn = document.querySelector('.tb-btn[data-mod="saisie"]');
+    if (btn) { btn.classList.toggle('active', SAISIE.placementMode); }
+    renderModuleSaisie(document.getElementById('panel-body'));
+}
+
+function editPoint(pointId) {
+    const pt = STATE.points.find(p=>p._id===pointId);
+    if (!pt) return;
+    SAISIE.editingId = pointId;
+    const panel=document.getElementById('panel'), body=document.getElementById('panel-body'), title=document.getElementById('panel-title');
+    panel.classList.remove('hidden');
+    title.innerHTML='✏️ Modifier point lumineux';
+    const cK = kelvinToHex(pt.temperatureCouleur||3000);
+    body.innerHTML=`
+    <div style="margin-bottom:12px;">
+        <div class="coords-display">${(pt.latitude||0).toFixed(6)}°N, ${(pt.longitude||0).toFixed(6)}°E</div>
+    </div>
+    <div class="form-section-head">🏷 Identification</div>
+    <div class="form-grid">
+        <div class="input-group span-2"><label class="input-label">Fabricant</label><input class="input-field" id="ep-fab" value="${esc(pt.fabricant||'')}"></div>
+        <div class="input-group"><label class="input-label">Structure</label>
+            <select class="form-select" id="ep-struct">
+                ${['APP','BOR','BL','COL','EN','LANT','PROJ','REGL','TUBE','VASQ','AU','XX'].map(s=>`<option value="${s}" ${pt.structure===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+        </div>
+        <div class="input-group"><label class="input-label">Support</label>
+            <select class="form-select" id="ep-support">
+                ${['BUS','CAT','ENS','MAT','MUR','OUV','PAN','POT','SOL','AU','XX'].map(s=>`<option value="${s}" ${pt.support===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+        </div>
+        <div class="input-group"><label class="input-label">Statut</label>
+            <select class="form-select" id="ep-statut">
+                ${['functional','decommissioned','dismantled','projected','underCommissionning','underConstruction'].map(s=>`<option value="${s}" ${pt.statut===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+        </div>
+        <div class="input-group"><label class="input-label">Usage</label>
+            <select class="form-select" id="ep-usage">
+                ${['A','B1','B2','B3','B4','C','D','E','F','G','PU','IN','AU','XX'].map(s=>`<option value="${s}" ${pt.usage===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+        </div>
+    </div>
+    <div class="form-section-head">💡 Source lumineuse</div>
+    <div class="form-grid">
+        <div class="input-group"><label class="input-label">Type source</label>
+            <select class="form-select" id="ep-source">
+                ${['LED','SHP','SBP','IM','VM','HAL','FLUO','INC','IND','XEN','AU','XX'].map(s=>`<option value="${s}" ${pt.typeSource===s?'selected':''}>${s}</option>`).join('')}
+            </select>
+        </div>
+        <div class="input-group"><label class="input-label">Puissance (W)</label><input class="input-field" id="ep-puiss" type="number" value="${pt.puissance||75}"></div>
+        <div class="input-group"><label class="input-label">Flux source (lm)</label><input class="input-field" id="ep-flux" type="number" value="${pt.fluxSource||8000}"></div>
+        <div class="input-group"><label class="input-label">Flux luminaire (lm)</label><input class="input-field" id="ep-fluxl" type="number" value="${pt.fluxLuminaire||7000}"></div>
+        <div class="input-group"><label class="input-label">Temp. couleur (K) <span class="kelvin-preview" style="background:${cK}"></span></label><input class="input-field" id="ep-temp" type="number" value="${pt.temperatureCouleur||3000}" oninput="document.querySelector('.kelvin-preview').style.background=kelvinToHex(parseInt(this.value)||3000)"></div>
+        <div class="input-group"><label class="input-label">Hauteur feu (m)</label><input class="input-field" id="ep-hf" type="number" step="0.5" value="${pt.hauteurFeu||8}"></div>
+        <div class="input-group"><label class="input-label">CIE3 (0-1)</label><input class="input-field" id="ep-cie3" type="number" step="0.01" min="0" max="1" value="${pt.cie3||0.85}"></div>
+        <div class="input-group"><label class="input-label">ULR installé</label><input class="input-field" id="ep-ulr" type="number" step="0.01" min="0" max="1" value="${pt.ulrInstalle||0.02}"></div>
+        <div class="input-group"><label class="input-label">Inclinaison (°)</label><input class="input-field" id="ep-incl" type="number" step="1" value="${pt.inclinaisonInstallee||0}"></div>
+    </div>
+    <div class="form-section-head">🌙 Profil nocturne</div>
+    <div class="input-group"><label class="input-label">Profil</label>
+        <select class="form-select" id="ep-profil">
+            <option value="0">— Aucun (toujours allumé) —</option>
+            ${STATE.profils.map(p=>`<option value="${p.id}" ${pt.profilNocturne===p.id?'selected':''}>${esc(p.nomProfil)}</option>`).join('')}
+        </select>
+    </div>
+    <div class="form-section-head">📦 Modèle 3D</div>
+    <div class="input-group"><label class="input-label">Modèle luminaire</label>
+        <select class="form-select" id="ep-modele">
+            <option value="0">— Automatique (par structure) —</option>
+            ${STATE.models.map(m=>`<option value="${m._id}" ${pt.modele===m._id?'selected':''}>${esc(m.nom)} (${esc(m.structureEclExt)})</option>`).join('')}
+        </select>
+    </div>
+    <div class="form-section-head">⚙️ Options</div>
+    <div class="form-toggle-row"><span style="font-size:12px;">Extinction de nuit</span><div class="toggle ${pt.extinctionNuit?'on':''}" onclick="this.classList.toggle('on');document.getElementById('ep-ext').checked=!document.getElementById('ep-ext').checked"></div><input type="checkbox" id="ep-ext" style="display:none" ${pt.extinctionNuit?'checked':''}></div>
+    <div class="form-toggle-row"><span style="font-size:12px;">Éclairage adaptatif</span><div class="toggle ${pt.estAdaptatif?'on':''}" onclick="this.classList.toggle('on');document.getElementById('ep-adapt').checked=!document.getElementById('ep-adapt').checked"></div><input type="checkbox" id="ep-adapt" style="display:none" ${pt.estAdaptatif?'checked':''}></div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+        <button class="btn btn-primary" style="flex:2" onclick="savePoint(${pointId})">💾 Enregistrer</button>
+        <button class="btn btn-ghost" onclick="deletePoint(${pointId})">🗑</button>
+    </div>`;
+}
+
+async function savePoint(pointId) {
+    const pt = STATE.points.find(p=>p._id===pointId); if (!pt) return;
+    const data = {
+        fabricant:document.getElementById('ep-fab')?.value?.trim()||'',
+        structure:document.getElementById('ep-struct')?.value||'XX',
+        support:document.getElementById('ep-support')?.value||'XX',
+        statut:document.getElementById('ep-statut')?.value||'functional',
+        usage:document.getElementById('ep-usage')?.value||'XX',
+        typeSource:document.getElementById('ep-source')?.value||'LED',
+        puissance:parseFloat(document.getElementById('ep-puiss')?.value||75),
+        fluxSource:parseFloat(document.getElementById('ep-flux')?.value||8000),
+        fluxLuminaire:parseFloat(document.getElementById('ep-fluxl')?.value||7000),
+        temperatureCouleur:parseInt(document.getElementById('ep-temp')?.value||3000),
+        hauteurFeu:parseFloat(document.getElementById('ep-hf')?.value||8),
+        cie3:parseFloat(document.getElementById('ep-cie3')?.value||0.85),
+        ulrInstalle:parseFloat(document.getElementById('ep-ulr')?.value||0.02),
+        inclinaisonInstallee:parseFloat(document.getElementById('ep-incl')?.value||0),
+        profilNocturne:parseInt(document.getElementById('ep-profil')?.value||0)||0,
+        modele:parseInt(document.getElementById('ep-modele')?.value||0)||0,
+        extinctionNuit:document.getElementById('ep-ext')?.checked||false,
+        estAdaptatif:document.getElementById('ep-adapt')?.checked||false
+    };
+    try {
+        if (STATE.grist.ready) await grist.docApi.applyUserActions([['UpdateRecord','PointLumineux',pointId,data]]);
+        Object.assign(pt, data);
+        toast('Point mis à jour','success'); closePanel();
+        if (luminaireLayer) { const mc=new Map(); for(const p of STATE.points) mc.set(p._id,resolveModelForPoint(p)); luminaireLayer.updateAll(STATE.points,mc); }
+        renderAllLayers();
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+async function deletePoint(pointId) {
+    if (!confirm('Supprimer ce point lumineux ?')) return;
+    try {
+        if (STATE.grist.ready) await grist.docApi.applyUserActions([['RemoveRecord','PointLumineux',pointId]]);
+        STATE.points = STATE.points.filter(p=>p._id!==pointId);
+        toast('Point supprimé','success'); closePanel();
+        if (luminaireLayer) { luminaireLayer.clearAll(); luminaireLayer=null; }
+        renderAllLayers();
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+async function addPoint(lng, lat) {
+    const newPt = { latitude:lat, longitude:lng, statut:'functional', eclairagePublic:true, usage:'A', typeSource:'LED', structure:'MAT', support:'MAT', temperatureCouleur:3000, puissance:75, fluxSource:8000, fluxLuminaire:7000, hauteurFeu:8, cie3:0.85, ulrInstalle:0.02, inclinaisonInstallee:0, profilNocturne:STATE.profils.length>0?STATE.profils[0].id:0, modele:0, extinctionNuit:false, estAdaptatif:false };
+    try {
+        let newId;
+        if (STATE.grist.ready) {
+            const res=await grist.docApi.applyUserActions([['AddRecord','PointLumineux',null,newPt]]);
+            newId=res.rowIds[0];
+        } else { newId=Math.max(0,...STATE.points.map(p=>p._id))+1; }
+        STATE.points.push({_id:newId,...newPt});
+        toast(`Point #${newId} créé`,'success'); togglePlacementMode();
+        renderAllLayers(); editPoint(newId);
+    } catch(e) { toast('Erreur: '+e.message,'error'); }
+}
+
+// ============================================================
+// MAP CLICK handler (placement + saisie)
+// ============================================================
+function setupMapClickHandler() {
+    map.on('click', e => {
+        if (!SAISIE.placementMode) return;
+        e.preventDefault(); e.stopPropagation();
+        addPoint(e.lngLat.lng, e.lngLat.lat);
+    });
+}
+
+// ============================================================
+// IMPORT: OSM + CSV/GeoJSON
+// ============================================================
+async function importOSM() {
+    const center = map.getCenter();
+    const r = 500;
+    const query = `[out:json][timeout:25];(node["highway"="street_lamp"](around:${r},${center.lat},${center.lng}););out body;`;
+    showLoading(true);
+    try {
+        const resp = await fetch('https://overpass-api.de/api/interpreter', { method:'POST', body:'data='+encodeURIComponent(query) });
+        if (!resp.ok) throw new Error('Overpass API error: '+resp.status);
+        const data = await resp.json();
+        if (!data.elements?.length) { toast('Aucun lampadaire OSM dans ce rayon','warning'); showLoading(false); return; }
+        let added=0;
+        // OPTIM — insertion groupée (BulkAddRecord) au lieu d'un AddRecord par point
+        const newPts = [];
+        for (const el of data.elements) {
+            if (el.type!=='node'||!el.lat||!el.lon) continue;
+            newPts.push({ latitude:el.lat, longitude:el.lon, statut:'functional', eclairagePublic:true, usage:'A', typeSource:(el.tags?.lamp_type==='LED'?'LED':'XX'), structure:'MAT', support:'MAT', temperatureCouleur:3000, puissance:75, fluxSource:8000, fluxLuminaire:7000, hauteurFeu:parseFloat(el.tags?.height)||8, cie3:0.85, ulrInstalle:0.02, inclinaisonInstallee:0, profilNocturne:STATE.profils.length>0?STATE.profils[0].id:0, modele:0, extinctionNuit:false, estAdaptatif:false });
+        }
+        added = await bulkAddPoints(newPts);
+        toast(`${added} points OSM importés`,'success'); renderAllLayers();
+    } catch(e) { toast('Erreur OSM: '+e.message,'error'); }
+    showLoading(false);
+}
+
+// OPTIM — helper d'insertion groupée (Grist BulkAddRecord), fallback mémoire
+async function bulkAddPoints(newPts) {
+    if (newPts.length===0) return 0;
+    if (STATE.grist.ready) {
+        const cols = ECLEXT_TABLES.PointLumineux.columns.map(c=>c.id);
+        const fields = {};
+        cols.forEach(col => { fields[col] = newPts.map(p => p[col] ?? null); });
+        const res = await grist.docApi.applyUserActions([['BulkAddRecord','PointLumineux',new Array(newPts.length).fill(null),fields]]);
+        const ids = res.retValues?.[0] || [];
+        newPts.forEach((p,i) => STATE.points.push({ _id: ids[i] ?? (Math.max(0,...STATE.points.map(x=>x._id))+1), ...p }));
+    } else {
+        let id = Math.max(0,...STATE.points.map(p=>p._id), 0);
+        newPts.forEach(p => STATE.points.push({ _id: ++id, ...p }));
+    }
+    return newPts.length;
+}
+
+function importFile(event) {
+    const file = event.target.files[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        const content = e.target.result;
+        showLoading(true);
+        try {
+            if (file.name.endsWith('.csv')) await importCSV(content);
+            else { const geojson=JSON.parse(content); await importGeoJSON(geojson); }
+        } catch(err) { toast('Erreur import: '+err.message,'error'); }
+        showLoading(false);
+    };
+    reader.readAsText(file);
+}
+
+async function importCSV(content) {
+    const lines=content.split('\n').filter(l=>l.trim());
+    if (lines.length<2) { toast('CSV vide ou invalide','error'); return; }
+    const headers=lines[0].split(',').map(h=>h.trim().replace(/"/g,'').toLowerCase());
+    const latCol=headers.findIndex(h=>h.includes('lat')), lngCol=headers.findIndex(h=>h.includes('lon')||h.includes('lng'));
+    if (latCol<0||lngCol<0) { toast('Colonnes lat/lon introuvables','error'); return; }
+    const newPts=[];
+    for (let i=1;i<lines.length;i++) {
+        const cols=lines[i].split(',').map(c=>c.trim().replace(/"/g,''));
+        const lat=parseFloat(cols[latCol]), lng=parseFloat(cols[lngCol]);
+        if (!isFinite(lat)||!isFinite(lng)) continue;
+        newPts.push({latitude:lat,longitude:lng,statut:'functional',eclairagePublic:true,usage:'A',typeSource:'LED',structure:'MAT',support:'MAT',temperatureCouleur:3000,puissance:75,fluxSource:8000,fluxLuminaire:7000,hauteurFeu:8,cie3:0.85,ulrInstalle:0.02,inclinaisonInstallee:0,profilNocturne:STATE.profils.length>0?STATE.profils[0].id:0,modele:0,extinctionNuit:false,estAdaptatif:false});
+    }
+    const added = await bulkAddPoints(newPts);
+    toast(`${added} points CSV importés`,'success'); renderAllLayers();
+}
+
+async function importGeoJSON(geojson) {
+    const features = geojson.type==='FeatureCollection'?geojson.features:[geojson];
+    const newPts=[];
+    for (const ft of features) {
+        if (ft.geometry?.type!=='Point') continue;
+        const [lng,lat]=ft.geometry.coordinates; if (!isFinite(lat)||!isFinite(lng)) continue;
+        const p=ft.properties||{};
+        newPts.push({latitude:lat,longitude:lng,statut:p.statut||'functional',eclairagePublic:true,usage:p.usage||'A',typeSource:p.typeSource||p.lamp_type||'LED',structure:p.structure||'MAT',support:p.support||'MAT',temperatureCouleur:parseInt(p.temperatureCouleur||p.colour_temperature||3000),puissance:parseFloat(p.puissance||p.power||75),fluxSource:parseFloat(p.fluxSource||8000),fluxLuminaire:parseFloat(p.fluxLuminaire||7000),hauteurFeu:parseFloat(p.hauteurFeu||p.height||8),cie3:parseFloat(p.cie3||0.85),ulrInstalle:parseFloat(p.ulrInstalle||0.02),inclinaisonInstallee:parseFloat(p.inclinaisonInstallee||0),profilNocturne:STATE.profils.length>0?STATE.profils[0].id:0,modele:0,extinctionNuit:false,estAdaptatif:false});
+    }
+    const added = await bulkAddPoints(newPts);
+    toast(`${added} points GeoJSON importés`,'success'); renderAllLayers();
+}
+
+// ============================================================
+// EXPORT GeoJSON
+// ============================================================
+function exportGeoJSON() {
+    const geojson = { type:'FeatureCollection', features:STATE.points.map(pt=>({ type:'Feature', geometry:{type:'Point',coordinates:[pt.longitude,pt.latitude]}, properties:{...pt} })) };
+    const blob = new Blob([JSON.stringify(geojson,null,2)],{type:'application/json'});
+    const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='eclext-export.geojson'; a.click();
+    toast('Export GeoJSON téléchargé','success');
+}
+
+// ============================================================
+// BOOT
+// ============================================================
+window.addEventListener('load', () => {
+    STATE.date = new Date();
+    const dp = document.getElementById('time-date-picker');
+    if (dp) dp.value = STATE.date.toISOString().split('T')[0];
+    initMap();
+    // Le click handler de saisie est attaché dans map.on('load') → setupMapClickHandler()
+});
+</script>
+</body>
+</html>
