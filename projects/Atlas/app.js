@@ -1475,7 +1475,8 @@ function renderObjectInspector() {
             slider('m-scale', '📏 Échelle (×)', 1, 0.1, 5, 0.05, '×') +
             slider('m-rotationZ', '🔄 Rotation Z (+/-)', 0, -180, 180, 5, '°') +
             slider('m-offsetZ', '⬆️ Altitude (+/-)', 0, -5, 10, 0.5, 'm') +
-            slider('m-offsetX', '↔️ Décalage X (+/-)', 0, -5, 5, 0.1, 'm');
+            slider('m-offsetX', '↔️ Décalage X (+/-)', 0, -5, 5, 0.1, 'm') +
+            slider('m-offsetY', '↕️ Décalage Y (+/-)', 0, -5, 5, 0.1, 'm');
     }
     $('insp-foot').innerHTML = `
         <button class="btn btn-soft" style="flex:1" onclick="A.resetSelected()">🔄 Reset</button>
