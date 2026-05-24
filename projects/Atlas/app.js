@@ -1291,7 +1291,8 @@ function renderSymbologyInspector(layer) {
         <div class="insp-eyebrow"><span class="layer-swatch" style="background:${layer.color}"></span>Symboliser${is3D ? ' · <span style="color:var(--accent2)">3D</span>' : ''}</div>
         <div class="insp-title">${layer.name}</div>
         <div class="insp-sub">${layer.geojson?.features?.length || 0} objets · ${layer.geometryType}</div>
-        ${modelChip}`;
+        ${modelChip}
+        ${isPoint ? `<button class="btn btn-soft btn-full" style="margin-top:8px" onclick="A.editLayerObjects('${layer.id}')">✏️ Éditer les objets un par un</button>` : ''}`;
     $('insp-tabs').innerHTML = tabs.map((t) => `<button class="insp-tab ${inspSymTab === t ? 'active' : ''}" onclick="A.setSymTab('${t}')">${t}</button>`).join('');
 
     const body = $('insp-body');
@@ -1988,6 +1989,11 @@ const A = {
         applyPointStyle(l); Models3D.forceBuild(); renderInspector(); markDirty();
     },
     openLayerModel(id) { STATE.selectedLayer = id; inspSymTab = 'Modèle 3D'; openModule('symbo'); },
+    editLayerObjects(id) {
+        const l = STATE.layers.find((x) => x.id === id); if (!l) return;
+        enterSelectionMode(id);
+        showToast('Cliquez un objet à éditer · Maj+glisser = zone · ✓ Tout = toute la couche', 'info');
+    },
     setModelSet(set) {
         MODEL_LIBRARY.set = set; STATE.settings.modelSet = set;
         Models3D.gltfCache.clear(); Models3D.protoCache.clear(); // recharger les GLB du nouveau set
