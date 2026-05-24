@@ -163,6 +163,21 @@ const MODEL_LIBRARY = {
         ]},
     },
 };
+// Résolution de l'URL des modèles : ?models=… > localStorage > local (servir la
+// racine du repo) > GitHub Pages (prod). Permet de tester les GLB en local.
+(function resolveModelBase() {
+    try {
+        const qp = new URLSearchParams(location.search).get('models');
+        if (qp) { MODEL_LIBRARY.baseRoot = qp.replace(/\/+$/, '') + '/'; return; }
+        const ls = localStorage.getItem('atlas_model_base');
+        if (ls) { MODEL_LIBRARY.baseRoot = ls.replace(/\/+$/, '') + '/'; return; }
+        const h = location.hostname;
+        if (location.protocol === 'file:' || h === 'localhost' || h === '127.0.0.1' || h === '') {
+            // dev : modèles relatifs au repo (servir la RACINE du repo, ouvrir /projects/carte-grist/index.html)
+            MODEL_LIBRARY.baseRoot = new URL('../../published/models/', location.href).href;
+        }
+    } catch (e) { /* garde le défaut Pages */ }
+})();
 function allModels() {
     const out = [];
     for (const [catId, cat] of Object.entries(MODEL_LIBRARY.categories))
