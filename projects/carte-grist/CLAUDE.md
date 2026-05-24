@@ -109,6 +109,13 @@ carte-grist/
   restent approximatifs.
 - **MNT IGN** : `ignmnt://` requiert `OffscreenCanvas` (Chrome/Edge/Firefox,
   Safari ≥ 16.4) ; repli tuile plate si décodage échoue. Couverture France.
+- **⚠️ Modèles GLB** : le dépôt `nic01asfr.github.io/3D-Models/` ne contient
+  réellement que **3 fichiers** (`Lantern.glb`, `B0.glb`, `AB4.glb`). La
+  bibliothèque `MODEL_LIBRARY` (héritée du widget d'origine) référence
+  ~20 noms inexistants (StreetLamp, Bench, Tree_*, Car…) → ces points retombent
+  silencieusement sur le cercle de hit (pas de 3D). La catégorie Éclairage a été
+  repointée sur les fichiers réels ; pour les autres catégories il faut héberger
+  les vrais GLB (ou changer `MODEL_LIBRARY.baseUrl`).
 - **Interaction sur les modèles 3D** : les objets three.js ne sont pas
   interrogeables par `queryRenderedFeatures`. On ajoute donc une couche de
   cercles MapLibre (faible opacité) servant de zone de clic / surbrillance.

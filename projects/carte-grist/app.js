@@ -108,10 +108,10 @@ const MODEL_LIBRARY = {
     baseUrl: 'https://nic01asfr.github.io/3D-Models/',
     categories: {
         lighting: { icon: '💡', name: 'Éclairage', models: [
-            { id: 'streetlamp', name: 'Lampadaire', icon: '🏮', file: 'StreetLamp.glb', scale: 1.5 },
-            { id: 'lampball', name: 'Lampe boule', icon: '💡', file: 'LampBall.glb', scale: 1 },
+            { id: 'streetlamp', name: 'Lampadaire', icon: '🏮', file: 'Lantern.glb', scale: 1.5 },
+            { id: 'lampball', name: 'Lampe boule', icon: '💡', file: 'B0.glb', scale: 1 },
             { id: 'lantern', name: 'Lanterne', icon: '🏮', file: 'Lantern.glb', scale: 1 },
-            { id: 'bollardlight', name: 'Borne lumineuse', icon: '🔆', file: 'Bollard.glb', scale: 1 },
+            { id: 'bollardlight', name: 'Borne lumineuse', icon: '🔆', file: 'B0.glb', scale: 1 },
         ]},
         signalization: { icon: '🚦', name: 'Signalisation', models: [
             { id: 'trafficlight', name: 'Feu tricolore', icon: '🚦', file: 'TrafficLight.glb', scale: 1 },
