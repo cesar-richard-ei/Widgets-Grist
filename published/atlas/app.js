@@ -120,10 +120,11 @@ const PALETTE_INFO = {
 // ============================================================
 // BIBLIOTHÈQUE DE MODÈLES 3D
 // ============================================================
-// Catalogue 3D généré dans le repo (scripts/generate-models.js → published/models/)
+// Catalogue 3D généré dans le repo (scripts/generate-models.js → published/atlas/models/)
 // Servi via GitHub Pages. Deux sets de style : 'colored' | 'mono'. Modèles en mètres (scale 1).
+// baseRoot résolu RELATIVEMENT au widget (import.meta.url) → portable (pas d'URL/dépôt en dur).
 const MODEL_LIBRARY = {
-    baseRoot: 'https://nic01asfr.github.io/Widgets-Grist/models/',
+    baseRoot: new URL('./models/', import.meta.url).href,
     set: 'colored',
     get baseUrl() { return this.baseRoot + this.set + '/'; },
     categories: {
@@ -194,8 +195,8 @@ async function probeLocalModels() {
     if (MODEL_BASE_EXPLICIT) return;
     const cands = [];
     try {
-        cands.push(new URL('../../published/models/', location.href).href); // racine du repo servie
-        cands.push(new URL('./models/', location.href).href);               // modèles à côté du widget
+        cands.push(new URL('./models/', location.href).href);                     // modèles à côté du widget (prod /atlas/)
+        cands.push(new URL('../../published/atlas/models/', location.href).href);  // racine du repo servie en dev
         cands.push(new URL('../models/', location.href).href);
     } catch (e) { return; }
     for (const base of cands) {

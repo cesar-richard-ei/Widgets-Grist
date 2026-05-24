@@ -3,12 +3,12 @@
 // generate-models.js — Catalogue 3D procédural pour Maquette 3D
 // Génère des GLB binaires (sans dépendance) à partir de primitives,
 // en plusieurs "sets" de style (colored / mono).
-// Sortie : published/models/<set>/<Id>.glb + published/models/catalog.json
+// Sortie : published/atlas/models/<set>/<Id>.glb + published/atlas/models/catalog.json
 // ============================================================
 const fs = require('fs');
 const path = require('path');
 
-const OUT = path.join(__dirname, '..', 'published', 'models');
+const OUT = path.join(__dirname, '..', 'published', 'atlas', 'models');
 
 // ---------- primitives géométriques (Y up, centrées origine) ----------
 function box(w, h, d) {
@@ -401,7 +401,7 @@ function run() {
         console.log(`  ✓ ${item.id} (${file}) — h≈${height}m`);
     }
     fs.writeFileSync(path.join(OUT, 'catalog.json'), JSON.stringify(catalog, null, 2));
-    console.log(`\n✅ ${CATALOG.length} modèles × ${sets.length} sets = ${total} GLB → published/models/`);
+    console.log(`\n✅ ${CATALOG.length} modèles × ${sets.length} sets = ${total} GLB → published/atlas/models/`);
     console.log(`   catalog.json : ${CATALOG.length} entrées`);
 }
 run();
