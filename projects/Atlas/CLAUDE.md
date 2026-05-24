@@ -1,4 +1,4 @@
-# Projet : Carte Grist — Atlas (Maquette 3D Territoriale)
+# Projet : Atlas — Atlas (Maquette 3D Territoriale)
 
 ## Contexte
 
@@ -15,7 +15,7 @@ de Mapbox Standard) sont désormais rendus via une **custom layer three.js**.
 ## Architecture des fichiers
 
 ```
-carte-grist/
+Atlas/
 ├── index.html   # Chrome Atlas (HTML/CSS) + structure du DOM
 ├── app.js       # Toute la logique (ES module)
 └── CLAUDE.md
@@ -126,6 +126,6 @@ carte-grist/
 
 ## Publication
 
-Non publié. Pour publier : `published/carte-grist/` avec `package.json`
+Non publié. Pour publier : `published/atlas/` avec `package.json`
 (section `grist`) + copie de `index.html`/`app.js`, puis `npm run manifest`.
 `requiredAccess: 'full'` est requis (création de table `Maquette_Layers`).
