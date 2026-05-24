@@ -189,12 +189,12 @@ async function probeLocalModels() {
             if (r.ok && base !== MODEL_LIBRARY.baseRoot) {
                 MODEL_LIBRARY.baseRoot = base;
                 Models3D.gltfCache.clear(); Models3D.protoCache.clear(); Models3D.scheduleBuild();
-                console.log('🧩 Modèles 3D servis localement :', base);
+                console.log('🧩 Atlas — modèles 3D servis localement :', base);
                 return;
             }
         } catch (e) {}
     }
-    // sinon : GitHub Pages (fonctionne une fois publié, CORS *)
+    console.log('🧩 Atlas — base modèles (défaut) :', MODEL_LIBRARY.baseUrl, '— aucun chemin local trouvé. Sers la racine du repo, ou règle la source dans le module Modèles.');
 }
 function allModels() {
     const out = [];
@@ -1126,6 +1126,16 @@ function renderModelsPanel() {
                 <button class="${MODEL_LIBRARY.set === 'colored' ? 'active' : ''}" onclick="A.setModelSet('colored')">🎨 Coloré</button>
                 <button class="${MODEL_LIBRARY.set === 'mono' ? 'active' : ''}" onclick="A.setModelSet('mono')">⬜ Maquette</button>
             </div>
+        </div>
+        <div class="section">
+            <div class="section-title">Source des modèles (GLB)</div>
+            <div class="range-info" id="model-src-info" style="word-break:break-all">${MODEL_LIBRARY.baseUrl}</div>
+            <input class="input" id="model-src-input" style="margin-top:6px;font-family:var(--mono);font-size:11px" value="${MODEL_LIBRARY.baseRoot}" placeholder="https://…/models/">
+            <div style="display:flex;gap:6px;margin-top:6px">
+                <button class="btn btn-soft" style="flex:1" onclick="A.testModelBase()">Tester</button>
+                <button class="btn btn-primary" style="flex:1" onclick="A.setModelBase(document.getElementById('model-src-input').value)">Appliquer</button>
+            </div>
+            <div class="hint" style="margin-top:6px">Doit contenir <code>colored/</code>, <code>mono/</code> et <code>catalog.json</code>. En local : sers la racine du repo et ouvre <code>/projects/Atlas/index.html</code>.</div>
         </div>`;
     if (!isPoint) {
         $('module-body').innerHTML = setSelector + `<div class="empty"><div class="ic">📦</div><div class="t">Sélectionnez une couche de points</div><div class="h">Les modèles 3D s'appliquent aux couches ponctuelles (mobilier, arbres…)</div></div>`;
@@ -1938,6 +1948,23 @@ const A = {
         MODEL_LIBRARY.set = set; STATE.settings.modelSet = set;
         Models3D.gltfCache.clear(); Models3D.protoCache.clear(); // recharger les GLB du nouveau set
         Models3D.build(); renderModelsPanel(); markDirty();
+    },
+    setModelBase(url) {
+        url = (url || '').trim().replace(/\/+$/, '') + '/';
+        MODEL_LIBRARY.baseRoot = url; MODEL_BASE_EXPLICIT = true;
+        try { localStorage.setItem('atlas_model_base', url); } catch (e) {}
+        Models3D.gltfCache.clear(); Models3D.protoCache.clear(); Models3D.build();
+        renderModelsPanel(); showToast('Source modèles définie', 'success');
+    },
+    async testModelBase() {
+        const base = ((document.getElementById('model-src-input')?.value || MODEL_LIBRARY.baseRoot).trim().replace(/\/+$/, '')) + '/';
+        const el = document.getElementById('model-src-info');
+        if (el) { el.textContent = '… test ' + base; el.style.color = 'var(--muted)'; }
+        try {
+            const r = await fetch(base + 'catalog.json', { cache: 'no-store' });
+            if (r.ok) { const c = await r.json(); if (el) { el.textContent = `✅ OK — ${c.models?.length || 0} modèles · ${base}`; el.style.color = 'var(--green)'; } }
+            else if (el) { el.textContent = `❌ HTTP ${r.status} · ${base}`; el.style.color = 'var(--accent)'; }
+        } catch (e) { if (el) { el.textContent = `❌ ${e.message} · ${base}`; el.style.color = 'var(--accent)'; } }
     },
     pickModel(id, modelId) {
         const l = STATE.layers.find((x) => x.id === id); if (!l) return;
