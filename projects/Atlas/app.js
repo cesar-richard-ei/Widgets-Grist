@@ -260,6 +260,58 @@ function getNumericRange(layer, field) {
     if (!count) return { min: 0, max: 100, count: 0 };
     return { min, max, count };
 }
+// ============================================================
+// CONTRÔLES — filtres/animation par champ (curseur temps/valeur, sélecteur)
+// ============================================================
+// type de contrôle pour un champ : 'time' | 'range' | 'select' | null
+function controlField(layer, field) {
+    const vals = [];
+    for (const f of (layer.geojson?.features || [])) { const v = f.properties?.[field]; if (v != null && v !== '') vals.push(v); if (vals.length >= 50) break; }
+    if (!vals.length) return null;
+    const dateRe = /^\d{4}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{2,4}/;
+    if (vals.every((v) => typeof v === 'string' && dateRe.test(v.trim()) && !isNaN(Date.parse(v)))) return 'time';
+    if (vals.every((v) => v !== true && v !== false && v !== '' && !isNaN(Number(v)))) return 'range';
+    if (new Set(vals.map((v) => String(v))).size <= 20) return 'select';
+    return null;
+}
+function controlBounds(layer, type, field) {
+    if (type === 'select') return { values: getUniqueValues(layer, field, 40).map((v) => v.value) };
+    let lo = Infinity, hi = -Infinity;
+    for (const f of (layer.geojson?.features || [])) {
+        const raw = f.properties?.[field]; if (raw == null || raw === '') continue;
+        const n = type === 'time' ? Date.parse(raw) : Number(raw);
+        if (!isNaN(n)) { lo = Math.min(lo, n); hi = Math.max(hi, n); }
+    }
+    if (lo === Infinity) return { dataMin: 0, dataMax: 1 };
+    return { dataMin: lo, dataMax: hi };
+}
+function buildControlPredicate(layer) {
+    const ctrls = (layer.controls || []).filter((c) => c.active);
+    if (!ctrls.length) return null;
+    return (f) => {
+        const p = f.properties || {};
+        for (const c of ctrls) {
+            const raw = p[c.field];
+            if (c.type === 'select') {
+                if (c.values && !c.values.includes(String(raw))) return false;
+            } else {
+                if (raw == null || raw === '') continue;
+                const n = c.type === 'time' ? Date.parse(raw) : Number(raw);
+                if (isNaN(n)) continue;
+                if (n < c.min || n > c.max) return false;
+            }
+        }
+        return true;
+    };
+}
+// Applique les contrôles : filtre la source 2D (setData) + prédicat pour la 3D.
+function applyControls(layer) {
+    layer._filterPredicate = buildControlPredicate(layer);
+    const src = map && map.getSource(layer.id);
+    if (src) src.setData(layer._filterPredicate ? { type: 'FeatureCollection', features: (layer.geojson.features || []).filter(layer._filterPredicate) } : layer.geojson);
+    Models3D.scheduleBuild();
+}
+
 function detectFieldType(layer, field) {
     let num = 0, total = 0;
     (layer.geojson?.features || []).slice(0, 200).forEach((f) => {
@@ -615,6 +667,7 @@ const Models3D = {
             for (let idx = 0; idx < feats.length; idx++) {
                 const f = feats[idx];
                 if (f.geometry?.type !== 'Point') continue;
+                if (layer._filterPredicate && !layer._filterPredicate(f)) continue; // contrôles/filtres
                 const [lng, lat] = f.geometry.coordinates;
                 if (lng < b.getWest() - buf || lng > b.getEast() + buf || lat < b.getSouth() - buf || lat > b.getNorth() + buf) continue;
                 let url = defUrl;
@@ -958,6 +1011,7 @@ function addLayerToMap(layer) {
     initSymbolization(layer);
     applyLayerStyle(layer);
     if (layer.visible === false) setLayerVisibility(layer, false);
+    if ((layer.controls || []).some((c) => c.active)) applyControls(layer);
 }
 
 function applyLayerStyle(layer) {
@@ -1078,7 +1132,7 @@ function setLayerVisibility(layer, visible) {
 // ============================================================
 // MODULES — chrome contextuel
 // ============================================================
-const MODULE_TITLES = { lieu: '📍 Lieu', couches: 'Couches', soleil: '☀️ Soleil', vues: 'Vue & rendu', reglages: '⚙️ Catalogue 3D' };
+const MODULE_TITLES = { lieu: '📍 Lieu', couches: 'Couches', controles: '🎛️ Contrôles', soleil: '☀️ Soleil', vues: 'Vue & rendu', reglages: '⚙️ Catalogue 3D' };
 
 function openModule(name) {
     STATE.currentModule = name;
@@ -1089,6 +1143,7 @@ function openModule(name) {
 
     if (name === 'lieu') renderLieu();
     else if (name === 'couches') renderLayersPanel(name);
+    else if (name === 'controles') renderControles();
     else if (name === 'reglages') renderModelsPanel();
     else if (name === 'soleil') renderSoleil();
     else if (name === 'vues') renderVues();
@@ -1518,6 +1573,43 @@ function commonTransform(layer) {
 function layerFieldNames(layer) {
     const p = layer.geojson?.features?.[0]?.properties || {};
     return Object.keys(p).filter((k) => !k.startsWith('_') && k !== 'geometry_json');
+}
+// ---- Module Contrôles (filtres/animation par champ) ----
+function fmtCtl(c, n) { return c.type === 'time' ? new Date(n).toLocaleDateString('fr-FR') : (Math.round(n * 100) / 100); }
+function renderControlBody(layer, c) {
+    const esc = (s) => String(s).replace(/'/g, "\\'");
+    if (c.type === 'select') {
+        const vals = getUniqueValues(layer, c.field, 30);
+        const sel = new Set(c.values || vals.map((v) => v.value));
+        return `<div class="cats" style="margin-top:6px">${vals.map((v) => `<label class="cat-row" style="cursor:pointer"><input type="checkbox" ${sel.has(v.value) ? 'checked' : ''} onchange="A.toggleControlValue('${layer.id}','${esc(c.field)}','${esc(v.value)}')"><span class="cat-value" title="${v.value}">${v.value}</span><span class="cat-count">${v.count}</span></label>`).join('')}</div>`;
+    }
+    const step = c.type === 'time' ? Math.max(86400000, Math.round((c.dataMax - c.dataMin) / 200)) : ((c.dataMax - c.dataMin) / 200 || 1);
+    if (c.type === 'time') {
+        return `<div class="range-info" style="margin-top:6px">≤ <strong id="ctl-${c.field}-v">${fmtCtl(c, c.max)}</strong></div>
+            <input type="range" class="rng acc" min="${c.dataMin}" max="${c.dataMax}" step="${step}" value="${c.max}" oninput="A.setControlMax('${layer.id}','${esc(c.field)}', this.value)">
+            <button class="btn btn-soft btn-full" style="margin-top:6px" onclick="A.playTime('${layer.id}','${esc(c.field)}')">▶ Animer dans le temps</button>`;
+    }
+    return `<div class="range-info" style="margin-top:6px"><strong id="ctl-${c.field}-lo">${fmtCtl(c, c.min)}</strong> → <strong id="ctl-${c.field}-hi">${fmtCtl(c, c.max)}</strong></div>
+        <input type="range" class="rng" min="${c.dataMin}" max="${c.dataMax}" step="${step}" value="${c.min}" oninput="A.setControlBound('${layer.id}','${esc(c.field)}','min', this.value)">
+        <input type="range" class="rng acc" min="${c.dataMin}" max="${c.dataMax}" step="${step}" value="${c.max}" oninput="A.setControlBound('${layer.id}','${esc(c.field)}','max', this.value)">`;
+}
+function renderControles() {
+    $('module-title').textContent = '🎛️ Contrôles';
+    const body = $('module-body');
+    const layer = STATE.layers.find((l) => l.id === STATE.selectedLayer) || STATE.layers[0];
+    if (!layer) { body.innerHTML = `<div class="empty"><div class="ic">🎛️</div><div class="t">Aucune couche</div><div class="h">Importez ou liez des données</div></div>`; return; }
+    layer.controls = layer.controls || [];
+    const fields = layerFieldNames(layer).map((f) => ({ field: f, type: controlField(layer, f) })).filter((x) => x.type);
+    let html = STATE.layers.length > 1
+        ? `<select class="input" style="margin-bottom:8px" onchange="A.controlLayer(this.value)">${STATE.layers.map((l) => `<option value="${l.id}" ${l.id === layer.id ? 'selected' : ''}>${l.name}</option>`).join('')}</select>`
+        : `<div class="hint">Filtre / anime les objets de <strong>${layer.name}</strong>.</div>`;
+    if (!fields.length) { body.innerHTML = html + `<div class="hint">Aucun champ filtrable détecté (date, nombre ou catégorie).</div>`; return; }
+    html += fields.map(({ field, type }) => {
+        const c = layer.controls.find((x) => x.field === field) || { field, type, active: false };
+        const icon = type === 'time' ? '🕑' : type === 'range' ? '📊' : '🏷️';
+        return `<div class="section"><div class="toggle-row"><span class="tlabel">${icon} ${field}</span><div class="toggle ${c.active ? 'on' : ''}" onclick="A.toggleControl('${layer.id}','${String(field).replace(/'/g, "\\'")}','${type}')"></div></div>${c.active ? renderControlBody(layer, c) : ''}</div>`;
+    }).join('');
+    body.innerHTML = html;
 }
 function symLabelPanel(layer, sym) {
     const l = sym.label;
@@ -2100,12 +2192,12 @@ async function loadLayersFromGrist() {
             let geojson, style;
             try { geojson = JSON.parse(rec.GeoJSON[i]); } catch (e) { continue; }
             try { style = JSON.parse(rec.StyleJSON[i]); } catch (e) { style = { mode: 'mapbox' }; }
-            const binding = style?._binding; if (style) delete style._binding;
+            const binding = style?._binding; const ctrls = style?._controls; if (style) { delete style._binding; delete style._controls; }
             const layer = {
                 id: 'layer-grist-' + ids[i], gristId: ids[i],
                 name: rec.Name?.[i] || 'Sans nom', color: rec.Color?.[i] || '#C44536',
                 visible: rec.Visible?.[i] !== false, geometryType: rec.GeomType?.[i] || 'Point',
-                source: 'grist', geojson, style, _modelCat: 'furniture', kind: binding?.kind || 'blob',
+                source: 'grist', geojson, style, _modelCat: 'furniture', kind: binding?.kind || 'blob', controls: ctrls || [],
             };
             if (binding?.kind === 'table') { layer.sourceTable = binding.sourceTable; layer.geometryColumn = binding.geometryColumn; layer._perObjectColor = (geojson.features || []).some((f) => f.properties && f.properties.fill_color); }
             initSymbolization(layer);
@@ -2121,7 +2213,7 @@ async function saveLayerToGrist(layer, silent) {
         const data = {
             Name: layer.name, Color: layer.color, Visible: layer.visible !== false,
             GeomType: layer.geometryType,
-            StyleJSON: JSON.stringify({ ...(layer.style || {}), _binding: layer.kind === 'table' ? { kind: 'table', sourceTable: layer.sourceTable, geometryColumn: layer.geometryColumn } : undefined }),
+            StyleJSON: JSON.stringify({ ...(layer.style || {}), _binding: layer.kind === 'table' ? { kind: 'table', sourceTable: layer.sourceTable, geometryColumn: layer.geometryColumn } : undefined, _controls: (layer.controls && layer.controls.length) ? layer.controls : undefined }),
             GeoJSON: JSON.stringify(layer.geojson || {}),
         };
         if (layer.gristId) await grist.docApi.applyUserActions([['UpdateRecord', 'Maquette_Layers', layer.gristId, data]]);
@@ -2134,7 +2226,7 @@ async function saveLayerToGrist(layer, silent) {
 // PROJECT SAVE / LOAD (JSON) + autosave
 // ============================================================
 function buildProject() {
-    return { version: '2.0-atlas', savedAt: new Date().toISOString(), projectName: STATE.projectName, location: STATE.location, settings: { ...STATE.settings, date: STATE.settings.date.toISOString() }, layers: STATE.layers.map((l) => ({ id: l.id, name: l.name, color: l.color, visible: l.visible, geometryType: l.geometryType, source: l.source, geojson: l.geojson, style: l.style, _modelCat: l._modelCat, kind: l.kind, sourceTable: l.sourceTable, geometryColumn: l.geometryColumn, _perObjectColor: l._perObjectColor })) };
+    return { version: '2.0-atlas', savedAt: new Date().toISOString(), projectName: STATE.projectName, location: STATE.location, settings: { ...STATE.settings, date: STATE.settings.date.toISOString() }, layers: STATE.layers.map((l) => ({ id: l.id, name: l.name, color: l.color, visible: l.visible, geometryType: l.geometryType, source: l.source, geojson: l.geojson, style: l.style, _modelCat: l._modelCat, kind: l.kind, sourceTable: l.sourceTable, geometryColumn: l.geometryColumn, _perObjectColor: l._perObjectColor, controls: l.controls })) };
 }
 function saveProject() {
     const json = JSON.stringify(buildProject(), null, 2);
@@ -2564,6 +2656,40 @@ const A = {
         const l = STATE.layers.find((x) => x.id === id); if (!l) return;
         initSymbolization(l).orientation = { field: field || null };
         Models3D.forceBuild(); markDirty(); renderInspector();
+    },
+    // ---- Contrôles (filtres/animation) ----
+    controlLayer(id) { STATE.selectedLayer = id; renderControles(); },
+    toggleControl(id, field, type) {
+        const l = STATE.layers.find((x) => x.id === id); if (!l) return; l.controls = l.controls || [];
+        let c = l.controls.find((x) => x.field === field);
+        if (!c) { c = { field, type }; Object.assign(c, controlBounds(l, type, field)); if (type !== 'select') { c.min = c.dataMin; c.max = c.dataMax; } l.controls.push(c); }
+        c.active = !c.active;
+        applyControls(l); renderControles(); markDirty();
+    },
+    setControlBound(id, field, which, v) {
+        const l = STATE.layers.find((x) => x.id === id); if (!l) return; const c = (l.controls || []).find((x) => x.field === field); if (!c) return;
+        c[which] = +v; if (c.min > c.max) { if (which === 'min') c.max = c.min; else c.min = c.max; }
+        const el = $(`ctl-${field}-${which === 'min' ? 'lo' : 'hi'}`); if (el) el.textContent = fmtCtl(c, c[which]);
+        clearTimeout(this._ctlT); this._ctlT = setTimeout(() => applyControls(l), 80); markDirty();
+    },
+    setControlMax(id, field, v) {
+        const l = STATE.layers.find((x) => x.id === id); if (!l) return; const c = (l.controls || []).find((x) => x.field === field); if (!c) return;
+        c.max = +v; const el = $(`ctl-${field}-v`); if (el) el.textContent = fmtCtl(c, c.max);
+        clearTimeout(this._ctlT); this._ctlT = setTimeout(() => applyControls(l), 80); markDirty();
+    },
+    toggleControlValue(id, field, value) {
+        const l = STATE.layers.find((x) => x.id === id); if (!l) return; const c = (l.controls || []).find((x) => x.field === field); if (!c) return;
+        c.values = c.values || []; const i = c.values.indexOf(value); if (i >= 0) c.values.splice(i, 1); else c.values.push(value);
+        applyControls(l); markDirty();
+    },
+    playTime(id, field) {
+        const l = STATE.layers.find((x) => x.id === id); if (!l) return; const c = (l.controls || []).find((x) => x.field === field); if (!c || c.type !== 'time') return;
+        if (this._playT) { clearInterval(this._playT); this._playT = null; return; }
+        c.max = c.dataMin; const steps = 60, inc = (c.dataMax - c.dataMin) / steps;
+        this._playT = setInterval(() => {
+            c.max += inc; if (c.max >= c.dataMax) { c.max = c.dataMax; clearInterval(this._playT); this._playT = null; }
+            applyControls(l); const el = $(`ctl-${field}-v`); if (el) el.textContent = fmtCtl(c, c.max);
+        }, 66);
     },
     toggleLabel(id) { const l = STATE.layers.find((x) => x.id === id); if (!l) return; const lab = initSymbolization(l).label; lab.enabled = !lab.enabled; applyLayerStyle(l); renderInspector(); },
     resetSymbology(id) {
