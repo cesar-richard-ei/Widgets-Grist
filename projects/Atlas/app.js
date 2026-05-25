@@ -1173,7 +1173,7 @@ function renderLayersPanel(mode) {
                         <div class="layer-name">${l.name}</div>
                         <div class="layer-meta"><span>${l.geojson?.features?.length || 0} obj.</span>${is3D ? '<span class="badge3d">3D</span>' : ''}${l.kind === 'table' ? '<span class="badge-saved">⛓ table</span>' : (l.gristId ? '<span class="badge-saved">Grist</span>' : '')}</div>
                     </div>
-                    ${l.kind === 'table' ? `<button class="layer-act" onclick="A.refreshLayer('${l.id}', event)" title="Rafraîchir depuis la table">🔄</button>` : ''}
+                    ${l.kind === 'table' ? `<button class="layer-act" onclick="A.refreshLayer('${l.id}', event)" title="Rafraîchir depuis la table">🔄</button>` : (CONFIG.grist.ready ? `<button class="layer-act" onclick="A.explodeToTable('${l.id}', event)" title="Exploser en table Grist (1 ligne = 1 objet)">📤</button>` : '')}
                     <button class="layer-act" onclick="A.zoomLayer('${l.id}', event)" title="Zoomer sur la couche">🎯</button>
                     <button class="layer-del" onclick="A.deleteLayer('${l.id}', event)" title="Supprimer">🗑️</button>
                 </div>`;
@@ -1887,6 +1887,28 @@ async function scanGeoTables() {
     return out;
 }
 
+// Writer (convention §5, sens descendant) : helpers schéma.
+function sanitizeId(s) {
+    const v = String(s == null ? '' : s).trim().replace(/[^a-zA-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+    return (/^[a-zA-Z]/.test(v) ? v : '_' + v) || 'Col';
+}
+function inferGristType(vals) {
+    let seen = false, allBool = true, allInt = true, allNum = true;
+    for (const v of vals) {
+        if (v == null || v === '') continue; seen = true;
+        if (typeof v !== 'boolean') allBool = false;
+        const n = Number(v);
+        const isNum = (typeof v === 'number') || (typeof v === 'string' && v.trim() !== '' && isFinite(n));
+        if (!isNum) { allNum = false; allInt = false; }
+        else if (!Number.isInteger(n)) allInt = false;
+    }
+    if (!seen) return 'Text';
+    if (allBool) return 'Bool';
+    if (allInt) return 'Int';
+    if (allNum) return 'Numeric';
+    return 'Text';
+}
+
 const TABLE_SCHEMAS = {
     Maquette_Layers: [
         { id: 'Name', fields: { label: 'Nom', type: 'Text' } },
@@ -2142,6 +2164,55 @@ const A = {
             hideLoading();
             showToast(`« ${tableId} » liée · ${fc.features.length} objets`, 'success');
         } catch (e) { hideLoading(); showToast('Erreur : ' + e.message, 'error'); }
+    },
+    async explodeToTable(id, e) {
+        if (e) e.stopPropagation();
+        if (!CONFIG.grist.ready) { showToast('Grist requis pour exploser en table', 'warning'); return; }
+        const layer = STATE.layers.find((x) => x.id === id); if (!layer) return;
+        if (layer.kind === 'table') { showToast('Couche déjà liée à une table', 'info'); return; }
+        const feats = layer.geojson?.features || [];
+        if (!feats.length) { showToast('Couche vide', 'warning'); return; }
+        showLoading('Création de la table…');
+        try {
+            // colonnes d'attributs (hors internes _* et géométrie)
+            const propNames = new Set();
+            feats.forEach((f) => Object.keys(f.properties || {}).forEach((k) => { if (!k.startsWith('_') && k !== 'geometry_json') propNames.add(k); }));
+            const attrCols = [...propNames];
+            const colId = {}; attrCols.forEach((n) => colId[n] = sanitizeId(n));
+            // colonnes d'override par objet réellement utilisées
+            const OV = { _scale: 'scale', _rotationX: 'rotation_x', _rotationY: 'rotation_y', _rotationZ: 'rotation_z', _offsetX: 'offset_x', _offsetY: 'offset_y', _offsetZ: 'offset_z' };
+            const ovMap = { scale: 'scale', rotation_x: 'rotationX', rotation_y: 'rotationY', rotation_z: 'rotationZ', offset_x: 'offsetX', offset_y: 'offsetY', offset_z: 'offsetZ' };
+            const ovUsed = {};
+            feats.forEach((f) => { const p = f.properties || {}; for (const k in OV) if (p[k] != null && p[k] !== '') ovUsed[OV[k]] = 1; });
+            const is3D = layer.style?.mode === 'library' || layer.style?.mode === 'custom';
+            const colDefs = [
+                { id: 'geometry_json', fields: { label: 'Géométrie (GeoJSON)', type: 'Text' } },
+                ...attrCols.map((n) => ({ id: colId[n], fields: { label: n, type: inferGristType(feats.map((f) => f.properties?.[n])) } })),
+                ...Object.keys(ovUsed).map((cn) => ({ id: cn, fields: { label: cn, type: 'Numeric' } })),
+            ];
+            if (is3D) colDefs.push({ id: 'model_id', fields: { label: 'model_id', type: 'Text' } });
+            const tableName = sanitizeId('Atlas_' + layer.name);
+            const addRes = await grist.docApi.applyUserActions([['AddTable', tableName, colDefs]]);
+            const actualTable = addRes?.retValues?.[0]?.table_id || tableName;
+            const BATCH = 200;
+            for (let i = 0; i < feats.length; i += BATCH) {
+                const batch = feats.slice(i, i + BATCH);
+                const colData = { geometry_json: batch.map((f) => JSON.stringify(f.geometry)) };
+                attrCols.forEach((n) => { colData[colId[n]] = batch.map((f) => { const v = f.properties?.[n]; return v == null ? null : (typeof v === 'object' ? JSON.stringify(v) : v); }); });
+                for (const cn in ovUsed) colData[cn] = batch.map((f) => resolveFeatureProps(f, layer)[ovMap[cn]] ?? null);
+                if (is3D) colData.model_id = batch.map((f) => resolveFeatureProps(f, layer).modelId || null);
+                await grist.docApi.applyUserActions([['BulkAddRecord', actualTable, Array(batch.length).fill(null), colData]]);
+            }
+            // relier la couche à la nouvelle table (re-fetch → rowIds)
+            const cols = await grist.docApi.fetchTable(actualTable);
+            layer.geojson = tableToGeoJSON(cols, 'geometry_json');
+            layer.kind = 'table'; layer.sourceTable = actualTable; layer.geometryColumn = 'geometry_json'; layer.source = 'grist-table';
+            layer._perObjectColor = layer.geojson.features.some((f) => f.properties && f.properties.fill_color);
+            indexFeatures(layer); removeLayerGfx(layer); addLayerToMap(layer); Models3D.scheduleBuild();
+            saveLayerToGrist(layer, true); markDirty();
+            hideLoading(); showToast(`Table « ${actualTable} » créée · ${feats.length} objets`, 'success');
+            if (STATE.currentModule === 'couches') renderLayersPanel(STATE.currentModule);
+        } catch (err) { hideLoading(); showToast('Erreur : ' + err.message, 'error'); }
     },
     async refreshLayer(id, e) {
         if (e) e.stopPropagation();
