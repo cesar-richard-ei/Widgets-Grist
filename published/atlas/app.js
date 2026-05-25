@@ -2564,7 +2564,7 @@ const A = {
         setFeatureOverride(layer, idx, 'modelId', modelId || null);
         const isPt = layer.geometryType === 'Point' || layer.geometryType === 'MultiPoint';
         if (modelId && isPt && layer.style.mode !== 'library' && layer.style.mode !== 'custom') { layer.style.mode = 'library'; applyPointStyle(layer); }
-        Models3D.forceBuild(); markDirty();
+        Models3D.forceBuild(); markDirty(); renderInspector();
     },
     resetSelected() {
         const l = STATE.layers.find((x) => x.id === STATE.selection.layerId); if (!l) return;
