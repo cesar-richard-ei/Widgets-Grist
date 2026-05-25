@@ -970,6 +970,9 @@ function colorExpression(layer, fallback) {
         const r = getNumericRange(layer, sym.field);
         if (r.count) return buildColorGraduated(sym.field, [r.min, r.max], sym.colorRamp || sym.palette, sym.method);
     }
+    // Style « cuit » par objet (couche liée à une table : colonne fill_color) :
+    // règle (categorized/graduated) > par-objet > défaut couche.
+    if (layer._perObjectColor) return ['coalesce', ['get', 'fill_color'], sym.value || fallback || layer.color];
     return sym.value || fallback || layer.color;
 }
 
@@ -1163,8 +1166,9 @@ function renderLayersPanel(mode) {
                     <span class="layer-swatch" style="background:${l.color}"></span>
                     <div class="layer-info">
                         <div class="layer-name">${l.name}</div>
-                        <div class="layer-meta"><span>${l.geojson?.features?.length || 0} obj.</span>${is3D ? '<span class="badge3d">3D</span>' : ''}${l.gristId ? '<span class="badge-saved">Grist</span>' : ''}</div>
+                        <div class="layer-meta"><span>${l.geojson?.features?.length || 0} obj.</span>${is3D ? '<span class="badge3d">3D</span>' : ''}${l.kind === 'table' ? '<span class="badge-saved">⛓ table</span>' : (l.gristId ? '<span class="badge-saved">Grist</span>' : '')}</div>
                     </div>
+                    ${l.kind === 'table' ? `<button class="layer-act" onclick="A.refreshLayer('${l.id}', event)" title="Rafraîchir depuis la table">🔄</button>` : ''}
                     <button class="layer-act" onclick="A.zoomLayer('${l.id}', event)" title="Zoomer sur la couche">🎯</button>
                     <button class="layer-del" onclick="A.deleteLayer('${l.id}', event)" title="Supprimer">🗑️</button>
                 </div>`;
@@ -1174,6 +1178,7 @@ function renderLayersPanel(mode) {
             <div style="display:flex;gap:8px">
                 <button class="btn btn-primary" style="flex:1" onclick="A.openOSM()">🌍 OSM</button>
                 <button class="btn btn-soft" style="flex:1" onclick="document.getElementById('file-input').click()">📄 Fichier</button>
+                ${CONFIG.grist.ready ? `<button class="btn btn-soft" style="flex:1" onclick="A.openLinkTable()">🔗 Table</button>` : ''}
             </div>
         </div>`;
 }
@@ -1754,7 +1759,7 @@ function makeLayer(name, geomType, geojson, category, modelId) {
     const layer = {
         id: 'layer-' + Date.now() + '-' + Math.floor(Math.random() * 1e4),
         name, color, visible: true, geometryType: geomType,
-        source: 'import', geojson,
+        source: 'import', geojson, kind: 'blob',
         _modelCat: category || 'furniture',
         style: {
             mode: is3DPoint ? 'library' : 'mapbox',
@@ -1810,6 +1815,73 @@ async function processFile(file) {
 // ============================================================
 // GRIST (persistance — optionnelle, mode standalone OK)
 // ============================================================
+// ============================================================
+// TABLES GÉO LIÉES — convention skills/geo-grist-convention.md
+// Lecture d'une table Grist « 1 ligne = 1 objet » comme couche (kind:'table').
+// ============================================================
+let _linkChoices = [];
+const GEOM_COL_ALIASES = ['geometry_json', 'geometry', 'geom', 'wkt'];
+const LATLNG_ALIASES = { lat: ['latitude', 'lat', 'y'], lng: ['longitude', 'lng', 'lon', 'x'] };
+
+// Repère la colonne géométrie d'une table colonnaire Grist : renvoie un nom de
+// colonne (GeoJSON), ou { lat, lng } si couple de coordonnées.
+function detectGeometryColumn(columnar) {
+    const keys = Object.keys(columnar || {});
+    const find = (n) => keys.find((k) => k.toLowerCase() === n);
+    for (const alias of GEOM_COL_ALIASES) { const k = find(alias); if (k) return k; }
+    const latK = LATLNG_ALIASES.lat.map(find).find(Boolean);
+    const lngK = LATLNG_ALIASES.lng.map(find).find(Boolean);
+    if (latK && lngK) return { lat: latK, lng: lngK };
+    return null;
+}
+function parseGeometryValue(columnar, geomCol, i) {
+    if (geomCol && geomCol.lat) {
+        const la = +columnar[geomCol.lat][i], lo = +columnar[geomCol.lng][i];
+        return (isFinite(la) && isFinite(lo)) ? { type: 'Point', coordinates: [lo, la] } : null;
+    }
+    const v = columnar[geomCol][i];
+    if (v == null || v === '') return null;
+    if (typeof v === 'object') return v.type ? v : null;
+    const s = String(v).trim();
+    if (s[0] === '{') { try { const g = JSON.parse(s); return g.type === 'Feature' ? g.geometry : g; } catch (e) { return null; } }
+    return null; // WKT non géré en v0 (qgis2grist écrit du GeoJSON)
+}
+// Table colonnaire Grist → FeatureCollection (id = rowId Grist).
+function tableToGeoJSON(columnar, geomCol) {
+    const ids = columnar.id || [];
+    const isLatLng = !!(geomCol && geomCol.lat);
+    const skip = new Set(['id', 'manualSort', isLatLng ? geomCol.lat : geomCol, isLatLng ? geomCol.lng : null].filter(Boolean));
+    const propKeys = Object.keys(columnar).filter((k) => !skip.has(k));
+    const features = [];
+    for (let i = 0; i < ids.length; i++) {
+        const geometry = parseGeometryValue(columnar, geomCol, i);
+        if (!geometry) continue;
+        const properties = { _rowId: ids[i] };
+        for (const k of propKeys) properties[k] = columnar[k][i];
+        features.push({ type: 'Feature', id: ids[i], geometry, properties });
+    }
+    return { type: 'FeatureCollection', features };
+}
+// Scanne le document : tables avec une colonne géométrie (hors registre).
+async function scanGeoTables() {
+    const out = [];
+    if (!CONFIG.grist.ready) return out;
+    let tables = [];
+    try { tables = await grist.docApi.listTables(); } catch (e) { return out; }
+    for (const t of tables) {
+        if (t === 'Maquette_Layers') continue;
+        try {
+            const data = await grist.docApi.fetchTable(t);
+            const gc = detectGeometryColumn(data);
+            if (!gc) continue;
+            const fc = tableToGeoJSON(data, gc);
+            if (!fc.features.length) continue;
+            out.push({ table: t, geometryColumn: gc, geomType: fc.features[0].geometry.type, count: fc.features.length, _data: data });
+        } catch (e) { /* table illisible → ignorée */ }
+    }
+    return out;
+}
+
 const TABLE_SCHEMAS = {
     Maquette_Layers: [
         { id: 'Name', fields: { label: 'Nom', type: 'Text' } },
@@ -1843,12 +1915,14 @@ async function loadLayersFromGrist() {
             let geojson, style;
             try { geojson = JSON.parse(rec.GeoJSON[i]); } catch (e) { continue; }
             try { style = JSON.parse(rec.StyleJSON[i]); } catch (e) { style = { mode: 'mapbox' }; }
+            const binding = style?._binding; if (style) delete style._binding;
             const layer = {
                 id: 'layer-grist-' + ids[i], gristId: ids[i],
                 name: rec.Name?.[i] || 'Sans nom', color: rec.Color?.[i] || '#C44536',
                 visible: rec.Visible?.[i] !== false, geometryType: rec.GeomType?.[i] || 'Point',
-                source: 'grist', geojson, style, _modelCat: 'furniture',
+                source: 'grist', geojson, style, _modelCat: 'furniture', kind: binding?.kind || 'blob',
             };
+            if (binding?.kind === 'table') { layer.sourceTable = binding.sourceTable; layer.geometryColumn = binding.geometryColumn; layer._perObjectColor = (geojson.features || []).some((f) => f.properties && f.properties.fill_color); }
             initSymbolization(layer);
             STATE.layers.push(layer);
         }
@@ -1861,7 +1935,8 @@ async function saveLayerToGrist(layer, silent) {
     try {
         const data = {
             Name: layer.name, Color: layer.color, Visible: layer.visible !== false,
-            GeomType: layer.geometryType, StyleJSON: JSON.stringify(layer.style || {}),
+            GeomType: layer.geometryType,
+            StyleJSON: JSON.stringify({ ...(layer.style || {}), _binding: layer.kind === 'table' ? { kind: 'table', sourceTable: layer.sourceTable, geometryColumn: layer.geometryColumn } : undefined }),
             GeoJSON: JSON.stringify(layer.geojson || {}),
         };
         if (layer.gristId) await grist.docApi.applyUserActions([['UpdateRecord', 'Maquette_Layers', layer.gristId, data]]);
@@ -1874,7 +1949,7 @@ async function saveLayerToGrist(layer, silent) {
 // PROJECT SAVE / LOAD (JSON) + autosave
 // ============================================================
 function buildProject() {
-    return { version: '2.0-atlas', savedAt: new Date().toISOString(), projectName: STATE.projectName, location: STATE.location, settings: { ...STATE.settings, date: STATE.settings.date.toISOString() }, layers: STATE.layers.map((l) => ({ id: l.id, name: l.name, color: l.color, visible: l.visible, geometryType: l.geometryType, source: l.source, geojson: l.geojson, style: l.style, _modelCat: l._modelCat })) };
+    return { version: '2.0-atlas', savedAt: new Date().toISOString(), projectName: STATE.projectName, location: STATE.location, settings: { ...STATE.settings, date: STATE.settings.date.toISOString() }, layers: STATE.layers.map((l) => ({ id: l.id, name: l.name, color: l.color, visible: l.visible, geometryType: l.geometryType, source: l.source, geojson: l.geojson, style: l.style, _modelCat: l._modelCat, kind: l.kind, sourceTable: l.sourceTable, geometryColumn: l.geometryColumn, _perObjectColor: l._perObjectColor })) };
 }
 function saveProject() {
     const json = JSON.stringify(buildProject(), null, 2);
@@ -2023,6 +2098,59 @@ const A = {
 
     // Couches
     openOSM, runOSM,
+    async openLinkTable() {
+        if (!CONFIG.grist.ready) { showToast('Disponible seulement dans Grist', 'warning'); return; }
+        showLoading('Recherche des tables géo…');
+        _linkChoices = await scanGeoTables();
+        hideLoading();
+        const body = $('module-body');
+        const back = `<div class="section"><button class="btn btn-soft btn-full" onclick="A.openModule('couches')">← Retour</button></div>`;
+        if (!_linkChoices.length) {
+            body.innerHTML = `<div class="empty"><div class="ic">🔍</div><div class="t">Aucune table géo trouvée</div><div class="h">Importez d'abord via QGIS → Grist</div></div>${back}`;
+            return;
+        }
+        const already = new Set(STATE.layers.filter((l) => l.kind === 'table').map((l) => l.sourceTable));
+        body.innerHTML = `<div class="section-title">Tables géo détectées</div><div class="layer-list">${_linkChoices.map((g, i) => `
+            <div class="layer-item" onclick="A.linkTableChoice(${i})">
+                <div class="layer-info"><div class="layer-name">${g.table}${already.has(g.table) ? ' ✓' : ''}</div>
+                <div class="layer-meta"><span>${g.count} obj.</span><span class="badge3d">${g.geomType}</span></div></div>
+                <button class="layer-act" title="Lier comme couche">🔗</button>
+            </div>`).join('')}</div>${back}`;
+    },
+    linkTableChoice(i) { const g = _linkChoices[i]; if (g) this.linkTable(g.table, g.geometryColumn, g._data); },
+    async linkTable(tableId, geomCol, data) {
+        if (!CONFIG.grist.ready) { showToast('Grist requis', 'warning'); return; }
+        showLoading('Lecture de la table…');
+        try {
+            const cols = data || await grist.docApi.fetchTable(tableId);
+            const gc = geomCol || detectGeometryColumn(cols);
+            if (!gc) { hideLoading(); showToast('Aucune colonne géométrie', 'error'); return; }
+            const fc = tableToGeoJSON(cols, gc);
+            if (!fc.features.length) { hideLoading(); showToast('Table sans géométrie exploitable', 'warning'); return; }
+            const layer = makeLayer(tableId, fc.features[0].geometry.type, fc, null, null);
+            layer.kind = 'table'; layer.sourceTable = tableId; layer.geometryColumn = gc; layer.source = 'grist-table';
+            layer._perObjectColor = fc.features.some((f) => f.properties && f.properties.fill_color);
+            finalizeNewLayer(layer);
+            hideLoading();
+            showToast(`« ${tableId} » liée · ${fc.features.length} objets`, 'success');
+        } catch (e) { hideLoading(); showToast('Erreur : ' + e.message, 'error'); }
+    },
+    async refreshLayer(id, e) {
+        if (e) e.stopPropagation();
+        const l = STATE.layers.find((x) => x.id === id); if (!l || l.kind !== 'table') return;
+        showLoading('Rafraîchissement…');
+        try {
+            const cols = await grist.docApi.fetchTable(l.sourceTable);
+            const gc = l.geometryColumn || detectGeometryColumn(cols);
+            l.geojson = tableToGeoJSON(cols, gc);
+            l._perObjectColor = l.geojson.features.some((f) => f.properties && f.properties.fill_color);
+            indexFeatures(l);
+            if (map.getSource(l.id)) map.getSource(l.id).setData(l.geojson); else addLayerToMap(l);
+            Models3D.scheduleBuild();
+            hideLoading(); showToast(`Rafraîchie · ${l.geojson.features.length} objets`, 'success');
+            if (STATE.currentModule === 'couches') renderLayersPanel(STATE.currentModule);
+        } catch (e2) { hideLoading(); showToast('Erreur : ' + e2.message, 'error'); }
+    },
     selectLayer(id) {
         STATE.selectedLayer = id;
         const layer = STATE.layers.find((l) => l.id === id);
