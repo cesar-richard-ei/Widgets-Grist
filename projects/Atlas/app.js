@@ -330,6 +330,7 @@ function initSymbolization(layer) {
             color: { mode: 'single', field: null, value: layer.color, palette: 'Tableau10', colorRamp: 'Viridis', categories: [], defaultColor: '#999999', method: 'linear' },
             size: { mode: 'single', field: null, value: layer.geometryType === 'Point' ? 8 : (layer.geometryType === 'Polygon' ? 12 : 4), outputRange: [4, 24], method: 'linear' },
             model: { mode: 'single', field: null, categories: [], defaultModelId: null },
+            orientation: { field: null }, // azimut (rotation Z) lié à un champ (B)
             label: { enabled: false, field: null },
         };
     }
@@ -749,6 +750,8 @@ function resolveFeatureProps(feature, layer) {
     }
     if (!modelId) modelId = layer.style?.library?.modelId ?? null;
     const m = modelId ? findModel(modelId) : null; // défaut du modèle (C)
+    // azimut lié à un champ (B) : liaison entre override objet et défaut couche
+    const fieldRotZ = sym.orientation?.field ? p[sym.orientation.field] : null;
 
     // Précédence (convention §2bis) : override objet (_x / colonne) > liaison champ
     // > défaut couche (style.common) > défaut modèle.
@@ -756,7 +759,7 @@ function resolveFeatureProps(feature, layer) {
         scale:     num([p._scale, p.scale, symScale, c.scale, m?.scale], 1),
         rotationX: num([p._rotationX, p.rotation_x, c.rotationX, m?.rotationX], 0),
         rotationY: num([p._rotationY, p.rotation_y, c.rotationY, m?.rotationY], 0),
-        rotationZ: num([p._rotationZ, p.rotation_z, c.rotationZ, m?.rotationZ], 0),
+        rotationZ: num([p._rotationZ, p.rotation_z, fieldRotZ, c.rotationZ, m?.rotationZ], 0),
         offsetX:   num([p._offsetX, p.offset_x, c.offsetX, m?.offsetX], 0),
         offsetY:   num([p._offsetY, p.offset_y, c.offsetY, m?.offsetY], 0),
         offsetZ:   num([p._offsetZ, p.offset_z, c.offsetZ, m?.offsetZ], 0),
@@ -1220,6 +1223,11 @@ function renderModelsPanel() {
             <div class="hint" style="margin-top:6px">Doit contenir <code>colored/</code>, <code>mono/</code> et <code>catalog.json</code>. En local : sers la racine du repo et ouvre <code>/projects/Atlas/index.html</code>.</div>
         </div>
         <div class="section">
+            <div class="section-title">Contribuer un modèle</div>
+            <div class="hint">Pour ajouter un objet au <strong>catalogue partagé</strong> : dépose ton <code>.glb</code> (low-poly, en mètres, base au sol) dans <code>published/atlas/models/</code>, lance <code>npm run models</code> (régénère <code>catalog.json</code>) et ouvre une PR. <em>Pour un usage ponctuel, importe le <code>.glb</code> directement sur un objet (inspecteur → 📎).</em></div>
+            <a class="btn btn-soft btn-full" style="margin-top:6px" href="https://github.com/nicO1asFr/Widgets-Grist/tree/main/published/atlas/models" target="_blank" rel="noopener">📂 Dossier des modèles (GitHub)</a>
+        </div>
+        <div class="section">
             <div class="section-title">Catalogue · ${nModels} modèles</div>
             ${Object.entries(MODEL_LIBRARY.categories).map(([k, c]) => `
                 <div style="margin:10px 0 4px;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">${c.icon} ${c.name} <span style="color:var(--muted-light)">· ${c.models.length}</span></div>
@@ -1501,7 +1509,14 @@ function commonTransform(layer) {
         <input type="range" class="rng acc" min="0" max="360" step="5" value="${c.rotationZ}" oninput="A.setCommon('${layer.id}','rotationZ',this.value,'ct-rz','°')">
         <div class="slider-head" style="margin-top:12px"><span class="lbl">Altitude (Z)</span><span class="val" id="ct-oz">${c.offsetZ}m</span></div>
         <input type="range" class="rng acc" min="0" max="30" step="0.5" value="${c.offsetZ}" oninput="A.setCommon('${layer.id}','offsetZ',this.value,'ct-oz','m')">
+        <div class="slider-head" style="margin-top:12px"><span class="lbl">🧭 Orientation depuis un champ</span></div>
+        <select class="input" onchange="A.setOrientationField('${layer.id}', this.value)"><option value="">— azimut fixe ci-dessus —</option>${layerFieldNames(layer).map((fn) => `<option value="${fn}" ${layer.style?.symbolization?.orientation?.field === fn ? 'selected' : ''}>${fn}</option>`).join('')}</select>
     </div>`;
+}
+// Noms de champs d'attributs d'une couche (hors internes).
+function layerFieldNames(layer) {
+    const p = layer.geojson?.features?.[0]?.properties || {};
+    return Object.keys(p).filter((k) => !k.startsWith('_') && k !== 'geometry_json');
 }
 function symLabelPanel(layer, sym) {
     const l = sym.label;
@@ -1537,7 +1552,8 @@ function renderObjectInspector() {
         const isPt = layer.geometryType === 'Point' || layer.geometryType === 'MultiPoint';
         const modelRow = isPt ? `<div class="slider-row"><div class="slider-head"><span class="lbl">🧩 Modèle 3D</span></div>
             <select class="input" onchange="A.pickFeatureModel(this.value)"><option value="">— cercle 2D —</option>${allModels().map((m) => `<option value="${m.id}" ${r.modelId === m.id ? 'selected' : ''}>${m.icon} ${m.name}</option>`).join('')}</select></div>` : '';
-        $('insp-body').innerHTML = modelRow +
+        const importRow = (isPt && layer.kind === 'table' && CONFIG.grist.ready) ? `<button class="btn btn-soft btn-full" style="margin-top:6px" onclick="A.importObjectModel()">📎 Importer un .glb pour cet objet</button>` : '';
+        $('insp-body').innerHTML = modelRow + importRow +
             slider('f-scale', '📏 Échelle', r.scale, 0.1, 5, 0.05, '×') +
             slider('f-rotationZ', '🔄 Rotation Z (azimut)', r.rotationZ, 0, 360, 5, '°') +
             slider('f-rotationX', '↕️ Rotation X', r.rotationX, -90, 90, 5, '°') +
@@ -1940,10 +1956,19 @@ let _gristTok = null;
 async function ensureGristToken() {
     if (_gristTok && Date.now() < _gristTok.exp) return _gristTok;
     try {
-        const t = await grist.docApi.getAccessToken({ readOnly: true });
+        const t = await grist.docApi.getAccessToken({}); // accès complet (lecture PJ + upload)
         _gristTok = { token: t.token, baseUrl: t.baseUrl, exp: Date.now() + Math.max(10000, (t.ttlMsecs || 60000) - 10000) };
         return _gristTok;
     } catch (e) { return null; }
+}
+// Upload d'un GLB en pièce jointe (API REST via jeton) → renvoie l'id d'attachment.
+async function uploadAttachment(file) {
+    const t = await ensureGristToken(); if (!t) throw new Error('jeton Grist indisponible');
+    const fd = new FormData(); fd.append('upload', file, file.name);
+    const res = await fetch(`${t.baseUrl}/attachments?auth=${encodeURIComponent(t.token)}`, { method: 'POST', body: fd });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const ids = await res.json();
+    return Array.isArray(ids) ? ids[0] : ids;
 }
 function attachmentUrlSync(attId) {
     if (!_gristTok || Date.now() >= _gristTok.exp) {
@@ -2466,6 +2491,11 @@ const A = {
         const el = $(elId); if (el) el.textContent = v + (unit || '');
         Models3D.updateEdited(id, (l.geojson?.features || []).map((_, i) => i));
     },
+    setOrientationField(id, field) {
+        const l = STATE.layers.find((x) => x.id === id); if (!l) return;
+        initSymbolization(l).orientation = { field: field || null };
+        Models3D.forceBuild(); markDirty(); renderInspector();
+    },
     toggleLabel(id) { const l = STATE.layers.find((x) => x.id === id); if (!l) return; const lab = initSymbolization(l).label; lab.enabled = !lab.enabled; applyLayerStyle(l); renderInspector(); },
     resetSymbology(id) {
         const l = STATE.layers.find((x) => x.id === id); if (!l) return;
@@ -2502,6 +2532,31 @@ const A = {
             });
         }
         Models3D.updateEdited(layer.id, multi ? STATE.selection.features : [STATE.selection.features[0]]);
+    },
+    importObjectModel() {
+        const layer = STATE.layers.find((l) => l.id === STATE.selection.layerId);
+        if (!layer) return;
+        if (layer.kind !== 'table' || !CONFIG.grist.ready) { showToast('Importer un .glb nécessite une couche liée à une table Grist', 'warning'); return; }
+        const inp = document.createElement('input'); inp.type = 'file'; inp.accept = '.glb,model/gltf-binary';
+        inp.onchange = async () => {
+            const file = inp.files && inp.files[0]; if (!file) return;
+            showLoading('Import du modèle 3D…');
+            try {
+                const id = await uploadAttachment(file);
+                if (id == null) throw new Error('upload sans id');
+                const cols = await grist.docApi.fetchTable(layer.sourceTable);
+                if (!('model_glb' in cols)) await grist.docApi.applyUserActions([['AddColumn', layer.sourceTable, 'model_glb', { type: 'Attachments' }]]);
+                const feats = STATE.selection.features.map((i) => layer.geojson.features[i]).filter((f) => f && f.properties && f.properties._rowId != null);
+                if (!feats.length) throw new Error('aucun objet sélectionné');
+                await grist.docApi.applyUserActions([['BulkUpdateRecord', layer.sourceTable, feats.map((f) => f.properties._rowId), { model_glb: feats.map(() => ['L', id]) }]]);
+                feats.forEach((f) => { f.properties.model_glb = ['L', id]; });
+                const isPt = layer.geometryType === 'Point' || layer.geometryType === 'MultiPoint';
+                if (isPt && layer.style.mode !== 'library' && layer.style.mode !== 'custom') { layer.style.mode = 'library'; applyPointStyle(layer); }
+                Models3D.forceBuild(); markDirty();
+                hideLoading(); showToast(`Modèle importé · ${feats.length} objet(s)`, 'success');
+            } catch (e) { hideLoading(); showToast('Import : ' + e.message, 'error'); }
+        };
+        inp.click();
     },
     pickFeatureModel(modelId) {
         const layer = STATE.layers.find((l) => l.id === STATE.selection.layerId); if (!layer) return;
