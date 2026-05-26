@@ -1509,6 +1509,7 @@ function renderSymbologyInspector(layer) {
 
     $('insp-foot').innerHTML = `
         <button class="btn btn-soft" style="flex:1" onclick="A.resetSymbology('${layer.id}')">Réinitialiser</button>
+        <button class="btn btn-soft" style="flex:1" onclick="A.exportLayerQGIS('${layer.id}')" title="Exporter GeoJSON + style QML pour QGIS">⬇ QGIS</button>
         <button class="btn btn-primary" style="flex:2" onclick="A.saveLayer('${layer.id}')">Enregistrer</button>`;
 }
 
@@ -2388,6 +2389,41 @@ function exportProject() {
     const a = document.createElement('a'); a.href = url; a.download = 'atlas_export.geojson'; a.click(); URL.revokeObjectURL(url);
     showToast('Export GeoJSON', 'success');
 }
+// ---- Export QGIS : GeoJSON + style QML (réversible avec le parse QML de qgis2grist) ----
+function downloadFile(name, content, mime) {
+    const url = URL.createObjectURL(new Blob([content], { type: mime }));
+    const a = document.createElement('a'); a.href = url; a.download = name; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+function hexToQgisColor(hex) {
+    const h = String(hex || '#999999').replace('#', ''); const r = parseInt(h.slice(0, 2), 16) || 0, g = parseInt(h.slice(2, 4), 16) || 0, b = parseInt(h.slice(4, 6), 16) || 0;
+    return `${r},${g},${b},255`;
+}
+function qgisSymbol(name, geomType, color) {
+    const t = geomType.includes('Point') ? 'marker' : geomType.includes('Line') ? 'line' : 'fill';
+    const cls = t === 'marker' ? 'SimpleMarker' : t === 'line' ? 'SimpleLine' : 'SimpleFill';
+    const props = t === 'marker'
+        ? `<prop k="name" v="circle"/><prop k="color" v="${color}"/><prop k="outline_color" v="255,255,255,255"/><prop k="size" v="3"/>`
+        : t === 'line'
+        ? `<prop k="line_color" v="${color}"/><prop k="line_width" v="0.6"/>`
+        : `<prop k="color" v="${color}"/><prop k="outline_color" v="35,35,35,255"/><prop k="outline_width" v="0.26"/>`;
+    return `<symbol name="${name}" type="${t}" alpha="1"><layer class="${cls}" enabled="1" pass="0">${props}</layer></symbol>`;
+}
+function layerToQML(layer) {
+    const g = layer.geometryType || 'Point';
+    const esc = (s) => String(s).replace(/"/g, '&quot;').replace(/&(?!quot;)/g, '&amp;');
+    const sym = layer.style?.symbolization?.color || { mode: 'single', value: layer.color };
+    let renderer;
+    if (sym.mode === 'categorized' && sym.field && sym.categories?.length) {
+        const cats = sym.categories;
+        const categories = cats.map((c, i) => `<category value="${esc(c.value)}" label="${esc(c.value)}" symbol="${i}" render="true"/>`).join('');
+        const symbols = cats.map((c, i) => qgisSymbol(String(i), g, hexToQgisColor(c.color))).join('');
+        renderer = `<renderer-v2 type="categorizedSymbol" attr="${esc(sym.field)}" forceraster="0" symbollevels="0" enableorderby="0"><categories>${categories}</categories><symbols>${symbols}</symbols></renderer-v2>`;
+    } else {
+        renderer = `<renderer-v2 type="singleSymbol" forceraster="0" symbollevels="0" enableorderby="0"><symbols>${qgisSymbol('0', g, hexToQgisColor(sym.value || layer.color))}</symbols></renderer-v2>`;
+    }
+    return `<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n<qgis version="3.34" styleCategories="Symbology">\n${renderer}\n</qgis>\n`;
+}
 
 // ============================================================
 // GEOCODING (Nominatim — libre, sans clé)
@@ -2917,6 +2953,16 @@ const A = {
 
     // Project
     saveProject, loadProject, exportProject,
+    exportLayerQGIS(id, e) {
+        if (e) e.stopPropagation();
+        const l = STATE.layers.find((x) => x.id === id);
+        if (!l || !l.geojson?.features?.length) { showToast('Couche vide', 'warning'); return; }
+        const base = sanitizeId(l.name) || 'couche';
+        const fc = { type: 'FeatureCollection', features: l.geojson.features.map((f) => ({ type: 'Feature', geometry: f.geometry, properties: Object.fromEntries(Object.entries(f.properties || {}).filter(([k]) => !k.startsWith('_') && k !== 'geometry_json')) })) };
+        downloadFile(base + '.geojson', JSON.stringify(fc), 'application/geo+json');
+        setTimeout(() => downloadFile(base + '.qml', layerToQML(l), 'application/xml'), 350);
+        showToast(`Export QGIS : ${base}.geojson + .qml`, 'success');
+    },
 };
 function regenCategories(layer, param) {
     const sym = layer.style.symbolization[param];
