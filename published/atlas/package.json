@@ -1,6 +1,6 @@
 {
   "name": "atlas",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "Maquette 3D territoriale pour Grist : carte MapLibre + modèles 3D (three.js), import OSM/GeoJSON, symbolisation, relief (terrarium/LIDAR HD IGN), éclairage solaire et ombres portées.",
   "authors": [
     {

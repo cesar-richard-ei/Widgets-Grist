@@ -1212,7 +1212,7 @@ function openModule(name) {
     $('module-foot').style.display = 'none';
 
     if (name === 'lieu') renderLieu();
-    else if (name === 'couches') renderLayersPanel(name);
+    else if (name === 'couches') { renderLayersPanel(name); refreshGeoTables(); }
     else if (name === 'controles') renderControles();
     else if (name === 'recit') renderRecit();
     else if (name === 'reglages') renderModelsPanel();
@@ -1273,12 +1273,32 @@ function renderLieu() {
 }
 
 // ---- Couches (liste + symbolisation via l'inspecteur de droite) ----
+// Tables géo du document détectées (cache), proposées à afficher dans Couches.
+let _geoTables = [];
+async function refreshGeoTables() {
+    if (!CONFIG.grist.ready) { _geoTables = []; return; }
+    try { _geoTables = await scanGeoTables(); } catch (e) { _geoTables = []; }
+    if (STATE.currentModule === 'couches') renderLayersPanel('couches');
+}
+function availableTablesSection() {
+    if (!CONFIG.grist.ready) return '';
+    const linked = new Set(STATE.layers.filter((l) => l.kind === 'table').map((l) => l.sourceTable));
+    const avail = _geoTables.filter((g) => !linked.has(g.table));
+    if (!avail.length) return '';
+    return `<div class="section"><div class="section-title">Tables géo du document · à afficher</div><div class="layer-list">${avail.map((g) => `
+        <div class="layer-item" onclick="A.showGeoTable('${String(g.table).replace(/'/g, "\\'")}')">
+            <span class="layer-vis" title="Afficher comme couche">＋</span>
+            <div class="layer-info"><div class="layer-name">${g.table}</div><div class="layer-meta"><span>${g.count} obj.</span><span class="badge3d">${g.geomType}</span></div></div>
+            <button class="layer-act" title="Afficher">👁</button>
+        </div>`).join('')}</div></div>`;
+}
 function renderLayersPanel(mode) {
     $('module-title').textContent = 'Couches';
     const body = $('module-body');
     if (STATE.layers.length === 0) {
         body.innerHTML = `
-            <div class="empty"><div class="ic">📂</div><div class="t">Aucune donnée</div><div class="h">Importez depuis OSM ou un fichier</div></div>
+            <div class="empty"><div class="ic">📂</div><div class="t">Aucune couche affichée</div><div class="h">Affiche une table ci-dessous, ou importe</div></div>
+            ${availableTablesSection()}
             <div class="section"><div class="section-title">🌍 OpenStreetMap</div><button class="btn btn-primary btn-full" onclick="A.openOSM()">Importer depuis OSM</button></div>
             <div class="section"><div class="section-title">📄 Fichier</div>
                 <div class="drop" id="drop" onclick="document.getElementById('file-input').click()"><div class="ic">📄</div><div class="t">Glissez un GeoJSON</div><div class="h">.geojson / .json</div></div>
@@ -1311,6 +1331,7 @@ function renderLayersPanel(mode) {
                 </div>`;
             }).join('')}
         </div>
+        ${availableTablesSection()}
         <div class="section">
             <div style="display:flex;gap:8px">
                 <button class="btn btn-primary" style="flex:1" onclick="A.openOSM()">🌍 OSM</button>
@@ -2571,6 +2592,7 @@ const A = {
             </div>`).join('')}</div>${back}`;
     },
     linkTableChoice(i) { const g = _linkChoices[i]; if (g) this.linkTable(g.table, g.geometryColumn, g._data); },
+    showGeoTable(t) { const g = _geoTables.find((x) => x.table === t); if (g) this.linkTable(g.table, g.geometryColumn, g._data); else this.linkTable(t); },
     async linkTable(tableId, geomCol, data) {
         if (!CONFIG.grist.ready) { showToast('Grist requis', 'warning'); return; }
         showLoading('Lecture de la table…');
