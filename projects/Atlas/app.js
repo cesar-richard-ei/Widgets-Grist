@@ -69,6 +69,7 @@ const STATE = {
     projectName: '',
     location: { name: 'Capitole · Toulouse', lat: 43.6043, lng: 1.4437, radius: 500 },
     layers: [],
+    story: [],
     selectedLayer: null,
     currentModule: null,
     selection: { mode: false, layerId: null, features: [], multiIndex: 0 },
@@ -310,6 +311,75 @@ function applyControls(layer) {
     const src = map && map.getSource(layer.id);
     if (src) src.setData(layer._filterPredicate ? { type: 'FeatureCollection', features: (layer.geojson.features || []).filter(layer._filterPredicate) } : layer.geojson);
     Models3D.scheduleBuild();
+}
+
+// ============================================================
+// RÉCIT / STORYMAPS — séquence d'étapes (caméra + état) rejouables
+// ============================================================
+function captureStoryState() {
+    return {
+        camera: { center: map.getCenter().toArray(), zoom: +map.getZoom().toFixed(2), pitch: +map.getPitch().toFixed(1), bearing: +map.getBearing().toFixed(1) },
+        projection: STATE.settings.projection,
+        timeOfDay: STATE.settings.timeOfDay,
+        date: STATE.settings.date.toISOString(),
+        terrain3D: STATE.settings.terrain3D,
+        layers: STATE.layers.map((l) => ({ id: l.id, name: l.name, visible: l.visible !== false, controls: (l.controls || []).filter((c) => c.active).map((c) => ({ field: c.field, type: c.type, min: c.min, max: c.max, values: c.values })) })),
+    };
+}
+function applyStoryState(s) {
+    if (!s || !map) return;
+    (s.layers || []).forEach((ls) => {
+        const l = STATE.layers.find((x) => x.id === ls.id) || STATE.layers.find((x) => x.name === ls.name);
+        if (!l) return;
+        setLayerVisibility(l, ls.visible);
+        l.controls = l.controls || [];
+        const stepFields = new Set((ls.controls || []).map((c) => c.field));
+        (ls.controls || []).forEach((sc) => {
+            let c = l.controls.find((x) => x.field === sc.field);
+            if (!c) { c = { field: sc.field, type: sc.type }; Object.assign(c, controlBounds(l, sc.type, sc.field)); l.controls.push(c); }
+            c.active = true; if (sc.min != null) c.min = sc.min; if (sc.max != null) c.max = sc.max; if (sc.values) c.values = sc.values;
+        });
+        l.controls.forEach((c) => { if (!stepFields.has(c.field)) c.active = false; });
+        applyControls(l);
+    });
+    if (s.projection && s.projection !== STATE.settings.projection) { STATE.settings.projection = s.projection; applyProjection(); }
+    if (s.terrain3D != null && s.terrain3D !== STATE.settings.terrain3D) { STATE.settings.terrain3D = s.terrain3D; applyTerrain(); setTimeout(() => Models3D.recomputeAll(), 250); }
+    if (s.timeOfDay != null) STATE.settings.timeOfDay = s.timeOfDay;
+    if (s.date) STATE.settings.date = new Date(s.date);
+    updateLighting();
+    if (s.camera) map.flyTo({ center: s.camera.center, zoom: s.camera.zoom, pitch: s.camera.pitch, bearing: s.camera.bearing, duration: 1500 });
+}
+const STORY_SCHEMA = [
+    { id: 'Step', fields: { label: 'Étape', type: 'Int' } },
+    { id: 'Title', fields: { label: 'Titre', type: 'Text' } },
+    { id: 'Description', fields: { label: 'Texte', type: 'Text' } },
+    { id: 'StateJSON', fields: { label: 'État (JSON)', type: 'Text' } },
+];
+async function saveStoryToGrist() {
+    if (!CONFIG.grist.ready) return;
+    try {
+        const tables = await grist.docApi.listTables();
+        if (!tables.includes('Atlas_Story')) await grist.docApi.applyUserActions([['AddTable', 'Atlas_Story', STORY_SCHEMA]]);
+        const rec = await grist.docApi.fetchTable('Atlas_Story');
+        if (rec.id && rec.id.length) await grist.docApi.applyUserActions([['BulkRemoveRecord', 'Atlas_Story', rec.id]]);
+        if (STATE.story.length) await grist.docApi.applyUserActions([['BulkAddRecord', 'Atlas_Story', STATE.story.map(() => null), {
+            Step: STATE.story.map((_, i) => i + 1),
+            Title: STATE.story.map((s) => s.title || ''),
+            Description: STATE.story.map((s) => s.text || ''),
+            StateJSON: STATE.story.map((s) => JSON.stringify(s.state || {})),
+        }]]);
+    } catch (e) { console.warn('story save', e.message); }
+}
+async function loadStoryFromGrist() {
+    if (!CONFIG.grist.ready) return;
+    try {
+        const tables = await grist.docApi.listTables();
+        if (!tables.includes('Atlas_Story')) return;
+        const rec = await grist.docApi.fetchTable('Atlas_Story'); const n = (rec.id || []).length; const rows = [];
+        for (let i = 0; i < n; i++) rows.push({ step: rec.Step?.[i] ?? i + 1, title: rec.Title?.[i] || '', text: rec.Description?.[i] || '', state: (() => { try { return JSON.parse(rec.StateJSON[i]); } catch (e) { return {}; } })() });
+        rows.sort((a, b) => a.step - b.step);
+        STATE.story = rows.map((r) => ({ title: r.title, text: r.text, state: r.state }));
+    } catch (e) { console.warn('story load', e.message); }
 }
 
 function detectFieldType(layer, field) {
@@ -1132,7 +1202,7 @@ function setLayerVisibility(layer, visible) {
 // ============================================================
 // MODULES — chrome contextuel
 // ============================================================
-const MODULE_TITLES = { lieu: '📍 Lieu', couches: 'Couches', controles: '🎛️ Contrôles', soleil: '☀️ Soleil', vues: 'Vue & rendu', reglages: '⚙️ Catalogue 3D' };
+const MODULE_TITLES = { lieu: '📍 Lieu', couches: 'Couches', controles: '🎛️ Contrôles', recit: '📖 Récit', soleil: '☀️ Soleil', vues: 'Vue & rendu', reglages: '⚙️ Catalogue 3D' };
 
 function openModule(name) {
     STATE.currentModule = name;
@@ -1144,6 +1214,7 @@ function openModule(name) {
     if (name === 'lieu') renderLieu();
     else if (name === 'couches') renderLayersPanel(name);
     else if (name === 'controles') renderControles();
+    else if (name === 'recit') renderRecit();
     else if (name === 'reglages') renderModelsPanel();
     else if (name === 'soleil') renderSoleil();
     else if (name === 'vues') renderVues();
@@ -1610,6 +1681,55 @@ function renderControles() {
         return `<div class="section"><div class="toggle-row"><span class="tlabel">${icon} ${field}</span><div class="toggle ${c.active ? 'on' : ''}" onclick="A.toggleControl('${layer.id}','${String(field).replace(/'/g, "\\'")}','${type}')"></div></div>${c.active ? renderControlBody(layer, c) : ''}</div>`;
     }).join('');
     body.innerHTML = html;
+}
+// ---- Module Récit (storymaps) ----
+let _storyIdx = 0;
+function renderRecit() {
+    $('module-title').textContent = '📖 Récit';
+    const body = $('module-body'); const steps = STATE.story || [];
+    let html = `<div class="hint">Capture des <strong>étapes</strong> (caméra + couches + filtres + heure) et rejoue-les en présentation.</div>
+        <div class="section" style="display:flex;gap:8px">
+            <button class="btn btn-primary" style="flex:2" onclick="A.storyCapture()">📸 Capturer l'étape</button>
+            ${steps.length ? `<button class="btn btn-dark" style="flex:1" onclick="A.storyPlay(0)">▶ Lecture</button>` : ''}
+        </div>`;
+    if (!steps.length) { body.innerHTML = html + `<div class="empty"><div class="ic">📖</div><div class="t">Aucune étape</div><div class="h">Cadre la vue puis « Capturer »</div></div>`; return; }
+    html += `<div class="layer-list">${steps.map((s, i) => `
+        <div class="layer-item">
+            <span class="layer-vis on" onclick="A.storyPlay(${i})" title="Aller à l'étape">▶</span>
+            <div class="layer-info" style="flex:1">
+                <input class="input" style="font-weight:600;padding:4px 6px" value="${(s.title || '').replace(/"/g, '&quot;')}" onchange="A.storySet(${i},'title',this.value)" placeholder="Titre étape ${i + 1}">
+                <textarea class="input" style="margin-top:4px;min-height:38px;font-size:12px" onchange="A.storySet(${i},'text',this.value)" placeholder="Texte…">${s.text || ''}</textarea>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:2px">
+                <button class="layer-act" onclick="A.storyMove(${i},-1)" title="Monter">▲</button>
+                <button class="layer-act" onclick="A.storyRecapture(${i})" title="Re-capturer la vue">📸</button>
+                <button class="layer-act" onclick="A.storyMove(${i},1)" title="Descendre">▼</button>
+            </div>
+            <button class="layer-del" onclick="A.storyDelete(${i})" title="Supprimer">🗑️</button>
+        </div>`).join('')}</div>`;
+    body.innerHTML = html;
+}
+function renderStoryPresentation() {
+    const ov = document.getElementById('story-present'); if (!ov) return;
+    const s = STATE.story[_storyIdx]; const n = STATE.story.length; if (!s) return;
+    ov.innerHTML = `<div style="display:flex;align-items:center;gap:10px">
+        <button class="btn btn-soft" onclick="A.storyStep(-1)" ${_storyIdx === 0 ? 'disabled' : ''}>◀</button>
+        <div style="flex:1;text-align:center"><div style="font-weight:600;font-size:15px">${s.title || ('Étape ' + (_storyIdx + 1))}</div><div style="font-size:10px;color:#6b6256;letter-spacing:.05em">${_storyIdx + 1} / ${n}</div></div>
+        <button class="btn btn-soft" onclick="A.storyStep(1)" ${_storyIdx === n - 1 ? 'disabled' : ''}>▶</button>
+        <button class="btn btn-soft" onclick="A.storyExit()" title="Quitter">✕</button>
+    </div>${s.text ? `<div style="margin-top:8px;font-size:13px;line-height:1.45">${s.text}</div>` : ''}`;
+}
+function enterStoryPresentation(i) {
+    if (!STATE.story.length) { showToast('Aucune étape à jouer', 'warning'); return; }
+    _storyIdx = Math.max(0, Math.min(i || 0, STATE.story.length - 1));
+    let ov = document.getElementById('story-present');
+    if (!ov) {
+        ov = document.createElement('div'); ov.id = 'story-present';
+        ov.style.cssText = 'position:absolute;left:50%;bottom:24px;transform:translateX(-50%);z-index:1000;background:rgba(244,239,227,0.96);color:#1F1B14;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.25);max-width:520px;width:88%;padding:12px 16px;font-family:\'Hanken Grotesk\',sans-serif';
+        (document.getElementById('map-frame') || document.body).appendChild(ov);
+    }
+    renderStoryPresentation();
+    applyStoryState(STATE.story[_storyIdx].state);
 }
 function symLabelPanel(layer, sym) {
     const l = sym.label;
@@ -2229,7 +2349,7 @@ async function saveLayerToGrist(layer, silent) {
 // PROJECT SAVE / LOAD (JSON) + autosave
 // ============================================================
 function buildProject() {
-    return { version: '2.0-atlas', savedAt: new Date().toISOString(), projectName: STATE.projectName, location: STATE.location, settings: { ...STATE.settings, date: STATE.settings.date.toISOString() }, layers: STATE.layers.map((l) => ({ id: l.id, name: l.name, color: l.color, visible: l.visible, geometryType: l.geometryType, source: l.source, geojson: l.geojson, style: l.style, _modelCat: l._modelCat, kind: l.kind, sourceTable: l.sourceTable, geometryColumn: l.geometryColumn, _perObjectColor: l._perObjectColor, controls: l.controls })) };
+    return { version: '2.0-atlas', savedAt: new Date().toISOString(), projectName: STATE.projectName, location: STATE.location, story: STATE.story, settings: { ...STATE.settings, date: STATE.settings.date.toISOString() }, layers: STATE.layers.map((l) => ({ id: l.id, name: l.name, color: l.color, visible: l.visible, geometryType: l.geometryType, source: l.source, geojson: l.geojson, style: l.style, _modelCat: l._modelCat, kind: l.kind, sourceTable: l.sourceTable, geometryColumn: l.geometryColumn, _perObjectColor: l._perObjectColor, controls: l.controls })) };
 }
 function saveProject() {
     const json = JSON.stringify(buildProject(), null, 2);
@@ -2244,6 +2364,7 @@ function saveProject() {
 async function restoreProject(p) {
     STATE.layers.forEach((l) => removeLayerGfx(l));
     STATE.layers = [];
+    STATE.story = p.story || [];
     if (p.projectName) { STATE.projectName = p.projectName; $('project-name').textContent = p.projectName; }
     if (p.location?.lat) { STATE.location = p.location; map.jumpTo({ center: [p.location.lng, p.location.lat] }); }
     if (p.settings) { Object.assign(STATE.settings, p.settings); STATE.settings.date = new Date(p.settings.date || Date.now()); MODEL_LIBRARY.set = STATE.settings.modelSet || 'colored'; }
@@ -2694,6 +2815,15 @@ const A = {
             applyControls(l); const el = $(`ctl-${field}-v`); if (el) el.textContent = fmtCtl(c, c.max);
         }, 66);
     },
+    // ---- Récit (storymaps) ----
+    storyCapture() { STATE.story.push({ title: 'Étape ' + (STATE.story.length + 1), text: '', state: captureStoryState() }); markDirty(); saveStoryToGrist(); renderRecit(); showToast('Étape capturée', 'success'); },
+    storyRecapture(i) { if (STATE.story[i]) { STATE.story[i].state = captureStoryState(); markDirty(); saveStoryToGrist(); showToast('Vue mise à jour', 'success'); } },
+    storySet(i, k, v) { if (STATE.story[i]) { STATE.story[i][k] = v; markDirty(); saveStoryToGrist(); } },
+    storyMove(i, d) { const j = i + d; if (j < 0 || j >= STATE.story.length) return; const a = STATE.story; [a[i], a[j]] = [a[j], a[i]]; markDirty(); saveStoryToGrist(); renderRecit(); },
+    storyDelete(i) { STATE.story.splice(i, 1); markDirty(); saveStoryToGrist(); renderRecit(); },
+    storyPlay(i) { enterStoryPresentation(i); },
+    storyStep(d) { _storyIdx = Math.max(0, Math.min(_storyIdx + d, STATE.story.length - 1)); renderStoryPresentation(); applyStoryState(STATE.story[_storyIdx].state); },
+    storyExit() { const ov = document.getElementById('story-present'); if (ov) ov.remove(); },
     toggleLabel(id) { const l = STATE.layers.find((x) => x.id === id); if (!l) return; const lab = initSymbolization(l).label; lab.enabled = !lab.enabled; applyLayerStyle(l); renderInspector(); },
     resetSymbology(id) {
         const l = STATE.layers.find((x) => x.id === id); if (!l) return;
@@ -2900,6 +3030,7 @@ async function init() {
         }
     } catch (e) {}
     await initGrist();
+    await loadStoryFromGrist();
     setInterval(() => { if (STATE.layers.length) { try { localStorage.setItem('atlas_autosave', JSON.stringify(buildProject())); } catch (e) {} } }, 120000);
     updateLegend();
     updateSunStrip();
