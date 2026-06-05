@@ -954,6 +954,30 @@
                 return out;
             }
 
+            // Decale une date de n periodes (semaine = 7 jours, mois = 1 mois).
+            function shiftPeriods(date, granularity, n) {
+                const d = new Date(date.getTime());
+                if (granularity === 'month') d.setUTCMonth(d.getUTCMonth() + n);
+                else d.setUTCDate(d.getUTCDate() + n * 7);
+                return d;
+            }
+
+            // Liste contigue de cles de periode (semaine ISO ou mois) a partir d'une date,
+            // alignee sur le debut de periode (lundi / 1er du mois). Inclut les periodes vides.
+            function periodRange(startDate, granularity, count) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                let d = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+                if (g === 'week') { const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); }
+                else { d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+                const out = [];
+                for (let i = 0; i < count; i++) {
+                    out.push(periodKey(d, g));
+                    if (g === 'week') d.setUTCDate(d.getUTCDate() + 7);
+                    else d.setUTCMonth(d.getUTCMonth() + 1);
+                }
+                return out;
+            }
+
             return {
                 DEFAULT_STATUSES: DEFAULT_STATUSES,
                 columnarToRows: columnarToRows,
@@ -968,7 +992,9 @@
                 chargeTotal: chargeTotal,
                 chargeByMember: chargeByMember,
                 periodKey: periodKey,
-                chargeByMemberPeriod: chargeByMemberPeriod
+                chargeByMemberPeriod: chargeByMemberPeriod,
+                shiftPeriods: shiftPeriods,
+                periodRange: periodRange
             };
         })();
         // </taskflow-core>

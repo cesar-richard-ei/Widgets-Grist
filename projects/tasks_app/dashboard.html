@@ -400,6 +400,8 @@ const CONFIG_FIELDS = {
     plancharge: [
         { key:'granularity', label:'Granularité', options:[['week','Semaine'],['month','Mois']] },
         { key:'horizon',     label:'Périodes',    options:[['6','6'],['8','8'],['12','12']] },
+        { key:'capacite',    label:'Capacité/sem', options:[['35','35h'],['39','39h'],['40','40h']] },
+        { key:'includeDone', label:'Inclure terminé', options:[['non','Non'],['oui','Oui']] },
     ],
     projects: [],
 };
@@ -687,6 +689,30 @@ const TF = (function () {
         return out;
     }
 
+    // Decale une date de n periodes (semaine = 7 jours, mois = 1 mois).
+    function shiftPeriods(date, granularity, n) {
+        const d = new Date(date.getTime());
+        if (granularity === 'month') d.setUTCMonth(d.getUTCMonth() + n);
+        else d.setUTCDate(d.getUTCDate() + n * 7);
+        return d;
+    }
+
+    // Liste contigue de cles de periode (semaine ISO ou mois) a partir d'une date,
+    // alignee sur le debut de periode (lundi / 1er du mois). Inclut les periodes vides.
+    function periodRange(startDate, granularity, count) {
+        const g = granularity === 'month' ? 'month' : 'week';
+        let d = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+        if (g === 'week') { const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); }
+        else { d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+        const out = [];
+        for (let i = 0; i < count; i++) {
+            out.push(periodKey(d, g));
+            if (g === 'week') d.setUTCDate(d.getUTCDate() + 7);
+            else d.setUTCMonth(d.getUTCMonth() + 1);
+        }
+        return out;
+    }
+
     return {
         DEFAULT_STATUSES: DEFAULT_STATUSES,
         columnarToRows: columnarToRows,
@@ -701,7 +727,9 @@ const TF = (function () {
         chargeTotal: chargeTotal,
         chargeByMember: chargeByMember,
         periodKey: periodKey,
-        chargeByMemberPeriod: chargeByMemberPeriod
+        chargeByMemberPeriod: chargeByMemberPeriod,
+        shiftPeriods: shiftPeriods,
+        periodRange: periodRange
     };
 })();
 // </taskflow-core>
@@ -1210,24 +1238,35 @@ function renderCharge(comp, ft) {
 }
 
 // #3 plan de charge temporel — grille personne × période (semaine/mois) avec taux vs capacité
+// État éphémère (non persisté) du décalage de fenêtre temporelle, par composant.
+let planChargeOffset = {};
+function planChargeShift(id, delta) { planChargeOffset[id] = (planChargeOffset[id] || 0) + delta; renderGrid(); }
+function planChargeReset(id) { planChargeOffset[id] = 0; renderGrid(); }
+
 function renderPlanCharge(comp, ft) {
     if (!team.length) return '<div class="empty-state"><div class="empty-icon">▦</div><div class="empty-text">Aucun membre Team</div></div>';
-    const granularity = comp.config.granularity === 'month' ? 'month' : 'week';
-    const horizon = parseInt(comp.config.horizon) || 8;
-    const byMP = TF.chargeByMemberPeriod(ft, granularity);
     const members = team.filter(m => m.actif !== false);
     if (!members.length) return '<div class="empty-state"><div class="empty-text">Aucun membre actif</div></div>';
-    const pset = new Set();
-    for (const tid in byMP) for (const p in byMP[tid]) pset.add(p);
-    let periods = Array.from(pset).sort();
-    if (!periods.length) return '<div class="empty-state"><div class="empty-icon">▦</div><div class="empty-text">Aucune charge datée à planifier</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Renseignez la charge par personne + des dates sur les tâches.</div></div>';
-    periods = periods.slice(0, horizon);
-    const capWeek = (m) => (Number(m.capaciteHebdo) > 0 ? Number(m.capaciteHebdo) : 35);
+    const granularity = comp.config.granularity === 'month' ? 'month' : 'week';
+    const horizon = parseInt(comp.config.horizon) || 8;
+    const includeDone = comp.config.includeDone === 'oui';
+    const defaultCap = parseFloat(comp.config.capacite) || 35;
+    let planTasks = ft;
+    if (!includeDone) planTasks = planTasks.filter(t => !TF.isTerminal(statusCfg, getStatus(t)));
+    const byMP = TF.chargeByMemberPeriod(planTasks, granularity);
+    const undated = planTasks.filter(t => TF.parseCharges(t.charges).length && (t.dateDebut == null || t.dateEcheance == null)).length;
+    if (!Object.keys(byMP).length && !undated) return '<div class="empty-state"><div class="empty-icon">▦</div><div class="empty-text">Aucune charge datée à planifier</div><div style="font-size:0.72rem;color:var(--text-muted);margin-top:4px">Renseignez la charge par personne + des dates sur les tâches.</div></div>';
+    const offset = planChargeOffset[comp.id] || 0;
+    const periods = TF.periodRange(TF.shiftPeriods(new Date(), granularity, offset), granularity, horizon);
+    const nowKey = TF.periodKey(new Date(), granularity);
+    const capWeek = (m) => (Number(m.capaciteHebdo) > 0 ? Number(m.capaciteHebdo) : defaultCap);
     const capPer = (m) => granularity === 'month' ? capWeek(m) * 52 / 12 : capWeek(m);
     const plabel = (p) => granularity === 'month' ? (p.slice(5) + '/' + p.slice(2, 4)) : ('S' + p.slice(6));
     const cellColor = (h, cap) => { const r = cap > 0 ? h / cap : 0; return r > 1 ? '#e5484d' : r > 0.85 ? '#f59e0b' : r > 0 ? '#3b82f6' : 'transparent'; };
-    let html = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.74rem"><thead><tr><th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Membre</th>';
-    for (const p of periods) html += '<th style="padding:4px 6px;text-align:center;color:var(--text-muted);font-weight:600">' + plabel(p) + '</th>';
+    const navBtn = 'background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:6px;padding:1px 9px;cursor:pointer;font-size:0.8rem';
+    let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><button onclick="planChargeShift(\'' + comp.id + '\',-1)" style="' + navBtn + '">◀</button><span style="font-size:0.74rem;color:var(--text-muted)">' + plabel(periods[0]) + ' → ' + plabel(periods[periods.length - 1]) + '</span><button onclick="planChargeShift(\'' + comp.id + '\',1)" style="' + navBtn + '">▶</button>' + (offset !== 0 ? '<button onclick="planChargeReset(\'' + comp.id + '\')" style="' + navBtn + ';font-size:0.72rem">Aujourd\'hui</button>' : '') + '</div>';
+    html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:0.74rem"><thead><tr><th style="text-align:left;padding:4px 8px;color:var(--text-muted);font-weight:600">Membre</th>';
+    for (const p of periods) html += '<th style="padding:4px 6px;text-align:center;font-weight:600;color:' + (p === nowKey ? 'var(--primary,#6366f1)' : 'var(--text-muted)') + '">' + plabel(p) + (p === nowKey ? ' •' : '') + '</th>';
     html += '</tr></thead><tbody>';
     for (const m of members) {
         const cap = capPer(m);
@@ -1242,6 +1281,7 @@ function renderPlanCharge(comp, ft) {
     }
     html += '</tbody></table></div>';
     html += '<div style="margin-top:8px;display:flex;gap:14px;font-size:0.72rem;color:var(--text-muted);flex-wrap:wrap"><span><span style="display:inline-block;width:10px;height:10px;background:#3b82f6;border-radius:2px;vertical-align:middle"></span> charge OK</span><span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;vertical-align:middle"></span> &gt; 85% capacité</span><span><span style="display:inline-block;width:10px;height:10px;background:#e5484d;border-radius:2px;vertical-align:middle"></span> surcharge</span><span>· = aucune charge</span></div>';
+    if (undated) html += '<div style="margin-top:6px;font-size:0.72rem;color:#f59e0b">&#9888; ' + undated + ' tâche' + (undated > 1 ? 's' : '') + ' chargée' + (undated > 1 ? 's' : '') + ' sans dates — non planifiée' + (undated > 1 ? 's' : '') + '.</div>';
     return html;
 }
 
