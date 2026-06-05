@@ -38,6 +38,7 @@
         .btn { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 0.8rem; transition: all 0.2s; background: var(--card-bg); color: var(--text); }
         .btn:hover { background: var(--bg); }
         .btn.primary { background: var(--primary); color: white; border-color: var(--primary); }
+        .btn.active { background: var(--primary-light); color: var(--primary); border-color: var(--primary); }
         .group-selector { display: flex; gap: 2px; background: var(--bg); padding: 3px; border-radius: 8px; }
         .group-selector .btn { border: none; background: transparent; padding: 5px 10px; border-radius: 5px; font-size: 0.75rem; }
         .group-selector .btn.active { background: var(--primary); color: white; }
@@ -224,7 +225,11 @@
 
         /* Project select with dot */
         .project-select-wrap { display: flex; align-items: center; gap: 8px; }
-        .project-color-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; }
+        .project-color-dot { width: 14px; height: 14px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; cursor: pointer; border: 2px solid rgba(255,255,255,0.5); box-shadow: 0 1px 3px rgba(0,0,0,0.2); transition: transform 0.15s; }
+        .project-color-dot:hover { transform: scale(1.25); }
+        .project-select-wrap { position: relative; }
+        .color-picker-pop { display: none; position: absolute; left: 20px; top: 100%; margin-top: 4px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; padding: 6px; box-shadow: var(--shadow-lg); z-index: 200; flex-wrap: wrap; gap: 4px; width: 128px; }
+        .color-picker-pop.open { display: flex; }
         .project-select-wrap .form-select { flex: 1; }
 
         /* Inline dates display */
@@ -343,6 +348,15 @@
                 <button class="btn" onclick="setGroupBy('priorite')" id="groupPriorite">Priorité</button>
                 <button class="btn" onclick="setGroupBy('projet')" id="groupProjet">Projet</button>
             </div>
+            <div style="margin-left:8px">
+                <select id="colorSelect" onchange="changeColorMode(this.value)" title="Couleur des cartes" style="padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-size:0.72rem;background:var(--card-bg)">
+                    <option value="priority">Couleur: Priorité</option>
+                    <option value="project">Couleur: Projet</option>
+                    <option value="assignee">Couleur: Assigné</option>
+                    <option value="status">Couleur: Statut</option>
+                </select>
+            </div>
+            <button class="btn" id="btnShowSubs" title="Afficher les sous-tâches (hiérarchie)" onclick="toggleShowSubtasks()" style="font-size:0.72rem">↳ Sous-tâches</button>
         </div>
         <div class="header-right">
             <div class="filter-dropdown">
@@ -391,21 +405,261 @@
         const TASKFLOW_SCHEMA = {
             Team: [{ id: 'nom', type: 'Text' }, { id: 'email', type: 'Text' }, { id: 'avatar', type: 'Text' }, { id: 'role', type: 'Choice' }, { id: 'actif', type: 'Bool' }, { id: 'couleur', type: 'Text' }],  // TEAM-01: couleur membre
             Projects: [{ id: 'nom', type: 'Text' }, { id: 'couleur', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateFin', type: 'Date' }, { id: 'responsable', type: 'Ref:Team' }, { id: 'actif', type: 'Bool' }],
-            Tasks: [{ id: 'titre', type: 'Text' }, { id: 'description', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateEcheance', type: 'Date' }, { id: 'priorite', type: 'Choice' }, { id: 'statut', type: 'Choice' }, { id: 'progression', type: 'Numeric' }, { id: 'projet', type: 'Ref:Projects' }, { id: 'assignees', type: 'RefList:Team' }, { id: 'type', type: 'Choice' }, { id: 'dependDe', type: 'RefList:Tasks' }, { id: 'tags', type: 'ChoiceList' }, { id: 'estimationH', type: 'Numeric' }, { id: 'tempsPasse', type: 'Numeric' }, { id: 'couleur', type: 'Text' }, { id: 'subtasks', type: 'Text' }]  // FUT-01: subtasks en JSON
+            Tasks: [{ id: 'titre', type: 'Text' }, { id: 'description', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateEcheance', type: 'Date' }, { id: 'priorite', type: 'Choice' }, { id: 'statut', type: 'Choice' }, { id: 'progression', type: 'Numeric' }, { id: 'projet', type: 'Ref:Projects' }, { id: 'assignees', type: 'RefList:Team' }, { id: 'type', type: 'Choice' }, { id: 'dependDe', type: 'RefList:Tasks' }, { id: 'tags', type: 'ChoiceList' }, { id: 'estimationH', type: 'Numeric' }, { id: 'tempsPasse', type: 'Numeric' }, { id: 'couleur', type: 'Text' }, { id: 'subtasks', type: 'Text' }, { id: 'parentTask', type: 'Ref:Tasks' }, { id: 'charges', type: 'Text' }]  // WBS-01: parentTask ; #3: charges = plan de charge JSON [{teamId,heures}]
         };
         const PRIORITY_LABELS = { 1: 'Critique', 2: 'Haute', 3: 'Moyenne', 4: 'Basse' };
         const PRIORITY_COLORS = { 1: '#ef4444', 2: '#f59e0b', 3: '#3b82f6', 4: '#64748b' };
+        // STATUS_COLORS supprime : couleurs des statuts lues dynamiquement via statusCfg (#1)
         // A15: Palette de couleurs prédéfinies pour les membres d'équipe
         const COLOR_PRESETS = ['#3e5de7','#10b981','#f59e0b','#ef4444','#3b82f6','#8b5cf6','#ec4899','#14b8a6','#f97316','#64748b'];
-        const STATUS_CONFIG = { todo: { label: 'À faire', icon: '' }, inprogress: { label: 'En cours', icon: '' }, review: { label: 'En revue', icon: '' }, done: { label: 'Terminé', icon: '' } };
-        const STATUS_LABELS = { todo: 'À faire', inprogress: 'En cours', review: 'En revue', done: 'Terminé' };
+        // STATUS_CONFIG / STATUS_LABELS supprimes : statuts (libelles + couleurs + ordre) lus dynamiquement via statusCfg (#1)
         const TYPE_ICONS = { tache: '', jalon: '◆', reunion: '' };
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // MODULE COMMUN TASKFLOW (genere — voir projects/tasks_app/core/taskflow-core.js)
+        // ═══════════════════════════════════════════════════════════════════════
+        // <taskflow-core> -- GENERE par scripts/build-taskflow.js, NE PAS EDITER ICI
+        /* ============================================================================
+         * taskflow-core.js — Module commun aux widgets TaskFlow
+         * ----------------------------------------------------------------------------
+         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-taskflow.js entre
+         * les marqueurs de generation prevus a cet effet.
+         * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
+         *   npm run build:taskflow
+         *
+         * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
+         * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans
+         * Grist sont DEFENSIVES : en cas d'echec elles n'interrompent jamais le widget
+         * (au pire, comportement actuel inchange).
+         * ========================================================================== */
+        const TF = (function () {
+            'use strict';
+
+            /* ----- Statuts ---------------------------------------------------------
+             * Convention : l'ORDRE fait foi. Le DERNIER statut de la liste est l'etat
+             * terminal ("termine") utilise par la logique de completion des widgets.
+             * Les statuts reels proviennent de la colonne Choice `statut` (editable par
+             * l'utilisateur dans Grist). DEFAULT_STATUSES n'est qu'un repli.
+             * --------------------------------------------------------------------- */
+            const DEFAULT_STATUSES = [
+                { value: 'todo',       label: 'À faire',  fillColor: '#94a3b8', textColor: '#ffffff' },
+                { value: 'inprogress', label: 'En cours', fillColor: '#f59e0b', textColor: '#ffffff' },
+                { value: 'review',     label: 'En revue', fillColor: '#3b82f6', textColor: '#ffffff' },
+                { value: 'done',       label: 'Terminé',  fillColor: '#10b981', textColor: '#ffffff' }
+            ];
+            // Repli libelle + couleur pour les CODES par defaut. Permet d'afficher un libelle
+            // FR (et la bonne couleur) meme quand la colonne Choice stocke le code brut
+            // (todo/inprogress/...). Une valeur renommee par l'utilisateur garde SON libelle.
+            const DEFAULTS_BY_VALUE = {};
+            for (var _i = 0; _i < DEFAULT_STATUSES.length; _i++) DEFAULTS_BY_VALUE[DEFAULT_STATUSES[_i].value] = DEFAULT_STATUSES[_i];
+
+            // Convertit un tableau Grist colonnaire en tableau d'objets lignes.
+            function columnarToRows(data) {
+                if (!data || Array.isArray(data)) return data || [];
+                const cols = Object.keys(data);
+                if (!cols.length) return [];
+                const n = (data[cols[0]] && data[cols[0]].length) || 0;
+                const rows = [];
+                for (let i = 0; i < n; i++) {
+                    const rec = {};
+                    for (const k of cols) rec[k] = data[k][i];
+                    rows.push(rec);
+                }
+                return rows;
+            }
+
+            // Resout le rowId d'une table depuis son tableId via _grist_Tables.
+            async function tableRowId(grist, tableId) {
+                const meta = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                const row = meta.find(r => r.tableId === tableId);
+                return row ? row.id : null;
+            }
+
+            // Construit une config de statuts normalisee depuis une liste brute.
+            function buildStatusConfig(list, source) {
+                const clean = (list || []).filter(s => s && s.value != null).map(s => {
+                    const v = String(s.value);
+                    const d = DEFAULTS_BY_VALUE[v];
+                    const hasExplicitLabel = s.label != null && s.label !== '' && String(s.label) !== v;
+                    return {
+                        value: v,
+                        label: hasExplicitLabel ? String(s.label) : (d ? d.label : v),
+                        fillColor: s.fillColor || (d ? d.fillColor : '#94a3b8'),
+                        textColor: s.textColor || (d ? d.textColor : '#ffffff')
+                    };
+                });
+                const final = clean.length ? clean : DEFAULT_STATUSES.slice();
+                const byValue = {};
+                for (const s of final) byValue[s.value] = s;
+                return {
+                    list: final,
+                    byValue,
+                    values: final.map(s => s.value),
+                    terminalValue: final[final.length - 1].value, // convention "dernier = termine"
+                    firstValue: final[0].value,
+                    source: clean.length ? source : 'default'
+                };
+            }
+
+            /* Lit les statuts (libelles + couleurs + ordre) depuis la colonne Choice
+             * indiquee, via les metadonnees Grist. Repli en cascade :
+             *   1. options de la colonne Choice (cas ideal)
+             *   2. valeurs distinctes presentes dans les donnees (colonne Text)
+             *   3. DEFAULT_STATUSES
+             * Ne jette jamais : retourne toujours une config exploitable.
+             */
+            async function loadStatusConfig(grist, table, column, distinctFallback) {
+                try {
+                    const tid = await tableRowId(grist, table);
+                    if (tid != null) {
+                        const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                        const col = cols.find(c => c.parentId === tid && c.colId === column);
+                        if (col && col.widgetOptions) {
+                            let opt = {};
+                            try { opt = JSON.parse(col.widgetOptions) || {}; } catch (e) { opt = {}; }
+                            const choices = Array.isArray(opt.choices) ? opt.choices : [];
+                            const co = opt.choiceOptions || {};
+                            if (choices.length) {
+                                return buildStatusConfig(choices.map(ch => ({
+                                    value: ch,
+                                    label: ch,
+                                    fillColor: co[ch] && co[ch].fillColor,
+                                    textColor: co[ch] && co[ch].textColor
+                                })), 'choice');
+                            }
+                        }
+                    }
+                } catch (e) { /* repli silencieux */ }
+
+                if (Array.isArray(distinctFallback) && distinctFallback.length) {
+                    const seen = [];
+                    for (const v of distinctFallback) { if (v != null && v !== '' && seen.indexOf(v) === -1) seen.push(v); }
+                    if (seen.length) return buildStatusConfig(seen.map(v => ({ value: v, label: v })), 'data');
+                }
+                return buildStatusConfig(DEFAULT_STATUSES.slice(), 'default');
+            }
+
+            function getStatus(cfg, value) {
+                if (cfg && cfg.byValue && cfg.byValue[value]) return cfg.byValue[value];
+                return { value: value, label: value || '', fillColor: '#94a3b8', textColor: '#ffffff' };
+            }
+            function isTerminal(cfg, value) { return !!cfg && value === cfg.terminalValue; }
+
+            /* Seme les options (choix + couleurs) sur une colonne Choice si elle n'en a
+             * pas encore. Defensif. A appeler depuis ensureSchema apres creation.
+             */
+            async function seedStatusChoices(grist, table, column, statuses) {
+                try {
+                    const tid = await tableRowId(grist, table);
+                    if (tid == null) return;
+                    const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const col = cols.find(c => c.parentId === tid && c.colId === column);
+                    if (!col) return;
+                    let opt = {};
+                    try { opt = JSON.parse(col.widgetOptions || '{}') || {}; } catch (e) { opt = {}; }
+                    if (Array.isArray(opt.choices) && opt.choices.length) return; // deja configure : on respecte
+                    const list = statuses && statuses.length ? statuses : DEFAULT_STATUSES;
+                    const choiceOptions = {};
+                    for (const s of list) choiceOptions[s.value] = { fillColor: s.fillColor, textColor: s.textColor };
+                    const widgetOptions = JSON.stringify({ choices: list.map(s => s.value), choiceOptions: choiceOptions });
+                    await grist.docApi.applyUserActions([['ModifyColumn', table, column, { widgetOptions: widgetOptions }]]);
+                } catch (e) { console.warn('TF.seedStatusChoices:', e && e.message); }
+            }
+
+            /* ----- #2 : colonnes d'affichage des Ref (noms au lieu des IDs) ---------
+             * Pose le visibleCol + la display formula sur des colonnes Ref pour que les
+             * VUES NATIVES Grist affichent un libelle plutot que l'ID de ligne.
+             * specs : [{ table:'Tasks', column:'projet', visibleColId:'nom' }, ...]
+             * DEFENSIF : si Grist refuse une action, on log et on continue ; au pire
+             * l'affichage reste en IDs (comportement actuel), jamais de casse.
+             * --------------------------------------------------------------------- */
+            async function setRefDisplayColumns(grist, specs) {
+                if (!Array.isArray(specs) || !specs.length) return;
+                try {
+                    const tables = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                    const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+                    const colOf = (tableRow, colId) => cols.find(c => c.parentId === tableRow && c.colId === colId);
+
+                    const actions = [];
+                    for (const s of specs) {
+                        const srcTid = tidOf(s.table);
+                        if (srcTid == null) continue;
+                        const refCol = colOf(srcTid, s.column);
+                        if (!refCol) continue;
+                        // Table cible deduite du type "Ref:Target" / "RefList:Target".
+                        const m = /^(?:Ref|RefList):(.+)$/.exec(refCol.type || '');
+                        if (!m) continue;
+                        const targetTid = tidOf(m[1]);
+                        if (targetTid == null) continue;
+                        const visCol = colOf(targetTid, s.visibleColId);
+                        if (!visCol) continue;
+                        // Eviter de re-poser si deja correct.
+                        if (refCol.visibleCol === visCol.id) continue;
+                        actions.push(['SetDisplayFormula', s.table, null, refCol.id, '$' + s.column + '.' + s.visibleColId]);
+                        actions.push(['UpdateRecord', '_grist_Tables_column', refCol.id, { visibleCol: visCol.id }]);
+                    }
+                    if (actions.length) await grist.docApi.applyUserActions(actions);
+                } catch (e) { console.warn('TF.setRefDisplayColumns:', e && e.message); }
+            }
+
+            /* ----- #3 : plan de charge (heures par personne) ------------------------
+             * Stockage : colonne Text `charges` sur Tasks, JSON [{teamId, heures}].
+             * Parse defensif identique au pattern subtasks.
+             * --------------------------------------------------------------------- */
+            function parseCharges(v) {
+                try {
+                    const a = JSON.parse(v || '[]');
+                    if (!Array.isArray(a)) return [];
+                    return a.filter(x => x && x.teamId != null)
+                            .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+                            .filter(x => !isNaN(x.teamId));
+                } catch (e) { return []; }
+            }
+            function chargesToJson(arr) {
+                return JSON.stringify((arr || [])
+                    .filter(x => x && x.teamId != null)
+                    .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+                    .filter(x => !isNaN(x.teamId)));
+            }
+            // Heures totales d'une tache (somme des charges par personne).
+            function chargeTotal(charges) { return parseCharges(typeof charges === 'string' ? charges : JSON.stringify(charges || [])).reduce((s, c) => s + c.heures, 0); }
+            // Agrege la charge par membre sur une liste de taches (chaque tache expose .charges).
+            function chargeByMember(tasks) {
+                const by = {};
+                for (const t of (tasks || [])) {
+                    for (const c of parseCharges(t && t.charges)) {
+                        by[c.teamId] = (by[c.teamId] || 0) + c.heures;
+                    }
+                }
+                return by;
+            }
+
+            return {
+                DEFAULT_STATUSES: DEFAULT_STATUSES,
+                columnarToRows: columnarToRows,
+                loadStatusConfig: loadStatusConfig,
+                buildStatusConfig: buildStatusConfig,
+                getStatus: getStatus,
+                isTerminal: isTerminal,
+                seedStatusChoices: seedStatusChoices,
+                setRefDisplayColumns: setRefDisplayColumns,
+                parseCharges: parseCharges,
+                chargesToJson: chargesToJson,
+                chargeTotal: chargeTotal,
+                chargeByMember: chargeByMember
+            };
+        })();
+        // </taskflow-core>
 
         // ═══════════════════════════════════════════════════════════════════════
         // STATE
         // ═══════════════════════════════════════════════════════════════════════
         let tasks = [], team = [], projects = [], gristReady = false;
+        let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig en mode Grist
         let groupBy = 'statut', searchQuery = '', selectedTaskId = null;
+        let colorMode = localStorage.getItem('taskflow_kanban_colormode') || 'priority';
+        let showSubtasks = localStorage.getItem('taskflow_kanban_showsubs') === '1';  // WBS-03: afficher enfants
         let filters = { project: [], priority: [], assignee: [], status: [] };  // KAN-01: Ajout filtre statut
         let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, columnTasks: [], columnKey: null, editData: null };
         let sortableInstances = [];
@@ -477,6 +731,98 @@
         const getDependsOn = (t) => getRefListArray(t?.dependDe);
         const getTags = (t) => getChoiceListArray(t?.tags);
         const getPriority = (t) => (t?.priorite >= 1 && t?.priorite <= 4) ? parseInt(t.priorite) : 3;
+        function getTaskColor(t) {
+            if (t?.couleur && /^#[0-9a-f]{3,8}$/i.test(t.couleur)) return t.couleur;
+            switch (colorMode) {
+                case 'project': return t?.projet ? getProjectColor(t.projet) : '#94a3b8';
+                case 'assignee': { const a = getAssignees(t); return a.length ? getTeamMemberColor(a[0]) : '#94a3b8'; }
+                case 'status': return TF.getStatus(statusCfg, t?.statut || statusCfg.firstValue).fillColor;
+                case 'priority':
+                default: return PRIORITY_COLORS[getPriority(t)];
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════════════════
+        // WBS (hiérarchie sous-tâches) — API commune
+        // ═══════════════════════════════════════════════════════════════════════
+        let childrenByParent = new Map();
+        function rebuildChildrenCache() {
+            childrenByParent = new Map();
+            const cycleIds = new Set();
+            for (const t of tasks) {
+                const seen = new Set([t.id]);
+                let cur = t.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
+                let guard = 0;
+                while (cur && guard++ < 128) {
+                    if (seen.has(cur.id)) { cycleIds.add(t.id); break; }
+                    seen.add(cur.id);
+                    cur = cur.parentTask ? tasks.find(x => x.id === cur.parentTask) : null;
+                }
+            }
+            if (cycleIds.size) console.warn('WBS: cycles detected on task ids:', [...cycleIds]);
+            for (const t of tasks) {
+                const pid = t.parentTask;
+                if (pid && !isNaN(pid) && !cycleIds.has(t.id)) {
+                    if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+                    childrenByParent.get(pid).push(t);
+                }
+            }
+        }
+        const isRoot = (t) => !t?.parentTask;
+        const getParent = (t) => t?.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
+        const getChildren = (id) => childrenByParent.get(id) || [];
+        const hasChildren = (t) => t && getChildren(t.id).length > 0;
+        function getDepth(t) { let d = 0, cur = t, guard = 0; while (cur?.parentTask && guard++ < 32) { cur = tasks.find(x => x.id === cur.parentTask); d++; } return d; }
+        function walkTree(roots, cb) {
+            const stack = roots.map(r => ({ task: r, depth: 0 }));
+            while (stack.length) {
+                const { task, depth: d } = stack.shift();
+                cb(task, d);
+                const kids = getChildren(task.id);
+                if (kids.length) for (let i = kids.length - 1; i >= 0; i--) stack.unshift({ task: kids[i], depth: d + 1 });
+            }
+        }
+        function getAllDescendants(id, acc = [], visited = new Set()) {
+            if (visited.has(id)) return acc;
+            visited.add(id);
+            for (const k of getChildren(id)) { acc.push(k); getAllDescendants(k.id, acc, visited); }
+            return acc;
+        }
+        function canSetParent(taskId, newParent) {
+            if (!newParent) return true;
+            if (newParent === taskId) return false;
+            let cur = tasks.find(x => x.id === newParent), guard = 0;
+            while (cur && guard++ < 64) {
+                if (cur.id === taskId) return false;
+                cur = cur.parentTask ? tasks.find(x => x.id === cur.parentTask) : null;
+            }
+            return true;
+        }
+        function aggregateProgress(t, visited = new Set()) {
+            if (visited.has(t.id)) return t.progression || 0;
+            visited.add(t.id);
+            const kids = getChildren(t.id);
+            if (!kids.length) return t.progression || 0;
+            const allWeighted = kids.every(k => k.estimationH && k.estimationH > 0);
+            if (allWeighted) {
+                const totalW = kids.reduce((s, k) => s + k.estimationH, 0);
+                return Math.round(kids.reduce((s, k) => s + aggregateProgress(k, visited) * k.estimationH, 0) / totalW);
+            }
+            return Math.round(kids.reduce((s, k) => s + aggregateProgress(k, visited), 0) / kids.length);
+        }
+        function aggregateDates(t, visited = new Set()) {
+            if (visited.has(t.id)) return { start: t.dateDebut, end: t.dateEcheance };
+            visited.add(t.id);
+            const kids = getChildren(t.id);
+            if (!kids.length) return { start: t.dateDebut, end: t.dateEcheance };
+            let minS = t.dateDebut, maxE = t.dateEcheance;
+            for (const k of kids) {
+                const sub = aggregateDates(k, visited);
+                if (sub.start != null && (minS == null || sub.start < minS)) minS = sub.start;
+                if (sub.end != null && (maxE == null || sub.end > maxE)) maxE = sub.end;
+            }
+            return { start: minS, end: maxE };
+        }
 
         function wouldCreateCycle(taskId, depId, visited = new Set()) { if (taskId === depId) return true; if (visited.has(depId)) return false; visited.add(depId); const depTask = tasks.find(t => t.id === depId); if (!depTask) return false; return getDependsOn(depTask).some(d => wouldCreateCycle(taskId, d, visited)); }
         function getAvailableDependencies(taskId) { return tasks.filter(t => t.id !== taskId && !wouldCreateCycle(taskId, t.id)); }
@@ -486,21 +832,77 @@
         // GRIST
         // ═══════════════════════════════════════════════════════════════════════
         function convertGristToRecords(data) { if (!data || Array.isArray(data)) return data || []; const cols = Object.keys(data); if (!cols.length) return []; const n = data[cols[0]]?.length || 0; const records = []; for (let i = 0; i < n; i++) { const rec = {}; cols.forEach(k => { rec[k] = data[k][i]; }); records.push(rec); } return records; }
-        async function ensureSchema() { let created = 0; const tablesCreated = []; for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) { let existingCols = [], tableExists = false; try { const data = await grist.docApi.fetchTable(tableName); existingCols = Object.keys(data).filter(c => c !== 'id' && c !== 'manualSort'); tableExists = true; } catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } } if (tableExists) { const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); } catch (e) {} } } } if (tablesCreated.includes('Tasks')) await seedData(); }
-        async function seedData() { const today = new Date(); const day = (d) => Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate() + d).getTime() / 1000); try { await grist.docApi.applyUserActions([['AddRecord', 'Team', null, { nom: 'Alice Martin', actif: true }], ['AddRecord', 'Team', null, { nom: 'Bob Durant', actif: true }], ['AddRecord', 'Team', null, { nom: 'Claire Bernard', actif: true }]]); await grist.docApi.applyUserActions([['AddRecord', 'Projects', null, { nom: 'Refonte Portail', couleur: '#4f46e5', actif: true }], ['AddRecord', 'Projects', null, { nom: 'App Mobile', couleur: '#10b981', actif: true }]]); await grist.docApi.applyUserActions([['AddRecord', 'Tasks', null, { titre: 'Analyse', priorite: '1', statut: 'done', progression: 100, projet: 1, type: 'tache', dateDebut: day(-10), dateEcheance: day(-5), assignees: ['L', 1] }], ['AddRecord', 'Tasks', null, { titre: 'Dev Backend', priorite: '1', statut: 'inprogress', progression: 40, projet: 1, type: 'tache', dateDebut: day(-4), dateEcheance: day(10), assignees: ['L', 1, 2], dependDe: ['L', 1], estimationH: 32, tempsPasse: 12 }], ['AddRecord', 'Tasks', null, { titre: 'Design UI', priorite: '2', statut: 'review', progression: 80, projet: 2, type: 'tache', dateDebut: day(-5), dateEcheance: day(2), assignees: ['L', 3] }], ['AddRecord', 'Tasks', null, { titre: 'Livraison', priorite: '1', statut: 'todo', projet: 1, type: 'jalon', dateDebut: day(15), dateEcheance: day(15), dependDe: ['L', 2] }], ['AddRecord', 'Tasks', null, { titre: 'Tests QA', priorite: '3', statut: 'todo', projet: 2, type: 'tache', dateDebut: day(5), dateEcheance: day(12), tags: ['L', 'qa'] }]]); } catch (e) { console.log('Seed error:', e); } }
-        async function loadAllData() { try { tasks = convertGristToRecords(await grist.docApi.fetchTable('Tasks')); } catch (e) { tasks = []; } try { team = convertGristToRecords(await grist.docApi.fetchTable('Team')); } catch (e) { team = []; } try { projects = convertGristToRecords(await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; } gristReady = true; updateFilterMenus(); render(); }
+        async function ensureSchema() { let created = 0; const tablesCreated = []; for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) { let existingCols = [], tableExists = false; try { const data = await grist.docApi.fetchTable(tableName); existingCols = Object.keys(data).filter(c => c !== 'id' && c !== 'manualSort'); tableExists = true; } catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } } if (tableExists) { const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); } catch (e) {} } } } if (tablesCreated.includes('Tasks')) await seedData();
+            // #1 : semer les statuts par defaut (choix + couleurs) sur la colonne Choice si vierge
+            await TF.seedStatusChoices(grist, 'Tasks', 'statut', TF.DEFAULT_STATUSES);
+            // #2 : afficher les NOMS plutot que les IDs dans les vues natives Grist (defensif, idempotent)
+            await TF.setRefDisplayColumns(grist, [
+                { table: 'Tasks',    column: 'projet',      visibleColId: 'nom' },
+                { table: 'Tasks',    column: 'assignees',   visibleColId: 'nom' },
+                { table: 'Tasks',    column: 'dependDe',    visibleColId: 'titre' },
+                { table: 'Tasks',    column: 'parentTask',  visibleColId: 'titre' },
+                { table: 'Projects', column: 'responsable', visibleColId: 'nom' }
+            ]);
+        }
+        async function seedData() {
+            const today = new Date();
+            const day = (d) => Math.floor(new Date(today.getFullYear(), today.getMonth(), today.getDate() + d).getTime() / 1000);
+            try {
+                await grist.docApi.applyUserActions([
+                    ['AddRecord', 'Team', null, { nom: 'Alice Martin', actif: true }],
+                    ['AddRecord', 'Team', null, { nom: 'Bob Durant', actif: true }],
+                    ['AddRecord', 'Team', null, { nom: 'Claire Bernard', actif: true }]
+                ]);
+                await grist.docApi.applyUserActions([
+                    ['AddRecord', 'Projects', null, { nom: 'Refonte Portail', couleur: '#4f46e5', actif: true }],
+                    ['AddRecord', 'Projects', null, { nom: 'App Mobile', couleur: '#10b981', actif: true }]
+                ]);
+                // Racines
+                const res = await grist.docApi.applyUserActions([
+                    ['AddRecord', 'Tasks', null, { titre: 'Analyse', priorite: '1', statut: 'done', progression: 100, projet: 1, type: 'tache', dateDebut: day(-10), dateEcheance: day(-5), assignees: ['L', 1] }],
+                    ['AddRecord', 'Tasks', null, { titre: 'Dev Backend', priorite: '1', statut: 'inprogress', progression: 40, projet: 1, type: 'tache', dateDebut: day(-4), dateEcheance: day(10), assignees: ['L', 1, 2], dependDe: ['L', 1], estimationH: 32, tempsPasse: 12 }],
+                    ['AddRecord', 'Tasks', null, { titre: 'Design UI', priorite: '2', statut: 'review', progression: 80, projet: 2, type: 'tache', dateDebut: day(-5), dateEcheance: day(2), assignees: ['L', 3] }],
+                    ['AddRecord', 'Tasks', null, { titre: 'Livraison', priorite: '1', statut: 'todo', projet: 1, type: 'jalon', dateDebut: day(15), dateEcheance: day(15), dependDe: ['L', 2] }],
+                    ['AddRecord', 'Tasks', null, { titre: 'Tests QA', priorite: '3', statut: 'todo', projet: 2, type: 'tache', dateDebut: day(5), dateEcheance: day(12), tags: ['L', 'qa'] }]
+                ]);
+                const devBackendId = Array.isArray(res?.retValues) ? res.retValues[1] : 2;
+                // WBS-01: exemple hiérarchique — 3 sous-tâches de "Dev Backend"
+                await grist.docApi.applyUserActions([
+                    ['AddRecord', 'Tasks', null, { titre: 'Modèle de données', priorite: '1', statut: 'done', progression: 100, projet: 1, type: 'tache', dateDebut: day(-4), dateEcheance: day(-1), assignees: ['L', 1], estimationH: 8, tempsPasse: 8, parentTask: devBackendId }],
+                    ['AddRecord', 'Tasks', null, { titre: 'Routes API', priorite: '1', statut: 'inprogress', progression: 50, projet: 1, type: 'tache', dateDebut: day(0), dateEcheance: day(5), assignees: ['L', 2], estimationH: 16, tempsPasse: 8, parentTask: devBackendId }],
+                    ['AddRecord', 'Tasks', null, { titre: 'Tests unitaires', priorite: '2', statut: 'todo', progression: 0, projet: 1, type: 'tache', dateDebut: day(5), dateEcheance: day(10), assignees: ['L', 2], estimationH: 8, parentTask: devBackendId }]
+                ]);
+            } catch (e) { console.log('Seed error:', e); }
+        }
+        async function loadAllData() { try { tasks = convertGristToRecords(await grist.docApi.fetchTable('Tasks')); } catch (e) { tasks = []; } try { team = convertGristToRecords(await grist.docApi.fetchTable('Team')); } catch (e) { team = []; } try { projects = convertGristToRecords(await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; } gristReady = true; rebuildChildrenCache(); try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', tasks.map(t => t && t.statut)); } catch (e) {} updateFilterMenus(); render(); }
 
         // ═══════════════════════════════════════════════════════════════════════
         // FILTERS
         // ═══════════════════════════════════════════════════════════════════════
         function setGroupBy(g) { groupBy = g; document.querySelectorAll('.group-selector .btn').forEach(b => b.classList.remove('active')); document.getElementById('group' + g.charAt(0).toUpperCase() + g.slice(1)).classList.add('active'); render(); }
+        function changeColorMode(mode) {
+            colorMode = mode;
+            localStorage.setItem('taskflow_kanban_colormode', mode);
+            // Persistance locale uniquement — évite la demande d'enregistrement du doc.
+            render();
+        }
+        async function setProjectColor(projectId, color) {
+            const p = projects.find(x => x.id === projectId);
+            if (!p) return;
+            p.couleur = color;
+            if (gristReady) {
+                try { await grist.docApi.applyUserActions([['UpdateRecord', 'Projects', projectId, { couleur: color }]]); showSaveIndicator(); }
+                catch (e) { showToast('Erreur couleur projet', 'error'); }
+            }
+            renderPanelTask(); render();
+        }
         function toggleFilterMenu(type) { document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('open')); document.getElementById(`filter${type.charAt(0).toUpperCase() + type.slice(1)}Menu`).classList.toggle('open'); }
         function updateFilterMenus() {
             document.getElementById('filterProjectMenu').innerHTML = projects.map(p => `<div class="filter-option" onclick="toggleFilterValue('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id) ? 'checked' : ''}><span style="color:${p.couleur}">●</span> ${escapeHtml(p.nom)}</div>`).join('') || '<div class="filter-option">Aucun</div>';
             document.getElementById('filterPriorityMenu').innerHTML = [1,2,3,4].map(p => `<div class="filter-option" onclick="toggleFilterValue('priority', ${p})"><input type="checkbox" ${filters.priority.includes(p) ? 'checked' : ''}><span style="color:${PRIORITY_COLORS[p]}">●</span> ${PRIORITY_LABELS[p]}</div>`).join('');
             document.getElementById('filterAssigneeMenu').innerHTML = team.filter(m => m.actif !== false).map(m => `<div class="filter-option" onclick="toggleFilterValue('assignee', ${m.id})"><input type="checkbox" ${filters.assignee.includes(m.id) ? 'checked' : ''}>${escapeHtml(m.nom)}</div>`).join('') || '<div class="filter-option">Aucun</div>';
             // KAN-01: Filtre par statut
-            document.getElementById('filterStatusMenu').innerHTML = Object.entries(STATUS_LABELS).map(([key, label]) => `<div class="filter-option" onclick="toggleFilterValue('status', '${key}')"><input type="checkbox" ${filters.status.includes(key) ? 'checked' : ''}>${label}</div>`).join('');
+            document.getElementById('filterStatusMenu').innerHTML = statusCfg.list.map(s => `<div class="filter-option" data-status="${escapeHtml(s.value)}" onclick="toggleFilterValue('status', this.dataset.status)"><input type="checkbox" ${filters.status.includes(s.value) ? 'checked' : ''}>${escapeHtml(s.label)}</div>`).join('');
             document.getElementById('filterProjectBtn').classList.toggle('has-filter', filters.project.length > 0);
             document.getElementById('filterPriorityBtn').classList.toggle('has-filter', filters.priority.length > 0);
             document.getElementById('filterAssigneeBtn').classList.toggle('has-filter', filters.assignee.length > 0);
@@ -510,14 +912,23 @@
         function handleSearch(q) { searchQuery = q.toLowerCase(); render(); }
         function getFilteredTasks() {
             return tasks.filter(t => {
+                // WBS-03: par défaut afficher uniquement les racines (pas les sous-tâches)
+                if (!showSubtasks && t.parentTask) return false;
                 if (filters.project.length && !filters.project.includes(t.projet)) return false;
                 if (filters.priority.length && !filters.priority.includes(getPriority(t))) return false;
                 if (filters.assignee.length && !getAssignees(t).some(a => filters.assignee.includes(a))) return false;
-                // KAN-01: Filtre par statut
                 if (filters.status.length && !filters.status.includes(t.statut || 'todo')) return false;
                 if (searchQuery && !(t.titre||'').toLowerCase().includes(searchQuery)) return false;
                 return true;
             });
+        }
+        // WBS-03: toggle d'inclusion des sous-tâches dans le kanban
+        function toggleShowSubtasks() {
+            showSubtasks = !showSubtasks;
+            localStorage.setItem('taskflow_kanban_showsubs', showSubtasks ? '1' : '0');
+            const btn = document.getElementById('btnShowSubs');
+            if (btn) btn.classList.toggle('active', showSubtasks);
+            render();
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -554,7 +965,7 @@
 
         function buildColumns(ft) {
             if (groupBy === 'statut') {
-                return Object.entries(STATUS_CONFIG).map(([k, v]) => ({ key: k, label: v.label, icon: v.icon, tasks: ft.filter(t => t.statut === k) }));
+                return statusCfg.list.map(s => ({ key: s.value, label: s.label, icon: '', tasks: ft.filter(t => t.statut === s.value) }));
             } else if (groupBy === 'priorite') {
                 return [1,2,3,4].map(p => ({ key: String(p), label: PRIORITY_LABELS[p], icon: '', tasks: ft.filter(t => getPriority(t) === p) }));
             } else if (groupBy === 'projet') {
@@ -574,16 +985,20 @@
             const typeIcon = TYPE_ICONS[t.type] || '';
             const subs = getSubtasks(t);
             const subsDone = subs.filter(s => s.done).length;
+            const nChildren = getChildren(t.id).length;
+            const isChild = !!t.parentTask;
 
-            return `<div class="task-card p${p} ${t.statut === 'done' ? 'done' : ''} ${t.id === selectedTaskId ? 'selected' : ''}" data-id="${t.id}" onclick="openTaskPanel(${t.id})">
+            const barColor = getTaskColor(t);
+            return `<div class="task-card p${p} ${TF.isTerminal(statusCfg, t.statut) ? 'done' : ''} ${t.id === selectedTaskId ? 'selected' : ''}" data-id="${t.id}" style="border-left-color:${barColor}" onclick="openTaskPanel(${t.id})">
                 <div class="card-header">
-                    <span class="card-title">${escapeHtml(t.titre) || 'Sans titre'}</span>
+                    <span class="card-title">${isChild ? '↳ ' : ''}${escapeHtml(t.titre) || 'Sans titre'}</span>
                     ${typeIcon ? `<span class="card-type">${typeIcon}</span>` : ''}
                 </div>
                 <div class="card-meta">
                     ${projectName ? `<span class="card-project"><span style="color:${projectColor}">●</span> ${escapeHtml(projectName)}</span>` : ''}
                     ${deps.length ? `<span class="card-deps">← ${deps.length}</span>` : ''}
-                    ${subs.length ? `<span class="card-subs${subsDone === subs.length ? ' complete' : ''}" title="Sous-tâches">◎ ${subsDone}/${subs.length}</span>` : ''}
+                    ${subs.length ? `<span class="card-subs${subsDone === subs.length ? ' complete' : ''}" title="Sous-tâches (checklist)">◎ ${subsDone}/${subs.length}</span>` : ''}
+                    ${nChildren ? `<span class="card-subs" title="Sous-tâches (hiérarchie)" onclick="event.stopPropagation();openTaskPanel(${t.id})">↳ ${nChildren}</span>` : ''}
                 </div>
                 ${t.type !== 'jalon' ? `<div class="card-progress" onclick="event.stopPropagation();setCardProgress(event, ${t.id})"><div class="card-progress-fill p${p}" style="width:${t.progression || 0}%"></div></div>` : ''}
                 ${assignees.length ? `<div class="card-assignees">${assignees.slice(0, 3).map(id => `<div class="card-avatar" style="background:${getTeamMemberColor(id)}">${getInitials(getTeamMemberName(id))}</div>`).join('')}${assignees.length > 3 ? `<div class="card-avatar more">+${assignees.length - 3}</div>` : ''}</div>` : ''}
@@ -601,7 +1016,7 @@
             if (colKey === null) return;
 
             let updates = {};
-            if (groupBy === 'statut') { updates.statut = colKey; if (colKey === 'done') updates.progression = 100; }
+            if (groupBy === 'statut') { updates.statut = colKey; if (TF.isTerminal(statusCfg, colKey)) updates.progression = 100; }
             else if (groupBy === 'priorite') updates.priorite = parseInt(colKey, 10);
             else if (groupBy === 'projet') updates.projet = colKey === 'none' ? null : parseInt(colKey, 10);
             
@@ -674,18 +1089,39 @@
             if (groupBy === 'statut') preset.statut = colKey;
             else if (groupBy === 'priorite') preset.priorite = colKey;
             else if (groupBy === 'projet') preset.projet = colKey === 'none' ? null : parseInt(colKey);
-            
+
             panelState = {
                 open: true, isNew: true, taskId: null, taskIndex: -1, columnTasks: [], columnKey: colKey,
-                editData: { titre: '', description: '', type: 'tache', priorite: preset.priorite || '3', statut: preset.statut || 'todo', progression: 0, dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)), projet: preset.projet !== undefined ? preset.projet : (projects.length > 0 ? projects[0].id : null), assignees: [], dependDe: [], tags: [], estimationH: null, tempsPasse: null, subtasks: [] }
+                editData: { titre: '', description: '', type: 'tache', priorite: preset.priorite || '3', statut: preset.statut || 'todo', progression: 0, dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)), projet: preset.projet !== undefined ? preset.projet : (projects.length > 0 ? projects[0].id : null), assignees: [], dependDe: [], tags: [], estimationH: null, tempsPasse: null, subtasks: [], couleur: null, parentTask: null, charges: [] }
             };
             renderPanelTask();
             openPanel();
             render();
             setTimeout(() => document.getElementById('taskTitle')?.focus(), 100);
         }
+        // WBS-03: création d'une sous-tâche
+        function openCreateTaskWithParent(parentId) {
+            const today = new Date();
+            const parent = parentId ? tasks.find(t => t.id === parentId) : null;
+            panelState = {
+                open: true, isNew: true, taskId: null, taskIndex: -1, columnTasks: [], columnKey: null,
+                editData: { titre: '', description: '', type: 'tache', priorite: '3', statut: 'todo', progression: 0, dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)), projet: parent?.projet || (projects.length > 0 ? projects[0].id : null), assignees: [], dependDe: [], tags: [], estimationH: null, tempsPasse: null, subtasks: [], couleur: null, parentTask: parentId || null, charges: [] }
+            };
+            renderPanelTask();
+            openPanel();
+            render();
+            setTimeout(() => document.getElementById('taskTitle')?.focus(), 100);
+        }
+        function detachFromParent() { updateField('parentTask', null); }
+        function setParent(newParentId) {
+            if (panelState.taskId && !canSetParent(panelState.taskId, newParentId)) {
+                showToast('Cycle détecté — choix impossible', 'error');
+                return;
+            }
+            updateField('parentTask', newParentId);
+        }
 
-        function cloneTaskData(task) { return { titre: task.titre || '', description: task.description || '', type: task.type || 'tache', priorite: String(task.priorite || '3'), statut: task.statut || 'todo', progression: task.progression || 0, dateDebut: task.dateDebut, dateEcheance: task.dateEcheance, projet: task.projet || null, assignees: getAssignees(task), dependDe: getDependsOn(task), tags: getTags(task), estimationH: task.estimationH || null, tempsPasse: task.tempsPasse || null, subtasks: getSubtasks(task) }; }
+        function cloneTaskData(task) { return { titre: task.titre || '', description: task.description || '', type: task.type || 'tache', priorite: String(task.priorite || '3'), statut: task.statut || 'todo', progression: task.progression || 0, dateDebut: task.dateDebut, dateEcheance: task.dateEcheance, projet: task.projet || null, assignees: getAssignees(task), dependDe: getDependsOn(task), tags: getTags(task), estimationH: task.estimationH || null, tempsPasse: task.tempsPasse || null, subtasks: getSubtasks(task), couleur: task.couleur || null, parentTask: task.parentTask || null, charges: TF.parseCharges(task.charges) }; }
         
         // FIX: Synchroniser editData vers le task local dans tasks[]
         function syncLocalTask() {
@@ -708,6 +1144,9 @@
             task.estimationH = data.estimationH;
             task.tempsPasse = data.tempsPasse;
             task.subtasks = subtasksToJson(data.subtasks);
+            task.couleur = data.couleur || null;
+            task.parentTask = data.parentTask || null;
+            task.charges = TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId)));
         }
 
         function navigatePanelTask(dir) {
@@ -749,6 +1188,11 @@
                 return `<div class="multi-select-option ${data.assignees.includes(m.id) ? 'selected' : ''}" onclick="toggleAssignee(${m.id})"><div class="member-color-wrap"><span class="member-color-dot" style="background:${getTeamMemberColor(m.id)}" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')"></span><div class="member-color-picker">${swatches}</div></div><input type="checkbox" ${data.assignees.includes(m.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleAssignee(${m.id})">${escapeHtml(m.nom)}</div>`;
             }).join('');
 
+            // #3 : charge par personne (heures par assigné)
+            const chargeOf = (mid) => { const c = (data.charges || []).find(x => x.teamId === mid); return c ? c.heures : 0; };
+            const chargeTotalH = (data.charges || []).reduce((sum, c) => (data.assignees.includes(c.teamId) ? sum + (Number(c.heures) || 0) : sum), 0);
+            const chargeRows = data.assignees.map(id => `<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-size:0.8rem">${escapeHtml(getTeamMemberName(id))}</span><input type="number" min="0" step="0.5" value="${chargeOf(id)}" onchange="updateCharge(${id}, this.value)" style="width:64px;padding:4px 6px;border:1px solid var(--border);border-radius:6px"><span style="font-size:0.75rem;color:var(--text-muted)">h</span></div>`).join('');
+
             // Dépendances (pour tâche uniquement)
             const depsChips = data.dependDe.map(id => { const d = tasks.find(t => t.id === id); return d ? `<span class="multi-select-chip">${escapeHtml(d.titre)}<span class="remove" onclick="event.stopPropagation();removeDependency(${id})">×</span></span>` : ''; }).join('');
             const availableDeps = panelState.isNew ? tasks : getAvailableDependencies(panelState.taskId);
@@ -762,12 +1206,12 @@
             const timePercent = estim > 0 ? Math.min((passe / estim) * 100, 100) : 0, timeOver = passe > estim && estim > 0;
 
             // Prérequis jalon (auto depuis dependDe)
-            const doneCount = data.dependDe.filter(id => { const t = tasks.find(x => x.id === id); return t?.statut === 'done'; }).length;
+            const doneCount = data.dependDe.filter(id => { const t = tasks.find(x => x.id === id); return TF.isTerminal(statusCfg, t?.statut); }).length;
             const prereqHtml = data.dependDe.map(id => {
                 const t = tasks.find(x => x.id === id);
                 if (!t) return '';
                 const st = t.statut || 'todo';
-                return `<div class="prereq-item ${st === 'done' ? 'done' : ''}" onclick="openTaskPanel(${id})"><span class="prereq-item-icon">${st === 'done' ? '✓' : '○'}</span><span class="prereq-item-title">${escapeHtml(t.titre)}</span><span class="prereq-badge ${st}">${STATUS_LABELS[st] || st}</span></div>`;
+                return `<div class="prereq-item ${TF.isTerminal(statusCfg, st) ? 'done' : ''}" onclick="openTaskPanel(${id})"><span class="prereq-item-icon">${TF.isTerminal(statusCfg, st) ? '✓' : '○'}</span><span class="prereq-item-title">${escapeHtml(t.titre)}</span><span class="prereq-badge" style="background:${TF.getStatus(statusCfg, st).fillColor};color:${TF.getStatus(statusCfg, st).textColor}">${escapeHtml(TF.getStatus(statusCfg, st).label)}</span></div>`;
             }).join('');
 
             content.innerHTML = `
@@ -783,9 +1227,7 @@
                     <div class="prop-row">
                         <span class="prop-label">Statut</span>
                         <div class="prop-value"><div class="status-selector">
-                            <div class="status-pill ${data.statut === 'todo' ? 'selected' : ''}" onclick="updateField('statut','todo')">À faire</div>
-                            ${data.type !== 'jalon' ? `<div class="status-pill ${data.statut === 'inprogress' ? 'selected' : ''}" onclick="updateField('statut','inprogress')">En cours</div><div class="status-pill ${data.statut === 'review' ? 'selected' : ''}" onclick="updateField('statut','review')">En revue</div>` : ''}
-                            <div class="status-pill ${data.statut === 'done' ? 'selected' : ''}" onclick="updateField('statut','done')">Terminé</div>
+                            ${(data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => `<div class="status-pill ${data.statut === s.value ? 'selected' : ''}" data-status="${escapeHtml(s.value)}" onclick="updateField('statut', this.dataset.status)">${escapeHtml(s.label)}</div>`).join('')}
                         </div></div>
                     </div>
                     ${data.type !== 'reunion' ? `
@@ -807,12 +1249,46 @@
                     </div>
                     <div class="prop-row">
                         <span class="prop-label">Projet</span>
-                        <div class="prop-value"><div class="project-select-wrap"><span class="project-color-dot" style="background:${projectColor}"></span><select class="form-select" onchange="updateField('projet', parseInt(this.value) || null)"><option value="">Aucun projet</option>${projectOptions}</select></div></div>
+                        <div class="prop-value"><div class="project-select-wrap">
+                            ${currentProject
+                                ? `<span class="project-color-dot" style="background:${projectColor}" title="Changer la couleur du projet" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')"></span><div class="color-picker-pop">${COLOR_PRESETS.map(c => `<span class="color-swatch" style="background:${c}" onclick="event.stopPropagation();setProjectColor(${currentProject.id},'${c}')"></span>`).join('')}</div>`
+                                : `<span class="project-color-dot" style="background:${projectColor}"></span>`}
+                            <select class="form-select" onchange="updateField('projet', parseInt(this.value) || null)"><option value="">Aucun projet</option>${projectOptions}</select>
+                        </div></div>
                     </div>
+                    <div class="prop-row">
+                        <span class="prop-label">Couleur</span>
+                        <div class="prop-value"><div style="display:flex;gap:8px;align-items:center">
+                            <input type="color" value="${data.couleur || getTaskColor(data)}" onchange="updateField('couleur', this.value)" style="width:36px;height:28px;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:2px">
+                            ${data.couleur
+                                ? `<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="updateField('couleur', null)">Réinitialiser</button>`
+                                : `<span style="font-size:0.72rem;color:var(--text-muted)">Héritée du mode « ${colorMode} »</span>`}
+                        </div></div>
+                    </div>
+                    ${(!panelState.isNew || data.parentTask) ? `
+                    <div class="prop-row">
+                        <span class="prop-label">Parent</span>
+                        <div class="prop-value">
+                            ${data.parentTask
+                                ? `<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+                                    <span class="multi-select-chip" ${panelState.isNew ? '' : `onclick="openTaskPanel(${data.parentTask})"`} style="${panelState.isNew ? '' : 'cursor:pointer;'}background:var(--primary-light);color:var(--primary)">↑ ${escapeHtml((tasks.find(t => t.id === data.parentTask) || {}).titre || '(inconnu)')}</span>
+                                    <button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="detachFromParent()">Détacher</button>
+                                  </div>`
+                                : `<select class="form-select" onchange="if(this.value)setParent(parseInt(this.value))"><option value="">— Tâche racine —</option>${tasks.filter(t => t.id !== panelState.taskId && canSetParent(panelState.taskId, t.id)).map(t => `<option value="${t.id}">${escapeHtml(t.titre)}</option>`).join('')}</select>`}
+                        </div>
+                    </div>` : ''}
                     <div class="prop-row">
                         <span class="prop-label">${assignLabel}</span>
                         <div class="prop-value"><div class="multi-select" id="assigneesSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect('assigneesSelect')"><div class="multi-select-values">${assigneesChips || '<span class="multi-select-placeholder">Assigner à...</span>'}</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">${assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>'}</div></div></div>
                     </div>
+                    ${data.assignees.length ? `
+                    <div class="prop-row">
+                        <span class="prop-label">Charge</span>
+                        <div class="prop-value">
+                            <div style="display:flex;flex-direction:column;gap:6px">${chargeRows}</div>
+                            <div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">Total : <strong>${chargeTotalH}</strong> h</div>
+                        </div>
+                    </div>` : ''}
                     ${data.type === 'tache' ? `
                     <div class="prop-row">
                         <span class="prop-label">Progression</span>
@@ -838,6 +1314,25 @@
                     <div class="panel-section-header"><span class="panel-section-title">${descLabel}</span></div>
                     <div class="form-group"><textarea class="form-textarea" placeholder="${descLabel}..." oninput="updateField('description', this.value, true)">${escapeHtml(data.description)}</textarea></div>
                 </div>
+
+                <!-- WBS-03: Sous-tâches (hiérarchie) — vraies tâches avec parentTask -->
+                ${!panelState.isNew ? (function() {
+                    const kids = getChildren(panelState.taskId);
+                    const kidsList = kids.map(k => {
+                        const kp = getPriority(k);
+                        const kprog = hasChildren(k) ? aggregateProgress(k) : (k.progression || 0);
+                        return `<div class="prereq-item" onclick="openTaskPanel(${k.id})">
+                            <span class="card-project" style="width:3px;height:16px;border-radius:2px;flex-shrink:0;background:${PRIORITY_COLORS[kp]}"></span>
+                            <span class="prereq-item-title">${escapeHtml(k.titre)}</span>
+                            <span class="prereq-badge ${k.statut || 'todo'}">${kprog}%</span>
+                        </div>`;
+                    }).join('');
+                    return `<div class="panel-section">
+                        <div class="panel-section-header"><span class="panel-section-title">Sous-tâches (hiérarchie)</span>${kids.length ? `<span class="panel-section-badge">${kids.length}</span>` : ''}</div>
+                        ${kids.length ? `<div class="prereq-list">${kidsList}</div>` : `<div class="prereq-empty">Aucune sous-tâche. Décomposez cette tâche en étapes planifiables.</div>`}
+                        <button class="panel-btn" style="width:auto;padding:6px 12px;font-size:0.78rem;margin-top:6px" onclick="openCreateTaskWithParent(${panelState.taskId})">+ Sous-tâche</button>
+                    </div>`;
+                })() : ''}
 
                 <!-- Prérequis (jalon) ou Checklist (tâche/réunion) -->
                 ${data.type === 'jalon' ? `
@@ -887,7 +1382,7 @@
             // Synchroniser le task local pour affichage immédiat
             syncLocalTask();
             
-            const visualFields = ['type', 'priorite', 'statut', 'projet', 'progression'];
+            const visualFields = ['type', 'priorite', 'statut', 'projet', 'progression', 'couleur', 'parentTask'];
             if (visualFields.includes(field)) { renderPanelTask(); if (!panelState.isNew) render(); }
             if (field === 'titre' && panelState.isNew) { const btn = document.querySelector('.panel-footer .panel-btn'); if (btn) btn.disabled = !value || !value.trim(); }
             if (!panelState.isNew && !noSave && gristReady) saveTaskToGrist();
@@ -934,7 +1429,7 @@
             if (!task) return;
             
             task.progression = clampedPercent;
-            if (task.progression === 100 && task.statut !== 'done') task.statut = 'done';
+            if (task.progression === 100 && !TF.isTerminal(statusCfg, task.statut)) task.statut = statusCfg.terminalValue;
             
             if (gristReady) {
                 try {
@@ -950,6 +1445,14 @@
         function toggleMultiSelect(id) { const el = document.getElementById(id); document.querySelectorAll('.multi-select').forEach(s => { if (s.id !== id) s.classList.remove('open'); }); el.classList.toggle('open'); }
         function toggleAssignee(id) { const data = panelState.editData; const idx = data.assignees.indexOf(id); if (idx === -1) data.assignees.push(id); else data.assignees.splice(idx, 1); syncLocalTask(); if (!panelState.isNew && gristReady) saveTaskToGrist(); renderPanelTask(); render(); }
         function removeAssignee(id) { const data = panelState.editData; const idx = data.assignees.indexOf(id); if (idx !== -1) { data.assignees.splice(idx, 1); syncLocalTask(); if (!panelState.isNew && gristReady) saveTaskToGrist(); renderPanelTask(); render(); } }
+        function updateCharge(memberId, value) {
+            const data = panelState.editData; if (!data) return;
+            if (!Array.isArray(data.charges)) data.charges = [];
+            const h = Math.max(0, Number(value) || 0);
+            const existing = data.charges.find(c => c.teamId === memberId);
+            if (existing) existing.heures = h; else data.charges.push({ teamId: memberId, heures: h });
+            syncLocalTask(); if (!panelState.isNew && gristReady) saveTaskToGrist(); renderPanelTask();
+        }
         function toggleDependency(id) { const data = panelState.editData; const idx = data.dependDe.indexOf(id); if (idx === -1) data.dependDe.push(id); else data.dependDe.splice(idx, 1); syncLocalTask(); if (!panelState.isNew && gristReady) saveTaskToGrist(); renderPanelTask(); }
         function removeDependency(id) { const data = panelState.editData; const idx = data.dependDe.indexOf(id); if (idx !== -1) { data.dependDe.splice(idx, 1); syncLocalTask(); if (!panelState.isNew && gristReady) saveTaskToGrist(); renderPanelTask(); } }
         function handleTagKeydown(e) { const data = panelState.editData; if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); const tag = e.target.value.trim().replace(/^#/, ''); if (tag && !data.tags.includes(tag)) { data.tags.push(tag); e.target.value = ''; syncLocalTask(); if (!panelState.isNew && gristReady) saveTaskToGrist(); renderPanelTask(); } } else if (e.key === 'Backspace' && !e.target.value && data.tags.length) { data.tags.pop(); syncLocalTask(); if (!panelState.isNew && gristReady) saveTaskToGrist(); renderPanelTask(); } }
@@ -1037,7 +1540,7 @@
             if (!data || panelState.isNew || !gristReady) return;
             if (data.dateDebut && data.dateEcheance && data.dateDebut > data.dateEcheance) { showToast('La date de début ne peut pas dépasser la date de fin', 'error'); return; }
             syncLocalTask();  // FIX: Synchroniser localement avant envoi API
-            const record = { titre: data.titre, description: data.description, type: data.type, priorite: data.priorite, statut: data.statut, progression: data.progression, dateDebut: data.dateDebut, dateEcheance: data.dateEcheance, projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe), tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse, subtasks: subtasksToJson(data.subtasks) };
+            const record = { titre: data.titre, description: data.description, type: data.type, priorite: data.priorite, statut: data.statut, progression: data.progression, dateDebut: data.dateDebut, dateEcheance: data.dateEcheance, projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe), tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse, subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null, parentTask: data.parentTask || null, charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))) };
             try { await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', panelState.taskId, record]]); showSaveIndicator(); } catch (e) { showToast('Erreur sauvegarde', 'error'); }
         }
 
@@ -1045,7 +1548,7 @@
             const data = panelState.editData;
             if (!data || !data.titre?.trim()) { showToast('Titre requis', 'error'); return; }
             if (data.dateDebut && data.dateEcheance && data.dateDebut > data.dateEcheance) { showToast('La date de début ne peut pas dépasser la date de fin', 'error'); return; }
-            const record = { titre: data.titre, description: data.description || '', type: data.type || 'tache', priorite: data.priorite || '3', statut: data.statut || 'todo', progression: data.progression || 0, dateDebut: data.dateDebut, dateEcheance: data.dateEcheance, projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe), tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse, subtasks: subtasksToJson(data.subtasks) };
+            const record = { titre: data.titre, description: data.description || '', type: data.type || 'tache', priorite: data.priorite || '3', statut: data.statut || 'todo', progression: data.progression || 0, dateDebut: data.dateDebut, dateEcheance: data.dateEcheance, projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe), tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse, subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null, parentTask: data.parentTask || null, charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))) };
             if (gristReady) {
                 try { await grist.docApi.applyUserActions([['AddRecord', 'Tasks', null, record]]); showToast('Créée', 'success'); await loadAllData(); closePanel(); } catch (e) { showToast('Erreur création', 'error'); }
             } else { record.id = Date.now(); tasks.push(record); showToast('Créée', 'success'); render(); closePanel(); }
@@ -1062,13 +1565,20 @@
         // INIT
         // ═══════════════════════════════════════════════════════════════════════
         async function initGrist() {
+            // Phase 1 : tenter grist.ready — si Grist absent, basculer en démo
             try {
                 await grist.ready({ requiredAccess: 'full' });
-                await ensureSchema();
-                await loadAllData();
+            } catch (e) {
+                console.log('Grist unavailable, using demo:', e);
+                useDemoMode();
+                return;
+            }
+            // Phase 2 : ici on est dans Grist. Toute erreur est logguée mais ne bascule PAS en démo.
+            try { await ensureSchema(); } catch (e) { console.error('ensureSchema error (continuing):', e); showToast('Schéma: ' + (e?.message || e), 'error'); }
+            try { await loadAllData(); } catch (e) { console.error('loadAllData error (continuing):', e); showToast('Chargement: ' + (e?.message || e), 'error'); }
+            try {
                 grist.onRecords(async () => await loadAllData());
                 grist.onRecord((rec) => { if (rec?.id && rec.id !== selectedTaskId) { selectedTaskId = rec.id; render(); } });
-                // GEN-02: Synchronisation des filtres inter-widgets
                 grist.onOptions((options, interaction) => {
                     if (options?.filters && interaction?.source !== 'self') {
                         const f = options.filters;
@@ -1079,7 +1589,8 @@
                         render();
                     }
                 });
-            } catch (e) { console.log('Demo mode'); useDemoMode(); }
+                { const s = document.getElementById('colorSelect'); if (s) s.value = colorMode; }
+            } catch (e) { console.error('Grist listeners error:', e); }
         }
         
         // GEN-02: Broadcast des filtres vers les autres widgets
@@ -1114,8 +1625,13 @@
                 { id: 7, titre: 'Correction bugs', priorite: '2', projet: 1, dateDebut: day(0), dateEcheance: day(3), progression: 10, statut: 'inprogress', type: 'tache', assignees: ['L', 2] },
                 { id: 8, titre: 'Réunion client', priorite: '2', projet: 2, dateDebut: day(7), dateEcheance: day(7), progression: 0, statut: 'todo', type: 'reunion', assignees: ['L', 1, 3] },
                 { id: 9, titre: 'Migration DB', priorite: '1', projet: 3, dateDebut: day(-3), dateEcheance: day(0), progression: 90, statut: 'review', type: 'tache', assignees: ['L', 1] },
-                { id: 10, titre: 'Formation équipe', priorite: '3', projet: 1, dateDebut: day(10), dateEcheance: day(14), progression: 0, statut: 'todo', type: 'reunion', assignees: ['L', 2, 3] }
+                { id: 10, titre: 'Formation équipe', priorite: '3', projet: 1, dateDebut: day(10), dateEcheance: day(14), progression: 0, statut: 'todo', type: 'reunion', assignees: ['L', 2, 3] },
+                // WBS-01: exemple hiérarchique — 3 enfants de "Dev Backend" (id=2)
+                { id: 11, titre: 'Modèle de données', priorite: '1', projet: 1, dateDebut: day(-4), dateEcheance: day(-1), progression: 100, statut: 'done', type: 'tache', assignees: ['L', 1], estimationH: 8, tempsPasse: 8, parentTask: 2 },
+                { id: 12, titre: 'Routes API', priorite: '1', projet: 1, dateDebut: day(0), dateEcheance: day(5), progression: 50, statut: 'inprogress', type: 'tache', assignees: ['L', 2], estimationH: 16, tempsPasse: 8, parentTask: 2 },
+                { id: 13, titre: 'Tests unitaires', priorite: '2', projet: 1, dateDebut: day(5), dateEcheance: day(10), progression: 0, statut: 'todo', type: 'tache', assignees: ['L', 2], estimationH: 8, parentTask: 2 }
             ];
+            rebuildChildrenCache();
             updateFilterMenus();
             render();
         }
@@ -1124,6 +1640,10 @@
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.filter-dropdown')) document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('open'));
             if (!e.target.closest('.multi-select')) document.querySelectorAll('.multi-select').forEach(s => s.classList.remove('open'));
+            // Fermer les pickers couleur (Projects / Team) si clic extérieur
+            if (!e.target.closest('.color-picker-pop, .project-color-dot, .member-color-picker, .member-color-dot')) {
+                document.querySelectorAll('.color-picker-pop, .member-color-picker').forEach(p => p.classList.remove('open'));
+            }
             // GEN-01: Désélection si clic en dehors d'une carte, du panel ou des contrôles
             if (!e.target.closest('.task-card, .panel, .toolbar, .filter-dropdown, .column-add-btn, .btn')) {
                 if (selectedTaskId !== null && !panelState.open) {
@@ -1149,6 +1669,9 @@
             }
         });
 
+        // Sync du select couleur avant même que Grist ne réponde (évite flash)
+        { const s = document.getElementById('colorSelect'); if (s) s.value = colorMode; }
+        { const b = document.getElementById('btnShowSubs'); if (b) b.classList.toggle('active', showSubtasks); }
         initGrist();
     </script>
 </body>

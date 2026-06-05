@@ -8,6 +8,9 @@
     "dev": "echo 'Ouvrir les fichiers HTML directement dans le navigateur'",
     "manifest": "node scripts/generate-manifest.js",
     "promote": "node scripts/promote.js",
+    "build:taskflow": "node scripts/build-taskflow.js",
+    "check:taskflow": "node scripts/build-taskflow.js --check",
+    "serve:dev": "node scripts/serve-dev.js",
     "serve": "npx serve published -p 3000 --cors"
   },
   "repository": {

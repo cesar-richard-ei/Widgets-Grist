@@ -266,6 +266,9 @@
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
                 Filtres
             </button>
+            <button class="btn" id="btnLeavesOnly" onclick="toggleLeavesOnly()" title="Compter uniquement les feuilles (éviter double-compte parent+enfants)">
+                ↳ Feuilles
+            </button>
             <button class="btn" id="editToggleBtn" onclick="toggleEditMode()">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                 Modifier
@@ -321,6 +324,7 @@ const CATALOG = {
     bars:     { label: 'Barres',     icon: '▦', defaultSpan: 2 },
     list:     { label: 'Liste',      icon: '☰', defaultSpan: 4 },
     workload: { label: 'Équipe',     icon: '◑', defaultSpan: 2 },
+    charge:   { label: 'Charge (h)',  icon: '◔', defaultSpan: 2 },
     upcoming: { label: 'Échéances',  icon: '◷', defaultSpan: 2 },
     projects: { label: 'Projets',    icon: '◧', defaultSpan: 2 },
     velocity: { label: 'Vélocité',   icon: '↗', defaultSpan: 4 },
@@ -337,6 +341,7 @@ const CONFIG_FIELDS = {
     upcoming: [{ key:'horizon', label:'Horizon (j)', options:[['7','7j'],['14','14j'],['30','30j']] }],
     velocity: [{ key:'weeks',   label:'Semaines',     options:[['4','4'],['6','6'],['8','8']] }],
     workload: [],
+    charge: [],
     projects: [],
 };
 
@@ -363,16 +368,282 @@ const DEFAULT_LAYOUT = [
 // ═══════════════════════════════════════════════════════════════════════════════
 // STATE
 // ═══════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════════════
+// MODULE COMMUN TASKFLOW (genere — voir projects/tasks_app/core/taskflow-core.js)
+// <taskflow-core> -- GENERE par scripts/build-taskflow.js, NE PAS EDITER ICI
+/* ============================================================================
+ * taskflow-core.js — Module commun aux widgets TaskFlow
+ * ----------------------------------------------------------------------------
+ * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-taskflow.js entre
+ * les marqueurs de generation prevus a cet effet.
+ * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
+ *   npm run build:taskflow
+ *
+ * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
+ * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans
+ * Grist sont DEFENSIVES : en cas d'echec elles n'interrompent jamais le widget
+ * (au pire, comportement actuel inchange).
+ * ========================================================================== */
+const TF = (function () {
+    'use strict';
+
+    /* ----- Statuts ---------------------------------------------------------
+     * Convention : l'ORDRE fait foi. Le DERNIER statut de la liste est l'etat
+     * terminal ("termine") utilise par la logique de completion des widgets.
+     * Les statuts reels proviennent de la colonne Choice `statut` (editable par
+     * l'utilisateur dans Grist). DEFAULT_STATUSES n'est qu'un repli.
+     * --------------------------------------------------------------------- */
+    const DEFAULT_STATUSES = [
+        { value: 'todo',       label: 'À faire',  fillColor: '#94a3b8', textColor: '#ffffff' },
+        { value: 'inprogress', label: 'En cours', fillColor: '#f59e0b', textColor: '#ffffff' },
+        { value: 'review',     label: 'En revue', fillColor: '#3b82f6', textColor: '#ffffff' },
+        { value: 'done',       label: 'Terminé',  fillColor: '#10b981', textColor: '#ffffff' }
+    ];
+    // Repli libelle + couleur pour les CODES par defaut. Permet d'afficher un libelle
+    // FR (et la bonne couleur) meme quand la colonne Choice stocke le code brut
+    // (todo/inprogress/...). Une valeur renommee par l'utilisateur garde SON libelle.
+    const DEFAULTS_BY_VALUE = {};
+    for (var _i = 0; _i < DEFAULT_STATUSES.length; _i++) DEFAULTS_BY_VALUE[DEFAULT_STATUSES[_i].value] = DEFAULT_STATUSES[_i];
+
+    // Convertit un tableau Grist colonnaire en tableau d'objets lignes.
+    function columnarToRows(data) {
+        if (!data || Array.isArray(data)) return data || [];
+        const cols = Object.keys(data);
+        if (!cols.length) return [];
+        const n = (data[cols[0]] && data[cols[0]].length) || 0;
+        const rows = [];
+        for (let i = 0; i < n; i++) {
+            const rec = {};
+            for (const k of cols) rec[k] = data[k][i];
+            rows.push(rec);
+        }
+        return rows;
+    }
+
+    // Resout le rowId d'une table depuis son tableId via _grist_Tables.
+    async function tableRowId(grist, tableId) {
+        const meta = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+        const row = meta.find(r => r.tableId === tableId);
+        return row ? row.id : null;
+    }
+
+    // Construit une config de statuts normalisee depuis une liste brute.
+    function buildStatusConfig(list, source) {
+        const clean = (list || []).filter(s => s && s.value != null).map(s => {
+            const v = String(s.value);
+            const d = DEFAULTS_BY_VALUE[v];
+            const hasExplicitLabel = s.label != null && s.label !== '' && String(s.label) !== v;
+            return {
+                value: v,
+                label: hasExplicitLabel ? String(s.label) : (d ? d.label : v),
+                fillColor: s.fillColor || (d ? d.fillColor : '#94a3b8'),
+                textColor: s.textColor || (d ? d.textColor : '#ffffff')
+            };
+        });
+        const final = clean.length ? clean : DEFAULT_STATUSES.slice();
+        const byValue = {};
+        for (const s of final) byValue[s.value] = s;
+        return {
+            list: final,
+            byValue,
+            values: final.map(s => s.value),
+            terminalValue: final[final.length - 1].value, // convention "dernier = termine"
+            firstValue: final[0].value,
+            source: clean.length ? source : 'default'
+        };
+    }
+
+    /* Lit les statuts (libelles + couleurs + ordre) depuis la colonne Choice
+     * indiquee, via les metadonnees Grist. Repli en cascade :
+     *   1. options de la colonne Choice (cas ideal)
+     *   2. valeurs distinctes presentes dans les donnees (colonne Text)
+     *   3. DEFAULT_STATUSES
+     * Ne jette jamais : retourne toujours une config exploitable.
+     */
+    async function loadStatusConfig(grist, table, column, distinctFallback) {
+        try {
+            const tid = await tableRowId(grist, table);
+            if (tid != null) {
+                const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                const col = cols.find(c => c.parentId === tid && c.colId === column);
+                if (col && col.widgetOptions) {
+                    let opt = {};
+                    try { opt = JSON.parse(col.widgetOptions) || {}; } catch (e) { opt = {}; }
+                    const choices = Array.isArray(opt.choices) ? opt.choices : [];
+                    const co = opt.choiceOptions || {};
+                    if (choices.length) {
+                        return buildStatusConfig(choices.map(ch => ({
+                            value: ch,
+                            label: ch,
+                            fillColor: co[ch] && co[ch].fillColor,
+                            textColor: co[ch] && co[ch].textColor
+                        })), 'choice');
+                    }
+                }
+            }
+        } catch (e) { /* repli silencieux */ }
+
+        if (Array.isArray(distinctFallback) && distinctFallback.length) {
+            const seen = [];
+            for (const v of distinctFallback) { if (v != null && v !== '' && seen.indexOf(v) === -1) seen.push(v); }
+            if (seen.length) return buildStatusConfig(seen.map(v => ({ value: v, label: v })), 'data');
+        }
+        return buildStatusConfig(DEFAULT_STATUSES.slice(), 'default');
+    }
+
+    function getStatus(cfg, value) {
+        if (cfg && cfg.byValue && cfg.byValue[value]) return cfg.byValue[value];
+        return { value: value, label: value || '', fillColor: '#94a3b8', textColor: '#ffffff' };
+    }
+    function isTerminal(cfg, value) { return !!cfg && value === cfg.terminalValue; }
+
+    /* Seme les options (choix + couleurs) sur une colonne Choice si elle n'en a
+     * pas encore. Defensif. A appeler depuis ensureSchema apres creation.
+     */
+    async function seedStatusChoices(grist, table, column, statuses) {
+        try {
+            const tid = await tableRowId(grist, table);
+            if (tid == null) return;
+            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const col = cols.find(c => c.parentId === tid && c.colId === column);
+            if (!col) return;
+            let opt = {};
+            try { opt = JSON.parse(col.widgetOptions || '{}') || {}; } catch (e) { opt = {}; }
+            if (Array.isArray(opt.choices) && opt.choices.length) return; // deja configure : on respecte
+            const list = statuses && statuses.length ? statuses : DEFAULT_STATUSES;
+            const choiceOptions = {};
+            for (const s of list) choiceOptions[s.value] = { fillColor: s.fillColor, textColor: s.textColor };
+            const widgetOptions = JSON.stringify({ choices: list.map(s => s.value), choiceOptions: choiceOptions });
+            await grist.docApi.applyUserActions([['ModifyColumn', table, column, { widgetOptions: widgetOptions }]]);
+        } catch (e) { console.warn('TF.seedStatusChoices:', e && e.message); }
+    }
+
+    /* ----- #2 : colonnes d'affichage des Ref (noms au lieu des IDs) ---------
+     * Pose le visibleCol + la display formula sur des colonnes Ref pour que les
+     * VUES NATIVES Grist affichent un libelle plutot que l'ID de ligne.
+     * specs : [{ table:'Tasks', column:'projet', visibleColId:'nom' }, ...]
+     * DEFENSIF : si Grist refuse une action, on log et on continue ; au pire
+     * l'affichage reste en IDs (comportement actuel), jamais de casse.
+     * --------------------------------------------------------------------- */
+    async function setRefDisplayColumns(grist, specs) {
+        if (!Array.isArray(specs) || !specs.length) return;
+        try {
+            const tables = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+            const colOf = (tableRow, colId) => cols.find(c => c.parentId === tableRow && c.colId === colId);
+
+            const actions = [];
+            for (const s of specs) {
+                const srcTid = tidOf(s.table);
+                if (srcTid == null) continue;
+                const refCol = colOf(srcTid, s.column);
+                if (!refCol) continue;
+                // Table cible deduite du type "Ref:Target" / "RefList:Target".
+                const m = /^(?:Ref|RefList):(.+)$/.exec(refCol.type || '');
+                if (!m) continue;
+                const targetTid = tidOf(m[1]);
+                if (targetTid == null) continue;
+                const visCol = colOf(targetTid, s.visibleColId);
+                if (!visCol) continue;
+                // Eviter de re-poser si deja correct.
+                if (refCol.visibleCol === visCol.id) continue;
+                actions.push(['SetDisplayFormula', s.table, null, refCol.id, '$' + s.column + '.' + s.visibleColId]);
+                actions.push(['UpdateRecord', '_grist_Tables_column', refCol.id, { visibleCol: visCol.id }]);
+            }
+            if (actions.length) await grist.docApi.applyUserActions(actions);
+        } catch (e) { console.warn('TF.setRefDisplayColumns:', e && e.message); }
+    }
+
+    /* ----- #3 : plan de charge (heures par personne) ------------------------
+     * Stockage : colonne Text `charges` sur Tasks, JSON [{teamId, heures}].
+     * Parse defensif identique au pattern subtasks.
+     * --------------------------------------------------------------------- */
+    function parseCharges(v) {
+        try {
+            const a = JSON.parse(v || '[]');
+            if (!Array.isArray(a)) return [];
+            return a.filter(x => x && x.teamId != null)
+                    .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+                    .filter(x => !isNaN(x.teamId));
+        } catch (e) { return []; }
+    }
+    function chargesToJson(arr) {
+        return JSON.stringify((arr || [])
+            .filter(x => x && x.teamId != null)
+            .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+            .filter(x => !isNaN(x.teamId)));
+    }
+    // Heures totales d'une tache (somme des charges par personne).
+    function chargeTotal(charges) { return parseCharges(typeof charges === 'string' ? charges : JSON.stringify(charges || [])).reduce((s, c) => s + c.heures, 0); }
+    // Agrege la charge par membre sur une liste de taches (chaque tache expose .charges).
+    function chargeByMember(tasks) {
+        const by = {};
+        for (const t of (tasks || [])) {
+            for (const c of parseCharges(t && t.charges)) {
+                by[c.teamId] = (by[c.teamId] || 0) + c.heures;
+            }
+        }
+        return by;
+    }
+
+    return {
+        DEFAULT_STATUSES: DEFAULT_STATUSES,
+        columnarToRows: columnarToRows,
+        loadStatusConfig: loadStatusConfig,
+        buildStatusConfig: buildStatusConfig,
+        getStatus: getStatus,
+        isTerminal: isTerminal,
+        seedStatusChoices: seedStatusChoices,
+        setRefDisplayColumns: setRefDisplayColumns,
+        parseCharges: parseCharges,
+        chargesToJson: chargesToJson,
+        chargeTotal: chargeTotal,
+        chargeByMember: chargeByMember
+    };
+})();
+// </taskflow-core>
+
 let tasks = [], projects = [], team = [];
+let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
 let gristReady = false;
 let isEditMode = false;
 let selectedCompId = null;
 let dashConfig = { layout: DEFAULT_LAYOUT.map(c => ({...c, config:{...c.config}})) };
 let filters = { periode: 'all', projets: [], assignes: [], statuts: [] };
+// WBS-04: par défaut compter uniquement les feuilles (pas les parents) pour éviter double-compte
+let leavesOnly = localStorage.getItem('taskflow_dashboard_leavesonly') !== '0';
+
+// WBS (hiérarchie sous-tâches) — API commune
+let childrenByParent = new Map();
+function rebuildChildrenCache() {
+    childrenByParent = new Map();
+    const cycleIds = new Set();
+    for (const t of tasks) {
+        const seen = new Set([t.id]);
+        let cur = t.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
+        let guard = 0;
+        while (cur && guard++ < 128) {
+            if (seen.has(cur.id)) { cycleIds.add(t.id); break; }
+            seen.add(cur.id);
+            cur = cur.parentTask ? tasks.find(x => x.id === cur.parentTask) : null;
+        }
+    }
+    if (cycleIds.size) console.warn('WBS: cycles detected on task ids:', [...cycleIds]);
+    for (const t of tasks) {
+        const pid = t.parentTask;
+        if (pid && !isNaN(pid) && !cycleIds.has(t.id)) {
+            if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
+            childrenByParent.get(pid).push(t);
+        }
+    }
+}
+const isRoot = (t) => !t?.parentTask;
+const getChildren = (id) => childrenByParent.get(id) || [];
+const hasChildren = (t) => t && getChildren(t.id).length > 0;
 let filterPanelOpen = false;
 
-const STATUS_LABELS  = { todo:'À faire', inprogress:'En cours', review:'En revue', done:'Terminé' };
-const STATUS_COLORS  = { todo:'#64748b', inprogress:'#3b82f6', review:'#f59e0b', done:'#10b981' };
+// STATUS_LABELS / STATUS_COLORS supprimes : statuts lus dynamiquement via statusCfg (#1)
 const PRIORITY_LABELS = { 1:'Critique', 2:'Haute', 3:'Moyenne', 4:'Basse' };
 const PRIORITY_COLORS = { 1:'#ef4444', 2:'#f59e0b', 3:'#3b82f6', 4:'#64748b' };
 const MONTHS_SHORT = ['Jan','Fév','Mar','Avr','Mai','Juin','Juil','Août','Sep','Oct','Nov','Déc'];
@@ -415,6 +686,8 @@ function getPeriodStart(periode) {
 // ═══════════════════════════════════════════════════════════════════════════════
 function getFilteredTasks(compFilter) {
     let ft = tasks;
+    // WBS-04: feuilles seulement par défaut — évite double-compte parent+enfants
+    if (leavesOnly) ft = ft.filter(t => !hasChildren(t));
     if (filters.periode !== 'all') {
         const pStart = getPeriodStart(filters.periode);
         ft = ft.filter(t => { const d=gristToDate(t.dateEcheance); return d && d >= pStart; });
@@ -479,7 +752,7 @@ function renderFilterPanel() {
         <div class="filter-section">
             <div class="filter-section-label">Statut</div>
             <div class="filter-checkboxes">
-                ${Object.entries(STATUS_LABELS).map(([v,l]) => `<span class="filter-check ${filters.statuts.includes(v)?'active':''}" onclick="toggleFilterStatut('${v}')">${l}</span>`).join('')}
+                ${statusCfg.list.map(s => `<span class="filter-check ${filters.statuts.includes(s.value)?'active':''}" onclick="toggleFilterStatut('${s.value}')">${s.label}</span>`).join('')}
             </div>
         </div>`;
     if (hasActiveFilters()) html += `<div class="filter-section" style="justify-content:flex-end"><button class="filter-clear" onclick="clearFilters()">Réinitialiser</button></div>`;
@@ -501,7 +774,7 @@ function renderFilterChips() {
         if (m) html += `<span class="filter-chip">${escapeHtml((m.nom||'').split(' ')[0])}<button onclick="toggleFilterAssigne(${m.id})">×</button></span>`;
     });
     filters.statuts.forEach(v => {
-        html += `<span class="filter-chip">${STATUS_LABELS[v]}<button onclick="toggleFilterStatut('${v}')">×</button></span>`;
+        html += `<span class="filter-chip">${TF.getStatus(statusCfg, v).label}<button onclick="toggleFilterStatut('${v}')">×</button></span>`;
     });
     document.getElementById('headerFilters').innerHTML = html;
 }
@@ -585,7 +858,7 @@ function updateCompFilterValue(id, value, e) {
 }
 
 function getFilterValueOptions(field) {
-    if (field==='statut')   return Object.entries(STATUS_LABELS);
+    if (field==='statut')   return statusCfg.list.map(s=>[s.value, s.label]);
     if (field==='priorite') return Object.entries(PRIORITY_LABELS);
     if (field==='projet')   return projects.map(p => [String(p.id), p.nom]);
     if (field==='type')     return [['tache','Tâche'],['jalon','Jalon'],['reunion','Réunion']];
@@ -642,7 +915,7 @@ function renderEditPanel() {
     // ── Catalogue ──
     const CATALOG_LABELS = {
         kpi:'KPI', donut:'Donut', bars:'Barres', list:'Liste',
-        workload:'Équipe', upcoming:'Échéances', projects:'Projets', velocity:'Vélocité'
+        workload:'Équipe', charge:'Charge (h)', upcoming:'Échéances', projects:'Projets', velocity:'Vélocité'
     };
     const catalogItems = Object.keys(CATALOG).map(type => `
         <div class="catalog-item" onclick="addComponent('${type}')">
@@ -711,6 +984,7 @@ function renderCompBody(comp, ft) {
         case 'bars':     return renderBars(comp, ft);
         case 'list':     return renderList(comp, ft);
         case 'workload': return renderWorkload(comp, ft);
+        case 'charge':   return renderCharge(comp, ft);
         case 'upcoming': return renderUpcoming(comp, ft);
         case 'projects': return renderProjects(comp, ft);
         case 'velocity': return renderVelocity(comp, ft);
@@ -728,11 +1002,11 @@ function renderKPI(comp, ft) {
     let value = 0, label = '';
     switch (metric) {
         case 'total':     value = ft.length;                                                                            label = 'tâches au total'; break;
-        case 'inprogress':value = ft.filter(t=>getStatus(t)!=='done').length;                                           label = 'tâches actives'; break;
-        case 'done':      value = ft.filter(t=>getStatus(t)==='done').length;                                           label = 'tâches terminées'; break;
-        case 'done_week': value = ft.filter(t=>getStatus(t)==='done' && gristToDate(t.dateEcheance)>=weekStart).length; label = 'terminées cette semaine'; break;
-        case 'late':      value = ft.filter(t=>{ const d=gristToDate(t.dateEcheance); return d&&d<today&&getStatus(t)!=='done'; }).length; label = 'en retard'; break;
-        case 'rate':      { const done=ft.filter(t=>getStatus(t)==='done').length; value=ft.length?Math.round(done/ft.length*100):0; label='% complété'; break; }
+        case 'inprogress':value = ft.filter(t=>!TF.isTerminal(statusCfg, getStatus(t))).length;                                           label = 'tâches actives'; break;
+        case 'done':      value = ft.filter(t=>TF.isTerminal(statusCfg, getStatus(t))).length;                                           label = 'tâches terminées'; break;
+        case 'done_week': value = ft.filter(t=>TF.isTerminal(statusCfg, getStatus(t)) && gristToDate(t.dateEcheance)>=weekStart).length; label = 'terminées cette semaine'; break;
+        case 'late':      value = ft.filter(t=>{ const d=gristToDate(t.dateEcheance); return d&&d<today&&!TF.isTerminal(statusCfg, getStatus(t)); }).length; label = 'en retard'; break;
+        case 'rate':      { const done=ft.filter(t=>TF.isTerminal(statusCfg, getStatus(t))).length; value=ft.length?Math.round(done/ft.length*100):0; label='% complété'; break; }
     }
     const cls = { total:'kpi-total', inprogress:'kpi-inprogress', done:'kpi-done', done_week:'kpi-done_week', late:'kpi-late', rate:'kpi-rate' }[metric]||'';
     const lateClass = metric==='late'&&value>0 ? 'kpi-late-border' : '';
@@ -751,7 +1025,7 @@ function groupByField(ft, field) {
         else if (field==='type')     key = t.type||'tache';
         if (key!==undefined) counts[key]=(counts[key]||0)+1;
     });
-    if (field==='statut')   return Object.entries(STATUS_LABELS).map(([k,l])=>({ key:k, label:l, count:counts[k]||0, color:STATUS_COLORS[k] }));
+    if (field==='statut')   return statusCfg.list.map(s=>({ key:s.value, label:s.label, count:counts[s.value]||0, color:s.fillColor }));
     if (field==='priorite') return [1,2,3,4].map(k=>({ key:String(k), label:PRIORITY_LABELS[k], count:counts[String(k)]||0, color:PRIORITY_COLORS[k] }));
     if (field==='projet')   return projects.filter(p=>counts[String(p.id)]).map(p=>({ key:String(p.id), label:p.nom, count:counts[String(p.id)]||0, color:p.couleur||'#6366f1' }));
     if (field==='type')     return [['tache','Tâche','#3b82f6'],['jalon','Jalon','#f59e0b'],['reunion','Réunion','#10b981']].map(([k,l,c])=>({ key:k, label:l, count:counts[k]||0, color:c }));
@@ -797,7 +1071,7 @@ function renderWorkload(comp, ft) {
         getAssigneesArray(t).forEach(a => {
             if (!byAssignee[a]) byAssignee[a]={ total:0, active:0 };
             byAssignee[a].total++;
-            if (getStatus(t)!=='done') byAssignee[a].active++;
+            if (!TF.isTerminal(statusCfg, getStatus(t))) byAssignee[a].active++;
         });
     });
     const maxActive = Math.max(...team.map(m=>(byAssignee[m.id]||{}).active||0), 1);
@@ -816,12 +1090,33 @@ function renderWorkload(comp, ft) {
     }).join('')}</div>`;
 }
 
+// #3 : charge par personne (somme des heures allouees via Tasks.charges)
+function renderCharge(comp, ft) {
+    if (!team.length) return '<div class="empty-state"><div class="empty-icon">◔</div><div class="empty-text">Aucun membre Team</div></div>';
+    const byMember = TF.chargeByMember(ft); // { teamId: heures }
+    const members = team.filter(m=>m.actif!==false);
+    if (!members.length) return '<div class="empty-state"><div class="empty-text">Aucun membre actif</div></div>';
+    const maxH = Math.max(...members.map(m=>byMember[m.id]||0), 1);
+    const totalH = members.reduce((s,m)=>s+(byMember[m.id]||0),0);
+    return `<div class="workload-list">${members.map(m => {
+        const h = byMember[m.id]||0;
+        const pct = Math.round(h/maxH*100);
+        const lvl = h>40?'high':h>20?'medium':'';
+        const ini=(m.nom||'?').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
+        return `<div class="workload-item">
+            <div class="workload-avatar" style="background:${m.couleur||'#4f46e5'}">${ini}</div>
+            <div class="workload-info"><div class="workload-name">${escapeHtml(m.nom)}</div><div class="workload-tasks">${h} h allouée${h>1?'s':''}</div></div>
+            <div class="workload-bar"><div class="workload-bar-fill ${lvl}" style="width:${pct}%"></div></div>
+        </div>`;
+    }).join('')}<div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted);text-align:right">Total : <strong>${totalH}</strong> h</div></div>`;
+}
+
 function renderUpcoming(comp, ft) {
     const horizon = parseInt(comp.config.horizon)||14;
     const today = new Date(); today.setHours(0,0,0,0);
     const upcoming = ft.filter(t => {
         const d=gristToDate(t.dateEcheance);
-        if (!d || getStatus(t)==='done') return false;
+        if (!d || TF.isTerminal(statusCfg, getStatus(t))) return false;
         return Math.ceil((d-today)/86400000) <= horizon;
     }).map(t => ({ t, d:gristToDate(t.dateEcheance), days:Math.ceil((gristToDate(t.dateEcheance)-today)/86400000) }))
       .sort((a,b)=>a.d-b.d).slice(0,8);
@@ -853,7 +1148,7 @@ function renderProjects(comp, ft) {
         if (!t.projet) return;
         if (!stats[t.projet]) stats[t.projet]={ total:0, done:0, prog:0 };
         stats[t.projet].total++;
-        if (getStatus(t)==='done') stats[t.projet].done++;
+        if (TF.isTerminal(statusCfg, getStatus(t))) stats[t.projet].done++;
         stats[t.projet].prog += (t.progression||0);
     });
     return `<div class="projects-list">${active.filter(p=>stats[p.id]).map(p => {
@@ -875,16 +1170,16 @@ function renderList(comp, ft) {
     const limit  = parseInt(comp.config.limit)||10;
     const today  = new Date(); today.setHours(0,0,0,0);
     let list = ft;
-    if (preset==='overdue')   list = ft.filter(t=>{const d=gristToDate(t.dateEcheance);return d&&d<today&&getStatus(t)!=='done';});
+    if (preset==='overdue')   list = ft.filter(t=>{const d=gristToDate(t.dateEcheance);return d&&d<today&&!TF.isTerminal(statusCfg, getStatus(t));});
     else if (preset==='today')     list = ft.filter(t=>{const d=gristToDate(t.dateEcheance);return d&&isSameDay(d,today);});
-    else if (preset==='upcoming')  list = ft.filter(t=>{const d=gristToDate(t.dateEcheance);const diff=d&&Math.ceil((d-today)/86400000);return diff!==null&&diff>=0&&diff<=14&&getStatus(t)!=='done';});
+    else if (preset==='upcoming')  list = ft.filter(t=>{const d=gristToDate(t.dateEcheance);const diff=d&&Math.ceil((d-today)/86400000);return diff!==null&&diff>=0&&diff<=14&&!TF.isTerminal(statusCfg, getStatus(t));});
     else if (preset==='inprogress')list = ft.filter(t=>getStatus(t)==='inprogress');
     if (!list.length) return '<div class="empty-state"><div class="empty-text">Aucune tâche</div></div>';
     return `<div class="list-items">${list.slice(0,limit).map(t=>{
         const p=getPriority(t), s=getStatus(t);
         const d=gristToDate(t.dateEcheance);
         const proj=projects.find(x=>x.id===t.projet);
-        const isLate=d&&d<today&&s!=='done';
+        const isLate=d&&d<today&&!TF.isTerminal(statusCfg, s);
         return `<div class="list-item" onclick="selectTask(${t.id})">
             <div class="list-prio p${p}"></div>
             <div class="list-info">
@@ -892,7 +1187,7 @@ function renderList(comp, ft) {
                 <div class="list-meta">
                     ${proj?`<span style="color:${proj.couleur||'#6366f1'}">● ${escapeHtml(proj.nom)}</span>`:''}
                     ${d?`<span class="${isLate?'text-danger':''}">${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}</span>`:''}
-                    <span class="status-badge s-${s}">${STATUS_LABELS[s]||s}</span>
+                    <span class="status-badge" style="background:${TF.getStatus(statusCfg, s).fillColor};color:${TF.getStatus(statusCfg, s).textColor}">${TF.getStatus(statusCfg, s).label}</span>
                 </div>
             </div>
         </div>`;
@@ -907,7 +1202,7 @@ function renderVelocity(comp, ft) {
         const start = startOfWeek(addDays(today, -w*7));
         const end   = addDays(start, 7);
         const count = ft.filter(t => {
-            if (getStatus(t)!=='done') return false;
+            if (!TF.isTerminal(statusCfg, getStatus(t))) return false;
             const d=gristToDate(t.dateEcheance);
             return d && d>=start && d<end;
         }).length;
@@ -1003,8 +1298,17 @@ async function loadAllData() {
             grist.docApi.fetchTable('Team'),
         ]);
         tasks=convert(td); projects=convert(pd); team=convert(md);
+        rebuildChildrenCache();
+        try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', tasks.map(t => t && t.statut)); } catch (e) {}
         render();
     } catch(e) { console.log('Error loading data:', e); }
+}
+// WBS-04: toggle "Feuilles uniquement"
+function toggleLeavesOnly() {
+    leavesOnly = !leavesOnly;
+    localStorage.setItem('taskflow_dashboard_leavesonly', leavesOnly ? '1' : '0');
+    const b = document.getElementById('btnLeavesOnly'); if (b) b.classList.toggle('active', leavesOnly);
+    render();
 }
 
 function selectTask(id) {
@@ -1015,7 +1319,7 @@ async function markDone(taskId, event) {
     event.stopPropagation();
     if (!gristReady) return;
     try {
-        await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', taskId, { statut: 'done', progression: 100 }]]);
+        await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', taskId, { statut: statusCfg.terminalValue, progression: 100 }]]);
         await loadAllData();
     } catch(e) { console.error(e); }
 }
@@ -1071,6 +1375,8 @@ function useDemoMode() {
     render();
 }
 
+// WBS-04: sync bouton "Feuilles uniquement" au chargement
+{ const b = document.getElementById('btnLeavesOnly'); if (b) b.classList.toggle('active', leavesOnly); }
 init();
 </script>
 </body>
