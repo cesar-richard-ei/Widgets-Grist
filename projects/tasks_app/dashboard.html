@@ -738,10 +738,11 @@ function getPeriodStart(periode) {
 // ═══════════════════════════════════════════════════════════════════════════════
 // FILTRES GLOBAUX
 // ═══════════════════════════════════════════════════════════════════════════════
-function getFilteredTasks(compFilter) {
+function getFilteredTasks(compFilter, ignoreLeaves) {
     let ft = tasks;
-    // WBS-04: feuilles seulement par défaut — évite double-compte parent+enfants
-    if (leavesOnly) ft = ft.filter(t => !hasChildren(t));
+    // WBS-04: feuilles seulement par défaut — évite double-compte parent+enfants.
+    // ignoreLeaves: la charge (#3) somme les charges PROPRES de toutes les tâches (parents inclus, coordination), une seule fois.
+    if (leavesOnly && !ignoreLeaves) ft = ft.filter(t => !hasChildren(t));
     if (filters.periode !== 'all') {
         const pStart = getPeriodStart(filters.periode);
         ft = ft.filter(t => { const d=gristToDate(t.dateEcheance); return d && d >= pStart; });
@@ -1010,7 +1011,7 @@ function createComp(comp) {
             <button class="btn-icon danger" onclick="removeComponent('${comp.id}',event)" title="Supprimer">×</button>
         </div>` : '';
 
-    const ft = getFilteredTasks(hasCF ? cf : null);
+    const ft = getFilteredTasks(hasCF ? cf : null, comp.type === 'charge');
 
     div.innerHTML = `
         <div class="comp-header">

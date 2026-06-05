@@ -2377,6 +2377,9 @@
             // #3 : charge par personne (heures par assigné)
             const chargeOf = (mid) => { const c = (data.charges || []).find(x => x.teamId === mid); return c ? c.heures : 0; };
             const chargeTotalH = (data.charges || []).reduce((sum, c) => (data.assignees.includes(c.teamId) ? sum + (Number(c.heures) || 0) : sum), 0);
+            const chargeDescs = (!panelState.isNew && panelState.taskId) ? getAllDescendants(panelState.taskId) : [];
+            const chargeConsol = chargeDescs.length ? TF.chargeByMember([{ charges: TF.chargesToJson(data.charges) }].concat(chargeDescs)) : null;
+            const chargeConsolHtml = (chargeConsol && Object.keys(chargeConsol).length) ? ('<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><div class="prop-label" style="margin-bottom:6px">Consolidé (avec sous-tâches)</div>' + Object.keys(chargeConsol).map(function(tid){ return '<div class="charge-row"><span class="an">' + escapeHtml(getTeamMemberName(Number(tid))) + '</span><span style="font-weight:600;font-size:0.82rem">' + chargeConsol[tid] + ' h</span></div>'; }).join('') + '<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">Total consolidé : <strong>' + Object.values(chargeConsol).reduce(function(s,h){ return s + h; }, 0) + '</strong> h</div></div>') : '';
             const chargeRows = data.assignees.map(id => `<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-size:0.8rem">${escapeHtml(getTeamMemberName(id))}</span><input type="number" min="0" step="0.5" value="${chargeOf(id)}" onchange="updateCharge(${id}, this.value)" style="width:64px;padding:4px 6px;border:1px solid var(--border);border-radius:6px"><span style="font-size:0.75rem;color:var(--text-muted)">h</span></div>`).join('');
 
             // Dépendances
@@ -2492,7 +2495,7 @@
                                 <div class="tc-box"><div class="tcl">Passé</div><div class="tcv"><input type="number" min="0" step="0.5" value="${passe || ''}" placeholder="0" onchange="updateField('tempsPasse', parseFloat(this.value) || null)"><small>h</small></div></div>
                             </div>
                             ${estim > 0 ? `<div class="tc-bar"><i class="${timeOver ? 'over' : ''}" style="width:${timePercent}%"></i></div><div class="tc-foot"><span>${Math.round((passe/estim)*100)}% consommé</span><span>reste ${Math.max(estim-passe,0)} h</span></div>` : ''}
-                            ${data.assignees.length ? `<div style="margin-top:13px"><div class="prop-label" style="margin-bottom:6px">Charge par personne</div>${data.assignees.map(id => `<div class="charge-row"><span class="an">${escapeHtml(getTeamMemberName(id))}</span><input type="number" min="0" step="0.5" value="${chargeOf(id)}" onchange="updateCharge(${id}, this.value)"><span style="font-size:0.75rem;color:var(--text-muted)">h</span></div>`).join('')}<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">Total : <strong>${chargeTotalH}</strong> h</div></div>` : ''}
+                            ${data.assignees.length ? `<div style="margin-top:13px"><div class="prop-label" style="margin-bottom:6px">Charge par personne</div>${data.assignees.map(id => `<div class="charge-row"><span class="an">${escapeHtml(getTeamMemberName(id))}</span><input type="number" min="0" step="0.5" value="${chargeOf(id)}" onchange="updateCharge(${id}, this.value)"><span style="font-size:0.75rem;color:var(--text-muted)">h</span></div>`).join('')}<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">Total : <strong>${chargeTotalH}</strong> h</div></div>` : ''}${chargeConsolHtml}
                         </div>
                     </div>` : ''}
                     ${data.type === 'tache' ? `
