@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Plan de charge - TaskFlow</title>
+<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+<style>
+:root{
+  --bg:#0f172a; --surface:#1e293b; --surface-2:#243044; --surface-3:#2c3a52;
+  --border:#334155; --text:#e2e8f0; --text-muted:#94a3b8; --primary:#6366f1;
+  --ok:#3b82f6; --warn:#f59e0b; --over:#e5484d; --off:#475569; --radius:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+#app{display:flex;flex-direction:column;height:100vh}
+.bar{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+.title{display:flex;align-items:center;gap:8px;font-size:1.1rem;font-weight:700;color:var(--primary)}
+.title .ic{font-size:1.2rem}
+.spacer{flex:1}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
+.seg button{background:transparent;color:var(--text-muted);border:0;padding:5px 11px;cursor:pointer;font-size:0.82rem}
+.seg button.on{background:var(--primary);color:#fff}
+.btn{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:var(--radius);padding:5px 10px;cursor:pointer;font-size:0.82rem}
+.btn:hover{background:var(--surface-3)}
+.btn.ghost{background:transparent;color:var(--text-muted)}
+.nav{display:inline-flex;align-items:center;gap:6px}
+.nav .range{font-size:0.82rem;color:var(--text-muted);min-width:104px;text-align:center}
+select.btn{appearance:none;padding-right:24px}
+label.chk{display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted);cursor:pointer}
+.alerts{padding:7px 14px;font-size:0.78rem;color:var(--text-muted);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap}
+.alerts .warn{color:var(--warn)} .alerts .over{color:var(--over)}
+.gridwrap{flex:1;overflow:auto;position:relative}
+table.grid{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:0.8rem}
+table.grid th,table.grid td{padding:0;border-bottom:1px solid var(--border)}
+table.grid thead th{position:sticky;top:0;z-index:3;background:var(--surface);color:var(--text-muted);font-weight:600;padding:8px 8px;text-align:center;white-space:nowrap;border-bottom:1px solid var(--border)}
+table.grid thead th.now{color:var(--primary)}
+.colres{position:sticky;left:0;z-index:2;background:var(--surface);text-align:left!important;min-width:190px;border-right:1px solid var(--border)}
+thead th.colres{z-index:4}
+.res{display:flex;align-items:center;gap:8px;padding:7px 10px}
+.ava{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.66rem;font-weight:700;color:#fff;flex-shrink:0}
+.res .nm{font-weight:600;white-space:nowrap}
+.res .cap{color:var(--text-muted);font-size:0.72rem}
+.cell{text-align:center;padding:0;cursor:pointer}
+.cell .v{display:block;padding:6px 8px;font-weight:600;font-size:0.78rem;color:#fff;min-width:46px}
+.cell .dot{display:block;padding:6px 8px;color:var(--off)}
+.cell:hover .v{outline:2px solid rgba(255,255,255,.45);outline-offset:-2px}
+.cell.nowcol,thead th.now,tfoot td.nowcol{box-shadow:inset 1px 0 var(--primary),inset -1px 0 var(--primary)}
+thead th .pk{font-weight:700}
+thead th .psub{font-weight:400;font-size:0.65rem;color:var(--off);margin-top:1px}
+th.sum,td.sum{text-align:center;background:var(--surface-2);border-left:1px solid var(--border);white-space:nowrap;padding:6px 12px}
+td.sum .sh{font-weight:700;font-size:0.8rem}
+td.sum .sp{font-size:0.67rem;color:var(--text-muted)}
+tfoot td{position:sticky;bottom:0;background:var(--surface-2);font-weight:600;color:var(--text);padding:7px 6px;text-align:center;border-top:1px solid var(--border)}
+tfoot td.colres{background:var(--surface-2);z-index:2}
+.legend{padding:8px 14px;display:flex;gap:16px;flex-wrap:wrap;font-size:0.74rem;color:var(--text-muted);border-top:1px solid var(--border)}
+.legend .sw{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:middle;margin-right:4px}
+.empty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;height:100%;color:var(--text-muted);text-align:center}
+.empty .ic{font-size:2.4rem;opacity:.5}
+/* panel slide-in (même primitive que les autres widgets) */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);opacity:0;pointer-events:none;transition:.2s;z-index:20}
+.overlay.show{opacity:1;pointer-events:auto}
+.panel{position:fixed;top:0;right:0;height:100%;width:380px;max-width:92vw;background:var(--surface);border-left:1px solid var(--border);transform:translateX(100%);transition:.22s;z-index:21;display:flex;flex-direction:column}
+.panel.show{transform:none}
+.panel .ph{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid var(--border)}
+.panel .ph h3{font-size:0.98rem}
+.panel .ph .sub{font-size:0.76rem;color:var(--text-muted);margin-top:2px}
+.panel .pb{flex:1;overflow:auto;padding:12px 14px}
+.tk{display:flex;flex-direction:column;gap:6px;padding:8px;border:1px solid var(--border);border-radius:var(--radius);margin-bottom:8px}
+.tk .tkmain{display:flex;align-items:center;gap:8px}
+.tk .tkdates{display:flex;align-items:center;gap:6px;padding-left:16px;flex-wrap:wrap}
+.tk .tkdates .dl{font-size:0.8rem}
+.tk .tkdates input{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:2px 6px;font-size:0.72rem;color-scheme:dark}
+.tk .tkdates span{color:var(--text-muted);font-size:0.74rem}
+.tk .pdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.tk .tinfo{flex:1;min-width:0}
+.tk .tt{font-weight:600;font-size:0.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tk .tm{font-size:0.72rem;color:var(--text-muted)}
+.tk .th{font-weight:700;font-size:0.84rem}
+.tk .tkedit{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.tk .tkedit input{width:50px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:3px 6px;font-size:0.8rem}
+.tk .tkedit .u{font-size:0.72rem;color:var(--text-muted)}
+.tk .tkedit select{width:30px;background:var(--surface-2);border:1px solid var(--border);color:var(--text-muted);border-radius:6px;padding:3px 2px;font-size:0.78rem;cursor:pointer}
+.panel .pf{padding:12px 14px;border-top:1px solid var(--border)}
+.x{background:transparent;border:0;color:var(--text-muted);font-size:1.3rem;cursor:pointer;line-height:1}
+.toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);background:var(--surface-3);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:0.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:80vw;text-align:center}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="bar">
+    <div class="title"><span class="ic">▦</span> Plan de charge</div>
+    <div class="seg" id="segGran"></div>
+    <div class="nav">
+      <button class="btn ghost" id="navPrev">◀</button>
+      <span class="range" id="navRange">—</span>
+      <button class="btn ghost" id="navNext">▶</button>
+      <button class="btn ghost" id="navToday" style="display:none">Aujourd'hui</button>
+    </div>
+    <div class="spacer"></div>
+    <label class="chk"><span>Grouper</span>
+      <select class="btn" id="selGroup">
+        <option value="person">Personne</option>
+        <option value="project">Projet</option>
+        <option value="role">Rôle</option>
+      </select>
+    </label>
+    <div class="seg" id="segUnit"></div>
+    <label class="chk"><input type="checkbox" id="chkDone"> Inclure terminé</label>
+    <label class="chk" title="Estimer la charge des tâches sans charge à partir de leur estimation ÷ nb assignés"><input type="checkbox" id="chkDerive"> Estimer</label>
+    <button class="btn" id="btnExport">Export</button>
+  </div>
+  <div class="alerts" id="alerts"></div>
+  <div class="gridwrap" id="gridwrap"><div class="empty"><div class="ic">▦</div><div>Chargement…</div></div></div>
+  <div class="legend">
+    <span><span class="sw" style="background:var(--ok)"></span>charge OK</span>
+    <span><span class="sw" style="background:var(--warn)"></span>&gt; 85% capacité</span>
+    <span><span class="sw" style="background:var(--over)"></span>surcharge</span>
+    <span><span class="sw" style="background:var(--off)"></span>capacité réduite</span>
+    <span>· = aucune charge</span>
+  </div>
+</div>
+<div class="overlay" id="overlay"></div>
+<div class="panel" id="panel">
+  <div class="ph">
+    <div><h3 id="pTitle">Détail</h3><div class="sub" id="pSub"></div></div>
+    <button class="x" id="pClose">×</button>
+  </div>
+  <div class="pb" id="pBody"></div>
+  <div class="pf"><button class="btn" id="pGantt" style="width:100%">↗ Ouvrir dans le Gantt</button></div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+"use strict";
+
+// ============================================================================
+// TF — extrait local du module commun taskflow-core.js.
+// À LA PROMOTION : remplacer ce bloc par le core inliné via build-taskflow
+// (marqueurs // <taskflow-core> ... </taskflow-core>). L'API consommée ci-dessous
+// (TF.parseCharges / periodKey / periodRange / shiftPeriods / chargeMatrix /
+//  isTerminal / columnarToRows) est identique à celle du core.
+// ============================================================================
+const TF = (function () {
+  function parseCharges(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a.filter(c => c && c.teamId != null).map(c => ({ teamId: c.teamId, heures: Number(c.heures) || 0 })) : []; } catch { return []; } }
+  function periodKey(date, g) {
+    if (g === 'month') return date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0');
+    const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+    const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() + 4 - day);
+    const ys = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+    const wk = Math.ceil((((d - ys) / 86400000) + 1) / 7);
+    return d.getUTCFullYear() + '-W' + String(wk).padStart(2, '0');
+  }
+  function shiftPeriods(date, g, n) { const d = new Date(date.getTime()); if (g === 'month') d.setUTCMonth(d.getUTCMonth() + n); else d.setUTCDate(d.getUTCDate() + n * 7); return d; }
+  function periodRange(start, g, count) {
+    const gg = g === 'month' ? 'month' : 'week';
+    let d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+    if (gg === 'week') { const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); } else { d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+    const out = []; for (let i = 0; i < count; i++) { out.push(periodKey(d, gg)); if (gg === 'week') d.setUTCDate(d.getUTCDate() + 7); else d.setUTCMonth(d.getUTCMonth() + 1); } return out;
+  }
+  // chargeMatrix : étale les charges propres sur la durée, agrège par clé (keyFn) et période.
+  function chargeMatrix(tasks, keyFn, g, getCharges) {
+    const out = {};
+    for (const t of (tasks || [])) {
+      const charges = getCharges ? getCharges(t) : parseCharges(t && t.charges);
+      if (!charges.length || t.dateDebut == null || t.dateEcheance == null) continue;
+      const d0 = Math.floor((t.dateDebut * 1000) / 86400000), d1 = Math.floor((t.dateEcheance * 1000) / 86400000);
+      const nDays = Math.max(d1 - d0 + 1, 1);
+      for (const c of charges) {
+        const key = keyFn(t, c); if (key == null) continue;
+        const perDay = c.heures / nDays; if (!perDay) continue;
+        if (!out[key]) out[key] = {};
+        for (let dd = d0; dd <= d1; dd++) { const pk = periodKey(new Date(dd * 86400000), g); out[key][pk] = (out[key][pk] || 0) + perDay; }
+      }
+    }
+    return out;
+  }
+  function columnarToRows(d) { if (!d || !d.id) return []; return d.id.map((id, i) => { const r = { id }; for (const k in d) if (k !== 'id') r[k] = d[k][i]; return r; }); }
+  return { parseCharges, periodKey, shiftPeriods, periodRange, chargeMatrix, columnarToRows };
+})();
+
+// ============================================================================
+// État
+// ============================================================================
+const S = {
+  tasks: [], team: [], projects: [],
+  granularity: 'week', offset: 0, horizon: 12,
+  groupBy: 'person', unit: 'pct', includeDone: false, derive: false,
+  terminalStatuts: ['done', 'termine', 'terminé'],
+  demo: false
+};
+
+// Utils
+const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const getRefList = (v) => Array.isArray(v) && v[0] === 'L' ? v.slice(1).map(Number) : [];
+const teamById = (id) => S.team.find(m => m.id === id);
+const projById = (id) => S.projects.find(p => p.id === id);
+const activeTeam = () => S.team.filter(m => m.actif !== false);
+const isTerminal = (t) => S.terminalStatuts.includes(String(t.statut || '').toLowerCase());
+const capOf = (m) => (Number(m && m.capaciteHebdo) > 0 ? Number(m.capaciteHebdo) : 35);
+const capPeriod = (cap) => S.granularity === 'month' ? cap * 52 / 12 : cap;
+const plabel = (p) => S.granularity === 'month' ? (p.slice(5) + '/' + p.slice(2, 4)) : ('S' + p.slice(6));
+const MOIS = ['janv', 'févr', 'mars', 'avr', 'mai', 'juin', 'juil', 'août', 'sept', 'oct', 'nov', 'déc'];
+function periodStarts(start, g, count) {
+  let d = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
+  if (g === 'week') { const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); } else { d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+  const out = []; for (let i = 0; i < count; i++) { out.push(new Date(d)); if (g === 'week') d.setUTCDate(d.getUTCDate() + 7); else d.setUTCMonth(d.getUTCMonth() + 1); } return out;
+}
+function subLabel(d) { return S.granularity === 'month' ? '' : (d.getUTCDate() + ' ' + MOIS[d.getUTCMonth()]); }
+const r1 = (n) => Math.round(n * 10) / 10;
+
+function planTasks() { return S.includeDone ? S.tasks : S.tasks.filter(t => !isTerminal(t)); }
+// Charges effectives : réelles, ou dérivées de estimationH ÷ nb assignés si l'option est active.
+function effCharges(t) {
+  const c = TF.parseCharges(t.charges);
+  if (c.length || !S.derive) return c;
+  const est = Number(t.estimationH) || 0, asg = getRefList(t.assignees);
+  return (est > 0 && asg.length) ? asg.map(id => ({ teamId: id, heures: est / asg.length })) : [];
+}
+const gToInput = (ts) => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : '';
+const inputToG = (s) => s ? Math.floor(Date.parse(s + 'T00:00:00Z') / 1000) : null;
+function tasksForKey(key) {
+  if (S.groupBy === 'project') return planTasks().filter(t => String(t.projet || '0') === String(key)).map(t => t.id);
+  if (S.groupBy === 'person') return planTasks().filter(t => getRefList(t.assignees).includes(Number(key))).map(t => t.id);
+  return [];
+}
+function toast(msg) { const el = document.getElementById('toast'); if (!el) return; el.textContent = msg; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 2800); }
+
+function keyFn() {
+  if (S.groupBy === 'project') return (t) => t.projet ? String(t.projet) : '0';
+  if (S.groupBy === 'role') return (t, c) => { const m = teamById(c.teamId); return (m && m.role) ? m.role : '—'; };
+  return (t, c) => String(c.teamId);
+}
+
+// Lignes (ressources/groupes) avec libellé + capacité + couleur
+function buildRows() {
+  if (S.groupBy === 'project') {
+    const ps = {}; for (const t of planTasks()) { const k = t.projet ? String(t.projet) : '0'; if (!ps[k]) { const p = projById(t.projet); ps[k] = { key: k, label: p ? p.nom : 'Sans projet', color: p ? p.couleur : '#64748b', cap: 0 }; } }
+    return Object.values(ps);
+  }
+  if (S.groupBy === 'role') {
+    const rs = {}; for (const m of activeTeam()) { const r = m.role || '—'; if (!rs[r]) rs[r] = { key: r, label: r, color: '#6366f1', cap: 0 }; rs[r].cap += capOf(m); }
+    return Object.values(rs);
+  }
+  return activeTeam().map(m => ({ key: String(m.id), label: m.nom, color: m.couleur || '#6366f1', cap: capOf(m) }));
+}
+
+function cellColor(h, cap) {
+  if (!(h > 0)) return 'transparent';
+  if (!(cap > 0)) return 'var(--ok)';
+  const r = h / cap; return r > 1 ? 'var(--over)' : r > 0.85 ? 'var(--warn)' : 'var(--ok)';
+}
+
+// ============================================================================
+// Rendu
+// ============================================================================
+function render() {
+  // segments
+  renderSeg('segGran', [['week', 'Sem'], ['month', 'Mois']], S.granularity, v => { S.granularity = v; S.offset = 0; render(); });
+  renderSeg('segUnit', [['pct', '%'], ['hours', 'h']], S.unit, v => { S.unit = v; render(); });
+  document.getElementById('selGroup').value = S.groupBy;
+  document.getElementById('chkDone').checked = S.includeDone;
+  document.getElementById('chkDerive').checked = S.derive;
+  document.getElementById('navToday').style.display = S.offset !== 0 ? '' : 'none';
+
+  const tasks = planTasks();
+  const matrix = TF.chargeMatrix(tasks, keyFn(), S.granularity, effCharges);
+  const periods = TF.periodRange(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon);
+  const nowKey = TF.periodKey(new Date(), S.granularity);
+  document.getElementById('navRange').textContent = plabel(periods[0]) + ' → ' + plabel(periods[periods.length - 1]);
+
+  const rows = buildRows();
+  const wrap = document.getElementById('gridwrap');
+
+  if (!S.team.length) { wrap.innerHTML = '<div class="empty"><div class="ic">▦</div><div>Aucun membre dans la table Team</div></div>'; renderAlerts(matrix, []); return; }
+  const hasData = Object.keys(matrix).length > 0;
+  const undated = tasks.filter(t => effCharges(t).length && (t.dateDebut == null || t.dateEcheance == null)).length;
+  if (!hasData && !undated) { wrap.innerHTML = '<div class="empty"><div class="ic">▦</div><div>Aucune charge datée à planifier</div><div style="font-size:.78rem">Renseignez la charge par personne + des dates sur les tâches.</div></div>'; renderAlerts(matrix, periods); return; }
+
+  const starts = periodStarts(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon);
+  let h = '<table class="grid"><thead><tr><th class="colres">Ressource</th>';
+  periods.forEach((p, i) => { h += '<th class="' + (p === nowKey ? 'now' : '') + '"><div class="pk">' + plabel(p) + (p === nowKey ? ' •' : '') + '</div><div class="psub">' + subLabel(starts[i]) + '</div></th>'; });
+  h += '<th class="sum">Σ fenêtre</th></tr></thead><tbody>';
+  for (const row of rows) {
+    const cells = matrix[row.key] || {};
+    const ini = row.label.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
+    h += '<tr><td class="colres"><div class="res"><span class="ava" style="background:' + row.color + '">' + esc(ini) + '</span><span><span class="nm">' + esc(row.label) + '</span>' + (row.cap > 0 ? ' <span class="cap">(' + Math.round(capPeriod(row.cap)) + 'h)</span>' : '') + '</span></div></td>';
+    let win = 0;
+    for (const p of periods) {
+      const hr = r1(cells[p] || 0); win += hr;
+      h += '<td class="cell' + (p === nowKey ? ' nowcol' : '') + '" data-key="' + esc(row.key) + '" data-period="' + p + '">' + fmtCell(hr, row.cap) + '</td>';
+    }
+    const peakH = Math.max(0, ...periods.map(p => cells[p] || 0));
+    const peak = row.cap > 0 ? Math.round(peakH / capPeriod(row.cap) * 100) : null;
+    h += '<td class="sum"><div class="sh">' + r1(win) + ' h</div>' + (peak != null ? '<div class="sp" style="' + (peak > 100 ? 'color:var(--over)' : '') + '">pic ' + peak + '%</div>' : '') + '</td>';
+    h += '</tr>';
+  }
+  h += '</tbody>';
+  // pied : total équipe par période vs capacité
+  const totalCap = rows.reduce((s, r) => s + capPeriod(r.cap), 0);
+  h += '<tfoot><tr><td class="colres" style="text-align:left;padding:7px 10px">Capacité équipe' + (totalCap > 0 ? ' · ' + Math.round(totalCap) + 'h/' + (S.granularity === 'month' ? 'mois' : 'sem') : '') + '</td>';
+  let grand = 0;
+  for (const p of periods) { let tot = 0; for (const row of rows) tot += (matrix[row.key] || {})[p] || 0; grand += tot; const pc = totalCap > 0 ? Math.round(tot / totalCap * 100) : null; h += '<td class="' + (p === nowKey ? 'nowcol' : '') + '">' + (tot > 0 ? r1(tot) + (pc != null ? '<div style="font-size:.66rem;color:var(--text-muted);font-weight:400">' + pc + '%</div>' : '') : '·') + '</td>'; }
+  h += '<td class="sum"><div class="sh">' + r1(grand) + ' h</div></td></tr></tfoot></table>';
+  wrap.innerHTML = h;
+  wrap.querySelectorAll('td.cell').forEach(td => td.addEventListener('click', () => openCell(td.dataset.key, td.dataset.period)));
+  renderAlerts(matrix, periods);
+}
+
+function fmtCell(hr, cap) {
+  if (!(hr > 0)) return '<span class="dot">·</span>';
+  const pct = cap > 0 ? Math.round(hr / capPeriod(cap) * 100) : 0;
+  const txt = S.unit === 'pct' && cap > 0 ? pct + '%' : hr;
+  return '<span class="v" style="background:' + heatBg(hr, cap) + '" title="' + hr + ' h' + (cap > 0 ? ' · ' + pct + '% de la capacité' : '') + '">' + txt + '</span>';
+}
+// Fond façon heatmap : teinte par seuil, intensité par taux (sous-emploi pâle -> plein -> surcharge rouge).
+function heatBg(hr, cap) {
+  if (!(cap > 0)) return 'rgba(59,130,246,0.55)';
+  const r = hr / capPeriod(cap);
+  if (r > 1) return 'rgba(229,72,77,' + Math.min(0.7 + (r - 1) * 0.5, 0.96).toFixed(2) + ')';
+  if (r > 0.85) return 'rgba(245,158,11,0.9)';
+  return 'rgba(59,130,246,' + (0.16 + 0.62 * (r / 0.85)).toFixed(2) + ')';
+}
+
+function renderAlerts(matrix, periods) {
+  const rows = buildRows();
+  let over = 0;
+  for (const row of rows) { if (!(row.cap > 0)) continue; for (const p of periods) { const hr = (matrix[row.key] || {})[p] || 0; if (hr > capPeriod(row.cap)) over++; } }
+  const undated = planTasks().filter(t => effCharges(t).length && (t.dateDebut == null || t.dateEcheance == null)).length;
+  const el = document.getElementById('alerts'); const parts = [];
+  parts.push('<span class="' + (over ? 'over' : '') + '">' + (over ? '⚠ ' + over + ' cellule' + (over > 1 ? 's' : '') + ' en surcharge' : '✓ aucune surcharge sur la fenêtre') + '</span>');
+  if (undated) parts.push('<span class="warn">⚠ ' + undated + ' tâche' + (undated > 1 ? 's' : '') + ' chargée' + (undated > 1 ? 's' : '') + ' sans dates — non planifiée' + (undated > 1 ? 's' : '') + '</span>');
+  if (!S.includeDone) parts.push('<span>tâches terminées exclues</span>');
+  el.innerHTML = parts.join('');
+}
+
+function renderSeg(id, opts, cur, cb) {
+  const el = document.getElementById(id);
+  el.innerHTML = opts.map(([v, l]) => '<button class="' + (v === cur ? 'on' : '') + '" data-v="' + v + '">' + l + '</button>').join('');
+  el.querySelectorAll('button').forEach(b => b.onclick = () => cb(b.dataset.v));
+}
+
+// ============================================================================
+// Drill cellule -> panel (liste des tâches composant la charge)
+// ============================================================================
+function tasksInCell(key, period) {
+  const kf = keyFn(); const out = [];
+  for (const t of planTasks()) {
+    const charges = effCharges(t);
+    if (!charges.length || t.dateDebut == null || t.dateEcheance == null) continue;
+    const d0 = Math.floor((t.dateDebut * 1000) / 86400000), d1 = Math.floor((t.dateEcheance * 1000) / 86400000);
+    const nDays = Math.max(d1 - d0 + 1, 1);
+    let slice = 0, total = 0;
+    for (const c of charges) {
+      if (String(kf(t, c)) !== String(key)) continue;
+      total += c.heures;
+      const perDay = c.heures / nDays;
+      for (let dd = d0; dd <= d1; dd++) if (TF.periodKey(new Date(dd * 86400000), S.granularity) === period) slice += perDay;
+    }
+    if (slice > 0.01) out.push({ task: t, slice: r1(slice), total: r1(total) });
+  }
+  return out.sort((a, b) => b.slice - a.slice);
+}
+
+function openCell(key, period) {
+  S._cellKey = key; S._cellPeriod = period;
+  const rows = buildRows(); const row = rows.find(r => String(r.key) === String(key));
+  const items = tasksInCell(key, period);
+  const tot = r1(items.reduce((s, i) => s + i.slice, 0));
+  const editable = S.groupBy === 'person';
+  const tid = Number(key);
+  const others = activeTeam().filter(m => m.id !== tid);
+  document.getElementById('pTitle').textContent = (row ? row.label : key) + ' — ' + plabel(period);
+  const capTxt = row && row.cap > 0 ? ' · capacité ' + Math.round(capPeriod(row.cap)) + 'h (' + Math.round(tot / capPeriod(row.cap) * 100) + '%)' : '';
+  document.getElementById('pSub').textContent = tot + ' h sur la période' + capTxt + (editable ? ' · allocation éditable' : '');
+  document.getElementById('pBody').innerHTML = items.length ? items.map(i => {
+    const p = projById(i.task.projet);
+    const sliceTxt = (p ? esc(p.nom) : 'Sans projet') + ' · ' + i.slice + ' h cette ' + (S.granularity === 'month' ? 'période' : 'sem.');
+    const right = editable
+      ? '<div class="tkedit"><input type="number" min="0" step="0.5" value="' + i.total + '" title="Charge totale allouée sur la tâche (h)" onchange="setCharge(' + i.task.id + ',' + tid + ',parseFloat(this.value)||0)"><span class="u">h</span><select title="Réaffecter à un autre membre" onchange="if(this.value)reassignCharge(' + i.task.id + ',' + tid + ',parseInt(this.value))"><option value="">⇄</option>' + others.map(m => '<option value="' + m.id + '">→ ' + esc(m.nom) + '</option>').join('') + '</select></div>'
+      : '<div class="th">' + i.total + ' h</div>';
+    const dates = editable ? '<div class="tkdates"><span class="dl">📅</span><input type="date" value="' + gToInput(i.task.dateDebut) + '" title="Début" onchange="setDates(' + i.task.id + ',this.value,null)"><span>→</span><input type="date" value="' + gToInput(i.task.dateEcheance) + '" title="Échéance" onchange="setDates(' + i.task.id + ',null,this.value)"></div>' : '';
+    return '<div class="tk"><div class="tkmain"><span class="pdot" style="background:' + (p ? p.couleur : '#64748b') + '"></span><div class="tinfo"><div class="tt">' + esc(i.task.titre) + '</div><div class="tm">' + sliceTxt + '</div></div>' + right + '</div>' + dates + '</div>';
+  }).join('') : '<div style="color:var(--text-muted);font-size:.82rem">Aucune tâche sur cette période.</div>';
+  document.getElementById('pGantt').onclick = () => openInGantt(key);
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('panel').classList.add('show');
+}
+function closePanel() { S._cellKey = null; document.getElementById('overlay').classList.remove('show'); document.getElementById('panel').classList.remove('show'); }
+function refreshCell() { if (S._cellKey != null) openCell(S._cellKey, S._cellPeriod); }
+// Allocation éditable : agit sur la charge PROPRE (Tasks.charges) — recalcule la heatmap.
+async function persistCharges(taskId, arr) {
+  const t = S.tasks.find(x => x.id === taskId); if (!t) return;
+  t.charges = JSON.stringify(arr);
+  if (!S.demo) { try { await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', taskId, { charges: t.charges }]]); } catch (e) {} }
+  render(); refreshCell();
+}
+function setCharge(taskId, teamId, heures) {
+  const t = S.tasks.find(x => x.id === taskId); if (!t) return;
+  const arr = TF.parseCharges(t.charges); const i = arr.findIndex(c => c.teamId === teamId);
+  if (heures > 0) { if (i >= 0) arr[i].heures = heures; else arr.push({ teamId, heures }); } else if (i >= 0) arr.splice(i, 1);
+  persistCharges(taskId, arr);
+}
+function reassignCharge(taskId, fromId, toId) {
+  if (fromId === toId) return;
+  const t = S.tasks.find(x => x.id === taskId); if (!t) return;
+  const arr = TF.parseCharges(t.charges); const fi = arr.findIndex(c => c.teamId === fromId); if (fi < 0) return;
+  const hrs = arr[fi].heures; arr.splice(fi, 1);
+  const ti = arr.findIndex(c => c.teamId === toId); if (ti >= 0) arr[ti].heures += hrs; else arr.push({ teamId: toId, heures: hrs });
+  persistCharges(taskId, arr);
+}
+// Replanification depuis la vue : modifie les dates de la tâche (ré-étale la charge).
+async function setDates(taskId, debut, echeance) {
+  const t = S.tasks.find(x => x.id === taskId); if (!t) return;
+  const upd = {};
+  if (debut !== null) { t.dateDebut = inputToG(debut); upd.dateDebut = t.dateDebut; }
+  if (echeance !== null) { t.dateEcheance = inputToG(echeance); upd.dateEcheance = t.dateEcheance; }
+  if (!S.demo) { try { await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', taskId, upd]]); } catch (e) {} }
+  render(); refreshCell();
+}
+function openInGantt(key) {
+  // Réutilise le Gantt de la suite : diffuse un filtre (setOptions) + sélectionne les lignes.
+  let filters = null;
+  if (S.groupBy === 'person') filters = { assignee: [Number(key)] };
+  else if (S.groupBy === 'project') filters = { project: Number(key) };
+  try { if (window.grist && grist.widgetApi && grist.widgetApi.setOptions) grist.widgetApi.setOptions({ filters }); } catch (e) {}
+  try { const ids = tasksForKey(key); if (window.grist && grist.setSelectedRows && ids.length) grist.setSelectedRows(ids); } catch (e) {}
+  const who = S.groupBy === 'person' ? ((teamById(Number(key)) || {}).nom || key) : (S.groupBy === 'project' ? ((projById(Number(key)) || {}).nom || key) : key);
+  toast('Filtre « ' + who + ' » diffusé à la suite — ouvre le Gantt pour le voir.');
+}
+
+// ============================================================================
+// Données : Grist + démo
+// ============================================================================
+function bindToolbar() {
+  document.getElementById('navPrev').onclick = () => { S.offset--; render(); };
+  document.getElementById('navNext').onclick = () => { S.offset++; render(); };
+  document.getElementById('navToday').onclick = () => { S.offset = 0; render(); };
+  document.getElementById('selGroup').onchange = (e) => { S.groupBy = e.target.value; render(); };
+  document.getElementById('chkDone').onchange = (e) => { S.includeDone = e.target.checked; render(); };
+  document.getElementById('chkDerive').onchange = (e) => { S.derive = e.target.checked; render(); };
+  document.getElementById('btnExport').onclick = () => window.print();
+  document.getElementById('pClose').onclick = closePanel;
+  document.getElementById('overlay').onclick = closePanel;
+}
+
+async function loadGrist() {
+  const [tasks, team, projects] = await Promise.all([
+    grist.docApi.fetchTable('Tasks').catch(() => null),
+    grist.docApi.fetchTable('Team').catch(() => null),
+    grist.docApi.fetchTable('Projects').catch(() => null)
+  ]);
+  S.tasks = tasks ? TF.columnarToRows(tasks) : [];
+  S.team = team ? TF.columnarToRows(team) : [];
+  S.projects = projects ? TF.columnarToRows(projects) : [];
+  render();
+}
+
+function loadDemo() {
+  S.demo = true;
+  const day = 86400000, today = new Date(); today.setHours(0, 0, 0, 0);
+  const g = (n) => Math.floor((today.getTime() + n * day) / 1000); // n jours depuis aujourd'hui -> Unix s
+  S.team = [
+    { id: 1, nom: 'Alice Martin', role: 'Dev', couleur: '#6366f1', capaciteHebdo: 35, actif: true },
+    { id: 2, nom: 'Bob Durant', role: 'Dev', couleur: '#10b981', capaciteHebdo: 35, actif: true },
+    { id: 3, nom: 'Claire Bernard', role: 'Design', couleur: '#f59e0b', capaciteHebdo: 28, actif: true },
+    { id: 4, nom: 'David Roy', role: 'PM', couleur: '#ec4899', capaciteHebdo: 35, actif: true }
+  ];
+  S.projects = [{ id: 1, nom: 'Refonte Portail', couleur: '#6366f1' }, { id: 2, nom: 'App Mobile', couleur: '#10b981' }];
+  S.tasks = [
+    { id: 1, titre: 'Dev Backend', statut: 'inprogress', projet: 1, dateDebut: g(-3), dateEcheance: g(9), charges: '[{"teamId":1,"heures":24},{"teamId":2,"heures":12}]' },
+    { id: 2, titre: 'Design UI', statut: 'inprogress', projet: 2, dateDebut: g(0), dateEcheance: g(6), charges: '[{"teamId":3,"heures":30}]' },
+    { id: 3, titre: 'Tests QA', statut: 'todo', projet: 1, dateDebut: g(5), dateEcheance: g(13), charges: '[{"teamId":2,"heures":22}]' },
+    { id: 4, titre: 'Pilotage / coordination', statut: 'inprogress', projet: 1, dateDebut: g(0), dateEcheance: g(20), charges: '[{"teamId":4,"heures":16}]' },
+    { id: 5, titre: 'Documentation', statut: 'done', projet: 2, dateDebut: g(7), dateEcheance: g(11), charges: '[{"teamId":1,"heures":12}]' },
+    { id: 6, titre: 'Specs à cadrer', statut: 'todo', projet: 1, dateDebut: null, dateEcheance: null, charges: '[{"teamId":3,"heures":10}]' },
+    { id: 7, titre: 'Hotfix critique', statut: 'inprogress', projet: 1, dateDebut: g(7), dateEcheance: g(8), charges: '[{"teamId":2,"heures":30}]' }
+  ];
+  render();
+}
+
+bindToolbar();
+// Hors Grist (ouverture directe, frame top) -> mode démo. Dans Grist -> iframe.
+if (window.self === window.top) {
+  loadDemo();
+} else {
+  try {
+    grist.ready({ requiredAccess: 'full' });
+    grist.onRecords(() => loadGrist());
+    loadGrist();
+    setTimeout(() => { if (!S.team.length && !S.tasks.length) loadDemo(); }, 2500); // filet
+  } catch (e) {
+    loadDemo();
+  }
+}
+</script>
+</body>
+</html>
