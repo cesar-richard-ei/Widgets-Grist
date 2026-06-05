@@ -716,7 +716,7 @@
         // SCHEMA & CONSTANTS
         // ═══════════════════════════════════════════════════════════════════════
         const TASKFLOW_SCHEMA = {
-            Team: [{ id: 'nom', type: 'Text' }, { id: 'email', type: 'Text' }, { id: 'avatar', type: 'Text' }, { id: 'role', type: 'Choice' }, { id: 'actif', type: 'Bool' }, { id: 'couleur', type: 'Text' }],  // TEAM-01
+            Team: [{ id: 'nom', type: 'Text' }, { id: 'email', type: 'Text' }, { id: 'avatar', type: 'Text' }, { id: 'role', type: 'Choice' }, { id: 'actif', type: 'Bool' }, { id: 'couleur', type: 'Text' }, { id: 'capaciteHebdo', type: 'Numeric' }],  // TEAM-01 ; capaciteHebdo: plan de charge
             Projects: [{ id: 'nom', type: 'Text' }, { id: 'couleur', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateFin', type: 'Date' }, { id: 'responsable', type: 'Ref:Team' }, { id: 'actif', type: 'Bool' }],
             Tasks: [{ id: 'titre', type: 'Text' }, { id: 'description', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateEcheance', type: 'Date' }, { id: 'priorite', type: 'Choice' }, { id: 'statut', type: 'Choice' }, { id: 'progression', type: 'Numeric' }, { id: 'projet', type: 'Ref:Projects' }, { id: 'assignees', type: 'RefList:Team' }, { id: 'type', type: 'Choice' }, { id: 'dependDe', type: 'RefList:Tasks' }, { id: 'tags', type: 'ChoiceList' }, { id: 'estimationH', type: 'Numeric' }, { id: 'tempsPasse', type: 'Numeric' }, { id: 'couleur', type: 'Text' }, { id: 'subtasks', type: 'Text' }, { id: 'parentTask', type: 'Ref:Tasks' }, { id: 'charges', type: 'Text' }]
         };
@@ -951,6 +951,47 @@
                 return by;
             }
 
+            // Cle de periode : semaine ISO 'YYYY-Www' ou mois 'YYYY-MM'.
+            function periodKey(date, granularity) {
+                if (granularity === 'month') {
+                    return date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0');
+                }
+                const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+                const day = d.getUTCDay() || 7;
+                d.setUTCDate(d.getUTCDate() + 4 - day);
+                const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+                return d.getUTCFullYear() + '-W' + String(week).padStart(2, '0');
+            }
+
+            // #3 plan de charge temporel : etale les charges PROPRES de chaque tache sur sa
+            // duree (jours calendaires), agrege par personne et par periode.
+            // dateDebut/dateEcheance = timestamps Unix SECONDES (Grist). Tache sans dates ou
+            // sans charge = ignoree. Retourne { teamId: { periodKey: heures } }.
+            function chargeByMemberPeriod(tasks, granularity) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                const out = {};
+                for (const t of (tasks || [])) {
+                    const charges = parseCharges(t && t.charges);
+                    if (!charges.length) continue;
+                    const s = t.dateDebut, e = t.dateEcheance;
+                    if (s == null || e == null) continue;
+                    const day0 = Math.floor((s * 1000) / 86400000);
+                    const day1 = Math.floor((e * 1000) / 86400000);
+                    const nDays = Math.max(day1 - day0 + 1, 1);
+                    for (const c of charges) {
+                        const perDay = (Number(c.heures) || 0) / nDays;
+                        if (!perDay) continue;
+                        if (!out[c.teamId]) out[c.teamId] = {};
+                        for (let dd = day0; dd <= day1; dd++) {
+                            const key = periodKey(new Date(dd * 86400000), g);
+                            out[c.teamId][key] = (out[c.teamId][key] || 0) + perDay;
+                        }
+                    }
+                }
+                return out;
+            }
+
             return {
                 DEFAULT_STATUSES: DEFAULT_STATUSES,
                 columnarToRows: columnarToRows,
@@ -963,7 +1004,9 @@
                 parseCharges: parseCharges,
                 chargesToJson: chargesToJson,
                 chargeTotal: chargeTotal,
-                chargeByMember: chargeByMember
+                chargeByMember: chargeByMember,
+                periodKey: periodKey,
+                chargeByMemberPeriod: chargeByMemberPeriod
             };
         })();
         // </taskflow-core>
