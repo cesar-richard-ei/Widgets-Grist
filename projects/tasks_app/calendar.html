@@ -718,7 +718,7 @@
         const TASKFLOW_SCHEMA = {
             Team: [{ id: 'nom', type: 'Text' }, { id: 'email', type: 'Text' }, { id: 'avatar', type: 'Text' }, { id: 'role', type: 'Choice' }, { id: 'actif', type: 'Bool' }, { id: 'couleur', type: 'Text' }, { id: 'capaciteHebdo', type: 'Numeric' }, { id: 'indispos', type: 'Text' }],  // TEAM-01 ; capaciteHebdo + indispos : plan de charge
             Projects: [{ id: 'nom', type: 'Text' }, { id: 'couleur', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateFin', type: 'Date' }, { id: 'responsable', type: 'Ref:Team' }, { id: 'actif', type: 'Bool' }],
-            Tasks: [{ id: 'titre', type: 'Text' }, { id: 'description', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateEcheance', type: 'Date' }, { id: 'priorite', type: 'Choice' }, { id: 'statut', type: 'Choice' }, { id: 'progression', type: 'Numeric' }, { id: 'projet', type: 'Ref:Projects' }, { id: 'assignees', type: 'RefList:Team' }, { id: 'type', type: 'Choice' }, { id: 'dependDe', type: 'RefList:Tasks' }, { id: 'tags', type: 'ChoiceList' }, { id: 'estimationH', type: 'Numeric' }, { id: 'tempsPasse', type: 'Numeric' }, { id: 'couleur', type: 'Text' }, { id: 'subtasks', type: 'Text' }, { id: 'parentTask', type: 'Ref:Tasks' }, { id: 'charges', type: 'Text' }]
+            Tasks: [{ id: 'titre', type: 'Text' }, { id: 'description', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateEcheance', type: 'Date' }, { id: 'priorite', type: 'Choice' }, { id: 'statut', type: 'Choice' }, { id: 'progression', type: 'Numeric' }, { id: 'projet', type: 'Ref:Projects' }, { id: 'assignees', type: 'RefList:Team' }, { id: 'type', type: 'Choice' }, { id: 'dependDe', type: 'RefList:Tasks' }, { id: 'tags', type: 'ChoiceList' }, { id: 'estimationH', type: 'Numeric' }, { id: 'tempsPasse', type: 'Numeric' }, { id: 'couleur', type: 'Text' }, { id: 'subtasks', type: 'Text' }, { id: 'parentTask', type: 'Ref:Tasks' }, { id: 'charges', type: 'Text' }, { id: 'dateCloture', type: 'Date' }]
         };
 
         const PRIORITY_LABELS = { 1: 'Critique', 2: 'Haute', 3: 'Moyenne', 4: 'Basse' };
@@ -2315,7 +2315,7 @@
                 subtasks: getSubtasks(task),
                 couleur: task.couleur || null,
                 parentTask: task.parentTask || null,
-                charges: TF.parseCharges(task.charges)
+                charges: TF.parseCharges(task.charges), dateCloture: task.dateCloture || null
             };
         }
         
@@ -2691,6 +2691,8 @@
             if (field === 'dateDebut' || field === 'dateEcheance') {
                 value = value ? dateToGrist(parseInputDate(value)) : null;
             }
+            // dateCloture auto : posee au statut terminal, effacee si reouverture
+            if (field === 'statut') { const _wasT = TF.isTerminal(statusCfg, data.statut), _nowT = TF.isTerminal(statusCfg, value); if (_nowT && !_wasT) data.dateCloture = Math.floor(Date.now() / 1000); else if (!_nowT && _wasT) data.dateCloture = null; }
             
             data[field] = value;
             
@@ -2922,7 +2924,7 @@
                 subtasks: subtasksToJson(data.subtasks),
                 couleur: data.couleur || null,
                 parentTask: data.parentTask || null,
-                charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId)))
+                charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))), dateCloture: data.dateCloture || null
             };
 
             try {
@@ -2962,7 +2964,7 @@
                 subtasks: subtasksToJson(data.subtasks),
                 couleur: data.couleur || null,
                 parentTask: data.parentTask || null,
-                charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId)))
+                charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))), dateCloture: data.dateCloture || null
             };
 
             if (gristReady) {
