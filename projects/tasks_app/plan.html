@@ -182,6 +182,12 @@ tfoot td.colres{background:var(--surface-2);z-index:2}
 .tl-bar { position: absolute; top: 4px; height: 15px; min-width: 4px; border-radius: 4px; font-size: .59rem; color: #fff; line-height: 15px; padding: 0 5px; overflow: hidden; white-space: nowrap; box-shadow: 0 1px 3px rgba(0,0,0,.35); cursor: pointer; }
 .tl-bar:hover { filter: brightness(1.12); }
 .tl-empty { padding: 26px; text-align: center; color: var(--text-muted, #94a3b8); font-size: .82rem; }
+.tl-band { position: absolute; top: 0; bottom: 0; background: rgba(123,140,255,.13); border-left: 1px solid rgba(123,140,255,.55); border-right: 1px solid rgba(123,140,255,.55); pointer-events: none; z-index: 0; }
+.tl-grp.tl-focus, .tl-row.tl-focus { background: rgba(123,140,255,.08); }
+.tl-axis .c.on { color: var(--primary, #7b8cff); font-weight: 700; }
+.tl-bar { z-index: 1; }
+.tl-bar.hot { z-index: 3; outline: 2px solid #fff; box-shadow: 0 0 0 2px rgba(123,140,255,.7), 0 2px 7px rgba(0,0,0,.45); }
+.grid td.cell.sel { outline: 2px solid var(--primary, #7b8cff); outline-offset: -2px; border-radius: 3px; }
 </style>
 <div class="tlpanel" id="tlPanel">
   <div class="tlhead"><div><strong>Timeline par personne</strong><span class="tlrange" id="tlRange"></span></div><button class="x" id="tlClose">×</button></div>
@@ -680,7 +686,7 @@ function render() {
       let content;
       if (dispo) { const free = capP > 0 ? r1(Math.max(capP - hr, 0)) : 0; win += free; content = fmtDispo(free, capP); }
       else { win += hr; if (capP > 0 && hr / capP > peakR) peakR = hr / capP; content = fmtCell(hr, capP); }
-      h += '<td class="cell' + (p === nowKey ? ' nowcol' : '') + (redu ? ' redu' : '') + '" data-key="' + esc(row.key) + '" data-period="' + p + '">' + content + '</td>';
+      h += '<td class="cell' + (p === nowKey ? ' nowcol' : '') + (redu ? ' redu' : '') + (String(S._cellKey) === String(row.key) && p === S._cellPeriod ? ' sel' : '') + '" data-key="' + esc(row.key) + '" data-period="' + p + '">' + content + '</td>';
     }
     const peak = (row.members && row.members.length) ? Math.round(peakR * 100) : null;
     h += '<td class="sum"><div class="sh">' + r1(win) + ' h</div>' + (dispo ? '<div class="sp">dispo</div>' : (peak != null ? '<div class="sp" style="' + (peak > 100 ? 'color:var(--over)' : '') + '">pic ' + peak + '%</div>' : '')) + '</td>';
@@ -726,13 +732,25 @@ function renderTimeline() {
   const winStart = starts[0].getTime();
   const winEnd = TF.shiftPeriods(starts[starts.length - 1], S.granularity, 1).getTime();
   const span = (winEnd - winStart) || 1;
+  // FOCUS = cellule ouverte dans la heatmap → lie les deux vues (bande de période + personne ciblée)
+  const fKey = S._cellKey != null ? String(S._cellKey) : null;
+  const fIdx = S._cellPeriod ? periods.indexOf(S._cellPeriod) : -1;
+  let bandStyle = '', bandS = 0, bandE = 0;
+  if (fIdx >= 0) {
+    bandS = starts[fIdx].getTime();
+    bandE = (fIdx + 1 < starts.length ? starts[fIdx + 1].getTime() : winEnd);
+    const bl = Math.max(0, (bandS - winStart) / span) * 100;
+    const bw = Math.min(100, (bandE - winStart) / span * 100) - bl;
+    bandStyle = 'left:' + bl.toFixed(1) + '%;width:' + bw.toFixed(1) + '%';
+  }
   const tasks = planTasks().filter(t => t.dateDebut != null && t.dateEcheance != null);
   const rows = buildRows().filter(r => r.members && r.members.length);
   let h = '<div class="tl-axis"><div style="width:160px;flex:none"></div>';
-  periods.forEach(p => { h += '<div class="c">' + plabel(p) + '</div>'; });
+  periods.forEach((p, i) => { h += '<div class="c' + (i === fIdx ? ' on' : '') + '">' + plabel(p) + '</div>'; });
   h += '</div>';
   let any = false;
   for (const row of rows) {
+    const isF = fKey != null && String(row.key) === fKey;
     const mine = tasks
       .filter(t => effCharges(t).some(c => String(c.teamId) === String(row.key)))
       .filter(t => (t.dateEcheance * 1000) >= winStart && (t.dateDebut * 1000) <= winEnd)
@@ -740,7 +758,7 @@ function renderTimeline() {
     if (!mine.length) continue;
     any = true;
     const ini = row.label.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    h += '<div class="tl-grp"><span class="tava" style="background:' + row.color + '">' + esc(ini) + '</span>' + esc(row.label) + ' · ' + mine.length + ' tâche' + (mine.length > 1 ? 's' : '') + '</div>';
+    h += '<div class="tl-grp' + (isF ? ' tl-focus' : '') + '"' + (isF ? ' id="tlFocus"' : '') + '><span class="tava" style="background:' + row.color + '">' + esc(ini) + '</span>' + esc(row.label) + ' · ' + mine.length + ' tâche' + (mine.length > 1 ? 's' : '') + '</div>';
     for (const t of mine) {
       const ts = t.dateDebut * 1000, te = t.dateEcheance * 1000;
       const l = Math.max(0, Math.min(1, (ts - winStart) / span)) * 100;
@@ -748,12 +766,14 @@ function renderTimeline() {
       const w = Math.max(rr - l, 1.4);
       const col = (statusCfg.byValue[t.statut] || {}).fillColor || '#64748b';
       const hrs = (effCharges(t).find(c => String(c.teamId) === String(row.key)) || {}).heures || 0;
-      h += '<div class="tl-row"><div class="tl-lbl" title="' + esc(t.titre) + '">' + esc(t.titre) + '</div><div class="tl-track"><div class="tl-bar" style="left:' + l.toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + col + '" data-id="' + t.id + '" title="' + esc(t.titre) + ' · ' + r1(hrs) + ' h">' + esc(t.titre) + '</div></div></div>';
+      const hot = isF && fIdx >= 0 && ts < bandE && te > bandS; // tâche qui tombe dans la période focalisée
+      h += '<div class="tl-row' + (isF ? ' tl-focus' : '') + '"><div class="tl-lbl" title="' + esc(t.titre) + '">' + esc(t.titre) + '</div><div class="tl-track">' + (bandStyle ? '<div class="tl-band" style="' + bandStyle + '"></div>' : '') + '<div class="tl-bar' + (hot ? ' hot' : '') + '" style="left:' + l.toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + col + '" data-id="' + t.id + '" title="' + esc(t.titre) + ' · ' + r1(hrs) + ' h">' + esc(t.titre) + '</div></div></div>';
     }
   }
   if (!any) h += '<div class="tl-empty">Aucune tâche datée pour les personnes affichées sur cette fenêtre.</div>';
   body.innerHTML = h;
   body.querySelectorAll('.tl-bar').forEach(b => b.addEventListener('click', () => { const id = Number(b.dataset.id); try { if (!S.demo && grist.setSelectedRows) grist.setSelectedRows([id]); } catch (e) {} }));
+  const fg = document.getElementById('tlFocus'); if (fg) fg.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
 
 function fmtCell(hr, capP) {
@@ -852,8 +872,12 @@ function openCell(key, period) {
   document.getElementById('pGantt').onclick = () => openInGantt(key);
   document.getElementById('overlay').classList.add('show');
   document.getElementById('panel').classList.add('show');
+  // lien heatmap → cellule surlignée + timeline focalisée
+  document.querySelectorAll('#gridwrap td.cell.sel').forEach(td => td.classList.remove('sel'));
+  const _td = document.querySelector('#gridwrap td.cell[data-key="' + key + '"][data-period="' + period + '"]'); if (_td) _td.classList.add('sel');
+  if (S.timeline) renderTimeline();
 }
-function closePanel() { S._cellKey = null; S._resId = null; document.getElementById('pGantt').style.display = ''; document.getElementById('overlay').classList.remove('show'); document.getElementById('panel').classList.remove('show'); }
+function closePanel() { S._cellKey = null; S._resId = null; document.getElementById('pGantt').style.display = ''; document.getElementById('overlay').classList.remove('show'); document.getElementById('panel').classList.remove('show'); document.querySelectorAll('#gridwrap td.cell.sel').forEach(td => td.classList.remove('sel')); if (S.timeline) renderTimeline(); }
 function refreshCell() { if (S._cellKey != null) openCell(S._cellKey, S._cellPeriod); }
 function setAllocUnit(u) { S.allocUnit = u; refreshCell(); }
 // Allocation éditable : agit sur Tasks.charges + COHÉRENCE assignés (option A) — recalcule la heatmap.
