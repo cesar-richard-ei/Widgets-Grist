@@ -815,7 +815,10 @@ const getStatus    = t => t?.statut||'todo';
 
 const getAssigneesArray = t => {
     if (!t?.assignees) return [];
-    if (Array.isArray(t.assignees)) return t.assignees[0]==='L' ? t.assignees.slice(1) : t.assignees;
+    const a = t.assignees;
+    if (Array.isArray(a)) return a[0]==='L' ? a.slice(1) : a;   // RefList ['L',..] ou tableau simple
+    if (typeof a === 'number') return [a];                       // Ref simple (un seul assigné)
+    if (typeof a === 'string') return a.split(/[,;]/).map(s=>s.trim()).filter(Boolean); // texte (noms ou ids)
     return [];
 };
 
@@ -1215,12 +1218,15 @@ function renderBars(comp, ft) {
 
 function renderWorkload(comp, ft) {
     if (!team.length) return '<div class="empty-state"><div class="empty-icon">◑</div><div class="empty-text">Aucun membre Team</div></div>';
+    // resout une valeur d'assigne (id numerique OU nom) vers un id de membre Team — robustesse des formats
+    const resolveMember = v => { const m = team.find(x => String(x.id)===String(v) || (x.nom && x.nom.toLowerCase()===String(v).trim().toLowerCase())); return m ? m.id : null; };
     const byAssignee = {};
     ft.forEach(t => {
         getAssigneesArray(t).forEach(a => {
-            if (!byAssignee[a]) byAssignee[a]={ total:0, active:0 };
-            byAssignee[a].total++;
-            if (!TF.isTerminal(statusCfg, getStatus(t))) byAssignee[a].active++;
+            const id = resolveMember(a); if (id == null) return;
+            if (!byAssignee[id]) byAssignee[id]={ total:0, active:0 };
+            byAssignee[id].total++;
+            if (!TF.isTerminal(statusCfg, getStatus(t))) byAssignee[id].active++;
         });
     });
     const maxActive = Math.max(...team.map(m=>(byAssignee[m.id]||{}).active||0), 1);
