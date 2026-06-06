@@ -86,6 +86,22 @@ tfoot td.colres{background:var(--surface-2);z-index:2}
 .x{background:transparent;border:0;color:var(--text-muted);font-size:1.3rem;cursor:pointer;line-height:1}
 .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%) translateY(20px);background:var(--surface-3);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:8px;font-size:0.8rem;opacity:0;pointer-events:none;transition:.2s;z-index:30;max-width:80vw;text-align:center}
 .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+.colres.clk{cursor:pointer}
+.colres.clk:hover{background:var(--surface-3)}
+.cell.redu{background:repeating-linear-gradient(45deg,transparent,transparent 5px,rgba(71,85,105,.28) 5px,rgba(71,85,105,.28) 10px)}
+.rl{font-size:0.78rem;color:var(--text-muted);font-weight:600}
+.capedit{display:flex;align-items:center;gap:8px;margin-top:6px}
+.capedit input{width:74px;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 8px;font-size:0.85rem}
+.capedit .u{color:var(--text-muted);font-size:0.8rem}
+.indispo{display:flex;align-items:center;gap:8px;padding:6px 8px;border:1px solid var(--border);border-radius:6px;margin-top:6px}
+.indispo .il{font-weight:600;font-size:0.8rem;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.indispo .id{font-size:0.72rem;color:var(--text-muted);white-space:nowrap}
+.indispo .ix{background:transparent;border:0;color:var(--text-muted);cursor:pointer;font-size:1.1rem;line-height:1}
+.indispo-add{margin-top:10px;display:flex;flex-direction:column;gap:6px}
+.indispo-add>input[type=text]{background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 8px;font-size:0.8rem}
+.indispo-add .dd{display:flex;align-items:center;gap:6px}
+.indispo-add .dd input{flex:1;background:var(--surface-2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:5px 6px;font-size:0.74rem;color-scheme:dark}
+.indispo-add .dd span{color:var(--text-muted)}
 </style>
 </head>
 <body>
@@ -513,18 +529,35 @@ function keyFn() {
   return (t, c) => String(c.teamId);
 }
 
-// Lignes (ressources/groupes) avec libellé + capacité + couleur
+// Lignes (ressources/groupes) avec libellé + capacité nominale + membres (pour la capacité par période)
 function buildRows() {
   if (S.groupBy === 'project') {
-    const ps = {}; for (const t of planTasks()) { const k = t.projet ? String(t.projet) : '0'; if (!ps[k]) { const p = projById(t.projet); ps[k] = { key: k, label: p ? p.nom : 'Sans projet', color: p ? p.couleur : '#64748b', cap: 0 }; } }
+    const ps = {}; for (const t of planTasks()) { const k = t.projet ? String(t.projet) : '0'; if (!ps[k]) { const p = projById(t.projet); ps[k] = { key: k, label: p ? p.nom : 'Sans projet', color: p ? p.couleur : '#64748b', cap: 0, members: [] }; } }
     return Object.values(ps);
   }
   if (S.groupBy === 'role') {
-    const rs = {}; for (const m of activeTeam()) { const r = m.role || '—'; if (!rs[r]) rs[r] = { key: r, label: r, color: '#6366f1', cap: 0 }; rs[r].cap += capOf(m); }
+    const rs = {}; for (const m of activeTeam()) { const r = m.role || '—'; if (!rs[r]) rs[r] = { key: r, label: r, color: '#6366f1', cap: 0, members: [] }; rs[r].cap += capOf(m); rs[r].members.push(m); }
     return Object.values(rs);
   }
-  return activeTeam().map(m => ({ key: String(m.id), label: m.nom, color: m.couleur || '#6366f1', cap: capOf(m) }));
+  return activeTeam().map(m => ({ key: String(m.id), label: m.nom, color: m.couleur || '#6366f1', cap: capOf(m), members: [m] }));
 }
+
+// Indisponibilités (Team.indispos JSON [{start,end,label}], dates ISO yyyy-mm-dd) -> capacité réduite par période.
+function parseIndispos(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a.filter(x => x && x.start && x.end) : []; } catch (e) { return []; } }
+const dayIdx = (s) => Math.floor(Date.parse(s + 'T00:00:00Z') / 86400000);
+function periodDays(periodStart) { return S.granularity === 'month' ? new Date(Date.UTC(periodStart.getUTCFullYear(), periodStart.getUTCMonth() + 1, 0)).getUTCDate() : 7; }
+function indispoFrac(member, periodStart) {
+  const ind = parseIndispos(member && member.indispos); if (!ind.length) return 0;
+  const p0 = Math.floor(periodStart.getTime() / 86400000), days = periodDays(periodStart);
+  let cnt = 0;
+  for (let d = p0; d < p0 + days; d++) { for (const iv of ind) { if (d >= dayIdx(iv.start) && d <= dayIdx(iv.end)) { cnt++; break; } } }
+  return Math.min(cnt / days, 1);
+}
+// Capacité d'une ligne sur une période donnée (heures), ajustée des indisponibilités.
+function capForRow(row, periodStart) {
+  return (row.members || []).reduce((s, m) => s + capPeriod(capOf(m)) * (1 - indispoFrac(m, periodStart)), 0);
+}
+function rowReduced(row, periodStart) { return (row.members || []).some(m => indispoFrac(m, periodStart) > 0); }
 
 function cellColor(h, cap) {
   if (!(h > 0)) return 'transparent';
@@ -562,42 +595,50 @@ function render() {
   let h = '<table class="grid"><thead><tr><th class="colres">Ressource</th>';
   periods.forEach((p, i) => { h += '<th class="' + (p === nowKey ? 'now' : '') + '"><div class="pk">' + plabel(p) + (p === nowKey ? ' •' : '') + '</div><div class="psub">' + subLabel(starts[i]) + '</div></th>'; });
   h += '<th class="sum">Σ fenêtre</th></tr></thead><tbody>';
+  const canEditRes = S.groupBy === 'person';
   for (const row of rows) {
     const cells = matrix[row.key] || {};
     const ini = row.label.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    h += '<tr><td class="colres"><div class="res"><span class="ava" style="background:' + row.color + '">' + esc(ini) + '</span><span><span class="nm">' + esc(row.label) + '</span>' + (row.cap > 0 ? ' <span class="cap">(' + Math.round(capPeriod(row.cap)) + 'h)</span>' : '') + '</span></div></td>';
-    let win = 0;
-    for (const p of periods) {
-      const hr = r1(cells[p] || 0); win += hr;
-      h += '<td class="cell' + (p === nowKey ? ' nowcol' : '') + '" data-key="' + esc(row.key) + '" data-period="' + p + '">' + fmtCell(hr, row.cap) + '</td>';
+    h += '<tr><td class="colres' + (canEditRes ? ' clk' : '') + '"' + (canEditRes ? ' data-res="' + esc(row.key) + '" title="Capacité & indisponibilités"' : '') + '><div class="res"><span class="ava" style="background:' + row.color + '">' + esc(ini) + '</span><span><span class="nm">' + esc(row.label) + '</span>' + (row.cap > 0 ? ' <span class="cap">(' + Math.round(capPeriod(row.cap)) + 'h)</span>' : '') + '</span></div></td>';
+    let win = 0, peakR = 0;
+    for (let pi = 0; pi < periods.length; pi++) {
+      const p = periods[pi], hr = r1(cells[p] || 0); win += hr;
+      const capP = capForRow(row, starts[pi]);
+      if (capP > 0 && hr / capP > peakR) peakR = hr / capP;
+      const redu = rowReduced(row, starts[pi]);
+      h += '<td class="cell' + (p === nowKey ? ' nowcol' : '') + (redu ? ' redu' : '') + '" data-key="' + esc(row.key) + '" data-period="' + p + '">' + fmtCell(hr, capP) + '</td>';
     }
-    const peakH = Math.max(0, ...periods.map(p => cells[p] || 0));
-    const peak = row.cap > 0 ? Math.round(peakH / capPeriod(row.cap) * 100) : null;
+    const peak = (row.members && row.members.length) ? Math.round(peakR * 100) : null;
     h += '<td class="sum"><div class="sh">' + r1(win) + ' h</div>' + (peak != null ? '<div class="sp" style="' + (peak > 100 ? 'color:var(--over)' : '') + '">pic ' + peak + '%</div>' : '') + '</td>';
     h += '</tr>';
   }
   h += '</tbody>';
-  // pied : total équipe par période vs capacité
-  const totalCap = rows.reduce((s, r) => s + capPeriod(r.cap), 0);
-  h += '<tfoot><tr><td class="colres" style="text-align:left;padding:7px 10px">Capacité équipe' + (totalCap > 0 ? ' · ' + Math.round(totalCap) + 'h/' + (S.granularity === 'month' ? 'mois' : 'sem') : '') + '</td>';
+  // pied : total équipe par période vs capacité (ajustée des indisponibilités)
+  h += '<tfoot><tr><td class="colres" style="text-align:left;padding:7px 10px">Capacité équipe</td>';
   let grand = 0;
-  for (const p of periods) { let tot = 0; for (const row of rows) tot += (matrix[row.key] || {})[p] || 0; grand += tot; const pc = totalCap > 0 ? Math.round(tot / totalCap * 100) : null; h += '<td class="' + (p === nowKey ? 'nowcol' : '') + '">' + (tot > 0 ? r1(tot) + (pc != null ? '<div style="font-size:.66rem;color:var(--text-muted);font-weight:400">' + pc + '%</div>' : '') : '·') + '</td>'; }
+  for (let pi = 0; pi < periods.length; pi++) {
+    const p = periods[pi]; let tot = 0; for (const row of rows) tot += (matrix[row.key] || {})[p] || 0; grand += tot;
+    const capTot = rows.reduce((s, row) => s + capForRow(row, starts[pi]), 0);
+    const pc = capTot > 0 ? Math.round(tot / capTot * 100) : null;
+    h += '<td class="' + (p === nowKey ? 'nowcol' : '') + '">' + (tot > 0 ? r1(tot) + (pc != null ? '<div style="font-size:.66rem;color:var(--text-muted);font-weight:400">' + pc + '%</div>' : '') : '·') + '</td>';
+  }
   h += '<td class="sum"><div class="sh">' + r1(grand) + ' h</div></td></tr></tfoot></table>';
   wrap.innerHTML = h;
   wrap.querySelectorAll('td.cell').forEach(td => td.addEventListener('click', () => openCell(td.dataset.key, td.dataset.period)));
+  wrap.querySelectorAll('td.colres.clk').forEach(td => td.addEventListener('click', () => openResource(td.dataset.res)));
   renderAlerts(matrix, periods);
 }
 
-function fmtCell(hr, cap) {
+function fmtCell(hr, capP) {
   if (!(hr > 0)) return '<span class="dot">·</span>';
-  const pct = cap > 0 ? Math.round(hr / capPeriod(cap) * 100) : 0;
-  const txt = S.unit === 'pct' && cap > 0 ? pct + '%' : hr;
-  return '<span class="v" style="background:' + heatBg(hr, cap) + '" title="' + hr + ' h' + (cap > 0 ? ' · ' + pct + '% de la capacité' : '') + '">' + txt + '</span>';
+  const pct = capP > 0 ? Math.round(hr / capP * 100) : 0;
+  const txt = S.unit === 'pct' && capP > 0 ? pct + '%' : hr;
+  return '<span class="v" style="background:' + heatBg(hr, capP) + '" title="' + hr + ' h' + (capP > 0 ? ' · ' + pct + '% de la capacité' : '') + '">' + txt + '</span>';
 }
-// Fond façon heatmap : teinte par seuil, intensité par taux (sous-emploi pâle -> plein -> surcharge rouge).
-function heatBg(hr, cap) {
-  if (!(cap > 0)) return 'rgba(59,130,246,0.55)';
-  const r = hr / capPeriod(cap);
+// Fond façon heatmap : teinte par seuil, intensité par taux (capP = capacité de la PÉRIODE).
+function heatBg(hr, capP) {
+  if (!(capP > 0)) return 'rgba(59,130,246,0.55)';
+  const r = hr / capP;
   if (r > 1) return 'rgba(229,72,77,' + Math.min(0.7 + (r - 1) * 0.5, 0.96).toFixed(2) + ')';
   if (r > 0.85) return 'rgba(245,158,11,0.9)';
   return 'rgba(59,130,246,' + (0.16 + 0.62 * (r / 0.85)).toFixed(2) + ')';
@@ -605,8 +646,9 @@ function heatBg(hr, cap) {
 
 function renderAlerts(matrix, periods) {
   const rows = buildRows();
+  const starts = periodStarts(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, periods.length);
   let over = 0;
-  for (const row of rows) { if (!(row.cap > 0)) continue; for (const p of periods) { const hr = (matrix[row.key] || {})[p] || 0; if (hr > capPeriod(row.cap)) over++; } }
+  for (const row of rows) { if (!(row.members && row.members.length)) continue; for (let pi = 0; pi < periods.length; pi++) { const hr = (matrix[row.key] || {})[periods[pi]] || 0; const capP = capForRow(row, starts[pi]); if (capP > 0 && hr > capP) over++; } }
   const undated = planTasks().filter(t => effCharges(t).length && (t.dateDebut == null || t.dateEcheance == null)).length;
   const el = document.getElementById('alerts'); const parts = [];
   parts.push('<span class="' + (over ? 'over' : '') + '">' + (over ? '⚠ ' + over + ' cellule' + (over > 1 ? 's' : '') + ' en surcharge' : '✓ aucune surcharge sur la fenêtre') + '</span>');
@@ -644,15 +686,19 @@ function tasksInCell(key, period) {
 }
 
 function openCell(key, period) {
-  S._cellKey = key; S._cellPeriod = period;
+  S._cellKey = key; S._cellPeriod = period; S._resId = null;
+  document.getElementById('pGantt').style.display = '';
   const rows = buildRows(); const row = rows.find(r => String(r.key) === String(key));
   const items = tasksInCell(key, period);
   const tot = r1(items.reduce((s, i) => s + i.slice, 0));
   const editable = S.groupBy === 'person';
   const tid = Number(key);
   const others = activeTeam().filter(m => m.id !== tid);
+  const _starts = periodStarts(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon);
+  const _pi = TF.periodRange(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon).indexOf(period);
+  const capP = row && _pi >= 0 ? capForRow(row, _starts[_pi]) : 0;
   document.getElementById('pTitle').textContent = (row ? row.label : key) + ' — ' + plabel(period);
-  const capTxt = row && row.cap > 0 ? ' · capacité ' + Math.round(capPeriod(row.cap)) + 'h (' + Math.round(tot / capPeriod(row.cap) * 100) + '%)' : '';
+  const capTxt = capP > 0 ? ' · capacité ' + Math.round(capP) + 'h (' + Math.round(tot / capP * 100) + '%)' : '';
   document.getElementById('pSub').textContent = tot + ' h sur la période' + capTxt + (editable ? ' · allocation éditable' : '');
   document.getElementById('pBody').innerHTML = items.length ? items.map(i => {
     const p = projById(i.task.projet);
@@ -667,7 +713,7 @@ function openCell(key, period) {
   document.getElementById('overlay').classList.add('show');
   document.getElementById('panel').classList.add('show');
 }
-function closePanel() { S._cellKey = null; document.getElementById('overlay').classList.remove('show'); document.getElementById('panel').classList.remove('show'); }
+function closePanel() { S._cellKey = null; S._resId = null; document.getElementById('pGantt').style.display = ''; document.getElementById('overlay').classList.remove('show'); document.getElementById('panel').classList.remove('show'); }
 function refreshCell() { if (S._cellKey != null) openCell(S._cellKey, S._cellPeriod); }
 // Allocation éditable : agit sur la charge PROPRE (Tasks.charges) — recalcule la heatmap.
 async function persistCharges(taskId, arr) {
@@ -710,6 +756,49 @@ function openInGantt(key) {
   toast('Filtre « ' + who + ' » diffusé à la suite — ouvre le Gantt pour le voir.');
 }
 
+// 2.1 — panneau ressource : capacité hebdo + indisponibilités (Team.capaciteHebdo / Team.indispos).
+function openResource(key) {
+  const m = teamById(Number(key)); if (!m) return;
+  S._cellKey = null; S._resId = m.id;
+  const ind = parseIndispos(m.indispos);
+  document.getElementById('pTitle').textContent = m.nom;
+  document.getElementById('pSub').textContent = 'Capacité & disponibilités';
+  let html = '<div class="rl">Capacité hebdomadaire</div><div class="capedit"><input type="number" min="0" step="1" value="' + capOf(m) + '" onchange="setCapacity(' + m.id + ',parseFloat(this.value)||0)"><span class="u">h / semaine</span></div>';
+  html += '<div class="rl" style="margin-top:16px">Indisponibilités (congés, fériés)</div>';
+  html += ind.length ? ind.map((iv, idx) => '<div class="indispo"><span class="il">' + esc(iv.label || 'Indispo') + '</span><span class="id">' + esc(iv.start) + ' → ' + esc(iv.end) + '</span><button class="ix" title="Retirer" onclick="removeIndispo(' + m.id + ',' + idx + ')">×</button></div>').join('') : '<div style="color:var(--text-muted);font-size:.8rem;margin:6px 0">Aucune indisponibilité.</div>';
+  html += '<div class="indispo-add"><input type="text" id="indLabel" placeholder="Libellé (ex. Congés)"><div class="dd"><input type="date" id="indStart"><span>→</span><input type="date" id="indEnd"></div><button class="btn" onclick="addIndispo(' + m.id + ')">+ Ajouter</button></div>';
+  document.getElementById('pBody').innerHTML = html;
+  document.getElementById('pGantt').style.display = 'none';
+  document.getElementById('overlay').classList.add('show');
+  document.getElementById('panel').classList.add('show');
+}
+async function setCapacity(memberId, val) {
+  const m = teamById(memberId); if (!m) return;
+  m.capaciteHebdo = val > 0 ? val : null;
+  if (!S.demo) { try { await grist.docApi.applyUserActions([['UpdateRecord', 'Team', memberId, { capaciteHebdo: m.capaciteHebdo }]]); } catch (e) {} }
+  render();
+}
+async function persistIndispos(memberId, arr) {
+  const m = teamById(memberId); if (!m) return;
+  m.indispos = JSON.stringify(arr);
+  if (!S.demo) { try { await grist.docApi.applyUserActions([['UpdateRecord', 'Team', memberId, { indispos: m.indispos }]]); } catch (e) {} }
+  render(); if (S._resId === memberId) openResource(String(memberId));
+}
+function addIndispo(memberId) {
+  const m = teamById(memberId); if (!m) return;
+  const label = (document.getElementById('indLabel').value || 'Indispo').trim();
+  const start = document.getElementById('indStart').value, end = document.getElementById('indEnd').value;
+  if (!start || !end) { toast('Renseigne les deux dates.'); return; }
+  if (end < start) { toast('La fin doit être après le début.'); return; }
+  const arr = parseIndispos(m.indispos); arr.push({ start, end, label });
+  persistIndispos(memberId, arr);
+}
+function removeIndispo(memberId, idx) {
+  const m = teamById(memberId); if (!m) return;
+  const arr = parseIndispos(m.indispos); arr.splice(idx, 1);
+  persistIndispos(memberId, arr);
+}
+
 // ============================================================================
 // Données : Grist + démo
 // ============================================================================
@@ -741,11 +830,12 @@ function loadDemo() {
   S.demo = true;
   const day = 86400000, today = new Date(); today.setHours(0, 0, 0, 0);
   const g = (n) => Math.floor((today.getTime() + n * day) / 1000); // n jours depuis aujourd'hui -> Unix s
+  const isoD = (n) => new Date(today.getTime() + n * day).toISOString().slice(0, 10);
   S.team = [
     { id: 1, nom: 'Alice Martin', role: 'Dev', couleur: '#6366f1', capaciteHebdo: 35, actif: true },
     { id: 2, nom: 'Bob Durant', role: 'Dev', couleur: '#10b981', capaciteHebdo: 35, actif: true },
     { id: 3, nom: 'Claire Bernard', role: 'Design', couleur: '#f59e0b', capaciteHebdo: 28, actif: true },
-    { id: 4, nom: 'David Roy', role: 'PM', couleur: '#ec4899', capaciteHebdo: 35, actif: true }
+    { id: 4, nom: 'David Roy', role: 'PM', couleur: '#ec4899', capaciteHebdo: 35, actif: true, indispos: '[{"start":"' + isoD(8) + '","end":"' + isoD(14) + '","label":"Congés"}]' }
   ];
   S.projects = [{ id: 1, nom: 'Refonte Portail', couleur: '#6366f1' }, { id: 2, nom: 'App Mobile', couleur: '#10b981' }];
   S.tasks = [
