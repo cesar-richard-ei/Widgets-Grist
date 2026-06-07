@@ -824,7 +824,7 @@ function renderTimeline() {
   const span = (winEnd - winStart) || 1;
   // FOCUS = cellule ouverte dans la heatmap (clé = personne, ou composite "groupe|personne")
   const fKey = S._cellKey != null ? String(S._cellKey) : null;
-  const fIdx = S._cellPeriod ? periods.indexOf(S._cellPeriod) : -1;
+  const fIdx = (fKey != null && S._cellPeriod) ? periods.indexOf(S._cellPeriod) : -1; // surlignage période seulement si une cellule est focalisée
   let bandStyle = '', bandS = 0, bandE = 0;
   if (fIdx >= 0) {
     bandS = starts[fIdx].getTime();
