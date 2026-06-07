@@ -408,6 +408,8 @@
         .subtask-item.done .subtask-text { text-decoration: line-through; color: var(--text-muted); }
         .subtask-checkbox { width: 18px; height: 18px; cursor: pointer; accent-color: var(--primary); }
         .subtask-text { flex: 1; font-size: 0.85rem; }
+        input.subtask-text { border: none; background: transparent; outline: none; color: var(--text); font: inherit; width: 100%; padding: 2px 4px; border-radius: 4px; }
+        input.subtask-text:focus { background: var(--card-bg); box-shadow: inset 0 0 0 1px var(--border); }
         .subtask-remove { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1rem; padding: 0 4px; opacity: 0; transition: opacity 0.15s; }
         .subtask-item:hover .subtask-remove { opacity: 1; }
         .subtask-remove:hover { color: var(--danger); }
@@ -2621,6 +2623,8 @@
                 <!-- WBS-03: Sous-tâches (hiérarchie) -->
                 ${!panelState.isNew ? (function() {
                     const kids = getChildren(panelState.taskId);
+                    const _par = data.parentTask ? tasks.find(x => x.id === data.parentTask) : null;
+                    const parentLink = _par ? '<div class="prereq-item" onclick="openTaskPanel(' + _par.id + ')" title="Ouvrir la tâche parent"><span style="flex-shrink:0;font-weight:700;color:var(--primary)">↑</span><span class="prereq-item-title">Parent : ' + escapeHtml(_par.titre) + '</span></div>' : '';
                     const kidsList = kids.map(k => {
                         const kp = getPriority(k);
                         const kprog = hasChildren(k) ? aggregateProgress(k) : (k.progression || 0);
@@ -2632,6 +2636,7 @@
                     }).join('');
                     return `<div class="panel-section">
                         <div class="panel-section-header"><span class="panel-section-title">Sous-tâches (hiérarchie)</span>${kids.length ? `<span class="panel-section-badge">${kids.length}</span>` : ''}</div>
+                        ${parentLink}
                         ${kids.length ? `<div class="prereq-list">${kidsList}</div>` : `<div class="prereq-empty">Aucune sous-tâche. Décomposez cette tâche en étapes planifiables.</div>`}
                         <button class="panel-btn" style="width:auto;padding:6px 12px;font-size:0.78rem;margin-top:6px;margin-right:6px" onclick="openCreateTaskWithParent(${panelState.taskId})">+ Sous-tâche</button>${kids.length ? `<button class="btn" style="padding:6px 12px;font-size:0.78rem;margin-top:6px" onclick="adjustParentDatesToChildren()" title="Aligner les dates du parent sur min/max des descendants">↔ Ajuster dates</button>` : ''}
                     </div>`;
@@ -2646,7 +2651,7 @@
                 ` : `
                 <div class="panel-section">
                     <div class="panel-section-header"><span class="panel-section-title">${data.type === 'reunion' ? 'Points à traiter' : 'Checklist'}</span>${subtasksTotal > 0 ? `<span class="panel-section-badge">${subtasksDone}/${subtasksTotal}</span>` : ''}</div>
-                    <div class="subtask-list">${(data.subtasks || []).map(st => `<div class="subtask-item ${st.done ? 'done' : ''}"><input type="checkbox" class="subtask-checkbox" ${st.done ? 'checked' : ''} onchange="toggleSubtask(${st.id})"><span class="subtask-text">${escapeHtml(st.text)}</span><button class="subtask-remove" onclick="removeSubtask(${st.id})">×</button></div>`).join('')}</div>
+                    <div class="subtask-list">${(data.subtasks || []).map(st => `<div class="subtask-item ${st.done ? 'done' : ''}"><input type="checkbox" class="subtask-checkbox" ${st.done ? 'checked' : ''} onchange="toggleSubtask(${st.id})"><input class="subtask-text" value="${escapeHtml(st.text)}" onchange="editSubtask(${st.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()"><button class="subtask-remove" onclick="removeSubtask(${st.id})">×</button></div>`).join('')}</div>
                     <div class="subtask-add"><input type="text" id="newSubtaskInput" placeholder="Ajouter..." onkeydown="handleSubtaskKeydown(event)"><button onclick="addSubtask()">+</button></div>
                 </div>
                 `}
@@ -2800,6 +2805,18 @@
                 renderPanelTask();
                 render();
             }
+        }
+        // Édite le texte d'un item de checklist (pas de renderPanelTask -> garde le focus dans l'input)
+        function editSubtask(id, value) {
+            const data = panelState.editData;
+            if (!data || !data.subtasks) return;
+            const st = data.subtasks.find(s => s.id === id);
+            if (!st) return;
+            const t = (value || '').trim();
+            if (!t || t === st.text) return;
+            st.text = t;
+            if (!panelState.isNew && gristReady) saveTaskToGrist();
+            render();
         }
         function updateSubtaskProgress() {
             const data = panelState.editData;
