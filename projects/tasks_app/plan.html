@@ -160,6 +160,9 @@ tfoot td.colres{background:var(--surface-2);z-index:2}
     <span><span class="sw" style="background:rgba(21,160,107,.85)"></span>capacité disponible (plus vert = plus de marge)</span>
     <span>· = complet / en surcharge</span>
   </div>
+  <div class="legend" id="legendRealise" style="display:none">
+    <span>réalisé = temps passé saisi · <b>estimé</b> (= prévu) pour les tâches clôturées sans temps</span>
+  </div>
 </div>
 <div class="overlay" id="overlay"></div>
 <div class="panel" id="panel">
@@ -719,7 +722,7 @@ function cellColor(h, cap) {
 function render() {
   // segments
   renderSeg('segGran', [['week', 'Sem'], ['month', 'Mois']], S.granularity, v => { S.granularity = v; S.offset = 0; render(); });
-  renderSeg('segMode', [['prevu', 'Prévu'], ['realise', 'Réalisé'], ['reste', 'Reste'], ['dispo', 'Dispo']], S.mode, v => { S.mode = v; render(); });
+  renderSeg('segMode', [['prevu', 'Prévu'], ['realise', 'Réalisé'], ['reste', 'Reste'], ['dispo', 'Dispo']], S.mode, v => { S.mode = v; if (v === 'dispo' && S.groupBy !== 'person') { S.groupBy = 'person'; document.getElementById('selGroup').value = 'person'; toast('Vue Dispo : groupement « Personne » (la marge ne se mesure qu\'au global, tous projets confondus)'); } render(); });
   renderSeg('segUnit', [['pct', '%'], ['hours', 'h']], S.unit, v => { S.unit = v; render(); });
   document.getElementById('selGroup').value = S.groupBy;
   document.getElementById('chkDone').checked = S.includeDone;
@@ -732,6 +735,7 @@ function render() {
   const dispo = S.mode === 'dispo';  // mode "capacité disponible" = cap - charge planifiée
   document.getElementById('legend').style.display = dispo ? 'none' : 'flex';
   document.getElementById('legendDispo').style.display = dispo ? 'flex' : 'none';
+  document.getElementById('legendRealise').style.display = (S.mode === 'realise') ? 'flex' : 'none';
   const matrix = TF.chargeMatrix(tasks, keyFn(), S.granularity, dispo ? effCharges : chargesFor, S.workdays);
   const periods = TF.periodRange(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon);
   const nowKey = TF.periodKey(new Date(), S.granularity);
@@ -1090,9 +1094,9 @@ function openCell(key, period) {
     const val = usePct ? Math.round(i.total / (capWk * wks) * 100) : i.total;
     const conv = usePct ? '((parseFloat(this.value)||0)/100*' + capWk + '*' + wks.toFixed(3) + ')' : '(parseFloat(this.value)||0)';
     const right = editable
-      ? '<div class="tkedit"><input type="number" min="0" step="' + (usePct ? 5 : 0.5) + '" value="' + val + '" title="Allocation ' + (usePct ? '(% de la capacité sur la durée)' : '(heures)') + '" onchange="setCharge(' + i.task.id + ',' + tid + ',' + conv + ')"><span class="u">' + (usePct ? '%' : 'h') + '</span><select title="Réaffecter à un membre (sa marge est indiquée)" onchange="if(this.value)reassignCharge(' + i.task.id + ',' + tid + ',parseInt(this.value))"><option value="">⇄</option>' + others.map(m => { const fr = av[m.id] ? av[m.id].free : null; return '<option value="' + m.id + '">→ ' + esc(m.nom) + (fr != null ? ' (' + fr + ' h libres)' : '') + '</option>'; }).join('') + '</select></div>'
+      ? '<div class="tkedit"><input type="number" name="alloc" min="0" step="' + (usePct ? 5 : 0.5) + '" value="' + val + '" title="Allocation ' + (usePct ? '(% de la capacité sur la durée)' : '(heures)') + '" onchange="setCharge(' + i.task.id + ',' + tid + ',' + conv + ')"><span class="u">' + (usePct ? '%' : 'h') + '</span><select name="reassign" title="Réaffecter à un membre (sa marge est indiquée)" onchange="if(this.value)reassignCharge(' + i.task.id + ',' + tid + ',parseInt(this.value))"><option value="">⇄</option>' + others.map(m => { const fr = av[m.id] ? av[m.id].free : null; return '<option value="' + m.id + '">→ ' + esc(m.nom) + (fr != null ? ' (' + fr + ' h libres)' : '') + '</option>'; }).join('') + '</select></div>'
       : '<div class="th">' + i.total + ' h</div>';
-    const dates = editable ? '<div class="tkdates"><span class="dl">📅 Dates</span><input type="date" value="' + gToInput(i.task.dateDebut) + '" title="Début" onchange="setDates(' + i.task.id + ',this.value,null)"><span>→</span><input type="date" value="' + gToInput(i.task.dateEcheance) + '" title="Échéance" onchange="setDates(' + i.task.id + ',null,this.value)"></div>' : '';
+    const dates = editable ? '<div class="tkdates"><span class="dl">📅 Dates</span><input type="date" name="dateDebut" value="' + gToInput(i.task.dateDebut) + '" title="Début" onchange="setDates(' + i.task.id + ',this.value,null)"><span>→</span><input type="date" name="dateEcheance" value="' + gToInput(i.task.dateEcheance) + '" title="Échéance" onchange="setDates(' + i.task.id + ',null,this.value)"></div>' : '';
     return '<div class="tk"><div class="tkmain"><span class="pdot" style="background:' + (p ? p.couleur : '#64748b') + '"></span><div class="tinfo"><div class="tt">' + esc(i.task.titre) + '</div><div class="tm">' + sliceTxt + '</div></div>' + right + '</div>' + dates + '</div>';
   }).join('') : '<div style="color:var(--text-muted);font-size:.82rem">Aucune tâche ' + (S.mode === 'realise' ? 'réalisée' : 'planifiée') + ' sur cette période.</div>');
   document.getElementById('pGantt').onclick = () => openInGantt(key);
@@ -1243,7 +1247,7 @@ function bindToolbar() {
   document.getElementById('navPrev').onclick = () => { S.offset--; render(); };
   document.getElementById('navNext').onclick = () => { S.offset++; render(); };
   document.getElementById('navToday').onclick = () => { S.offset = 0; render(); };
-  document.getElementById('selGroup').onchange = (e) => { S.groupBy = e.target.value; render(); };
+  document.getElementById('selGroup').onchange = (e) => { S.groupBy = e.target.value; if (S.groupBy !== 'person' && S.mode === 'dispo') { S.mode = 'prevu'; toast('Dispo indisponible en groupement « ' + (S.groupBy === 'project' ? 'Projet' : 'Rôle') + ' » (marge = notion globale) — vue Prévu rétablie'); } render(); };
   document.getElementById('chkDone').onchange = (e) => { S.includeDone = e.target.checked; render(); };
   document.getElementById('chkDerive').onchange = (e) => { S.derive = e.target.checked; render(); };
   document.getElementById('chkWorkdays').onchange = (e) => { S.workdays = e.target.checked; render(); };
