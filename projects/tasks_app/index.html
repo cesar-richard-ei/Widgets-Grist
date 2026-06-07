@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>TaskFlow</title>
-<script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
 <style>
 :root {
   --primary: #3e5de7;
@@ -17,6 +16,21 @@
   --text-light: #94a3b8;
   --border: #e2e8f0;
   --shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+/* Dark mode auto (aligné sur les widgets) */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #6b7cff;
+    --primary-dark: #8b9bff;
+    --primary-light: #232f52;
+    --bg: #0f1525;
+    --card-bg: #1a2236;
+    --text: #e2e8f0;
+    --text-muted: #94a3b8;
+    --text-light: #64748b;
+    --border: #2a3550;
+    --shadow: 0 1px 3px rgba(0,0,0,.35);
+  }
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { height: 100%; overflow: hidden; font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
@@ -56,117 +70,106 @@ body { display: flex; flex-direction: column; background: var(--bg); }
 
 /* ── Loading bar ── */
 .load-bar {
-  position: fixed;
-  top: 48px;
-  left: 0;
-  height: 2px;
-  width: 0;
-  background: var(--primary);
-  z-index: 100;
-  transition: width .1s;
-  opacity: 0;
+  position: fixed; top: 44px; left: 0; height: 2px; width: 0;
+  background: var(--primary); z-index: 200; opacity: 0;
 }
-.load-bar.loading {
-  animation: loading-pulse 1.2s ease-in-out infinite;
-}
+.load-bar.loading { animation: loading-pulse 1.4s ease-in-out infinite; }
 @keyframes loading-pulse {
-  0%   { width: 0; opacity: 1; }
-  70%  { width: 80%; opacity: 1; }
+  0%   { width: 0;   opacity: 1; }
+  70%  { width: 85%; opacity: 1; }
   100% { width: 100%; opacity: 0; }
 }
 
-/* ── Widget frame ── */
-#frame {
-  flex: 1;
-  border: none;
-  width: 100%;
-  display: block;
-  background: var(--bg);
+/* ── Skeleton overlay ── */
+#skeleton {
+  position: absolute; inset: 44px 0 0 0; background: var(--bg);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px;
+  z-index: 10; opacity: 0; pointer-events: none; transition: opacity .12s;
 }
+#skeleton.visible { opacity: 1; pointer-events: auto; }
+.sk-spinner { width: 28px; height: 28px; border: 2.5px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin .7s linear infinite; }
+.sk-label { font-size: .75rem; color: var(--text-muted); font-family: inherit; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Widget frame ── */
+#frame { flex: 1; border: none; width: 100%; display: block; background: var(--bg); opacity: 0; transition: opacity .18s ease; }
+#frame.visible { opacity: 1; }
 </style>
 </head>
 <body>
 
 <div class="load-bar" id="loadBar"></div>
+<div id="skeleton"><div class="sk-spinner"></div><span class="sk-label" id="skLabel"></span></div>
 
-<nav class="navbar">
-  <button class="tab" data-id="dashboard"  onclick="go('dashboard')" >
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-    Dashboard
-  </button>
-  <button class="tab" data-id="kanban"     onclick="go('kanban')"    >
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>
-    Kanban
-  </button>
-  <button class="tab" data-id="gantt"      onclick="go('gantt')"     >
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><rect x="3" y="4" width="8" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="8" y="10" width="10" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="5" y="16" width="6" height="4" rx="1" fill="currentColor" stroke="none"/></svg>
-    Gantt
-  </button>
-  <button class="tab" data-id="calendar"   onclick="go('calendar')"  >
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
-    Calendar
-  </button>
-  <button class="tab" data-id="whiteboard" onclick="go('whiteboard')">
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="3" y1="20" x2="21" y2="20"/><line x1="8" y1="17" x2="8" y2="20"/><line x1="16" y1="17" x2="16" y2="20"/></svg>
-    Whiteboard
-  </button>
-</nav>
+<nav class="navbar" id="navbar"></nav>
 
 <iframe id="frame" allow="clipboard-read; clipboard-write"></iframe>
 
 <script>
-const BASE = 'https://nic01asfr.github.io/Widgets-Grist/taskflow/';
+// ── Config (auto local / prod) ─────────────────────────────────────
+const LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+const PROD  = 'https://nic01asfr.github.io/Widgets-Grist/taskflow/';
+// dev : tasks_app/<id>.html ; whiteboard est dans projects/whiteboard/. prod : taskflow/<id>/
+function urlFor(id) {
+  if (id === 'whiteboard') return (LOCAL ? 'http://localhost:3001/whiteboard/index.html' : PROD + 'whiteboard/') + '?shell=1';
+  return (LOCAL ? 'http://localhost:3001/tasks_app/' + id + '.html' : PROD + id + '/') + '?shell=1';
+}
 
-const URLS = {
-  dashboard:  BASE + 'dashboard/',
-  kanban:     BASE + 'kanban/',
-  gantt:      BASE + 'gantt/',
-  calendar:   BASE + 'calendar/',
-  whiteboard: BASE + 'whiteboard/',
-};
+// ── Onglets (statiques) ──
+const TABS = [
+  { id: 'dashboard',  label: 'Dashboard',  icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>' },
+  { id: 'kanban',     label: 'Kanban',     icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="12" rx="1"/><rect x="17" y="3" width="5" height="15" rx="1"/></svg>' },
+  { id: 'gantt',      label: 'Gantt',      icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><rect x="3" y="4" width="8" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="8" y="10" width="10" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="5" y="16" width="6" height="4" rx="1" fill="currentColor" stroke="none"/></svg>' },
+  { id: 'calendar',   label: 'Calendar',   icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>' },
+  { id: 'plan',       label: 'Plan',       icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="21" x2="21" y2="21"/><rect x="5" y="11" width="3" height="8" rx="1"/><rect x="10.5" y="6" width="3" height="13" rx="1"/><rect x="16" y="14" width="3" height="5" rx="1"/></svg>' },
+  { id: 'whiteboard', label: 'Whiteboard', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="3" y1="20" x2="21" y2="20"/><line x1="8" y1="17" x2="8" y2="20"/><line x1="16" y1="17" x2="16" y2="20"/></svg>' },
+];
+const LABELS = {}; TABS.forEach(function (t) { LABELS[t.id] = t.label; });
 
-const frame   = document.getElementById('frame');
-const loadBar = document.getElementById('loadBar');
-let current   = null;
+const navbar   = document.getElementById('navbar');
+const frame    = document.getElementById('frame');
+const loadBar  = document.getElementById('loadBar');
+const skeleton = document.getElementById('skeleton');
+const skLabel  = document.getElementById('skLabel');
+let current = null;
 
-// ── Transparent Grist relay ───────────────────────────────────────
-// The widgets inside the iframe need to talk to Grist (our parent).
-// We relay messages transparently in both directions:
-//   child  → window.parent  (their Grist API calls)
-//   parent → child          (Grist responses & data pushes)
-window.addEventListener('message', event => {
+// ── Relais Grist transparent (enregistré AVANT grist-plugin-api) ──
+//   enfant -> Grist : on relaie PUIS stopImmediatePropagation, pour que l'API Grist du launcher
+//   (chargée juste après) n'intercepte pas l'appel enfant et n'injecte pas d'erreur (cassait le Plan).
+window.addEventListener('message', function (event) {
   if (event.source === frame.contentWindow) {
-    // Child widget → Grist
-    window.parent.postMessage(event.data, '*');
+    window.parent.postMessage(event.data, '*');   // enfant -> Grist
+    event.stopImmediatePropagation();
   } else if (event.source !== window.self) {
-    // Grist → child widget
-    try { frame.contentWindow?.postMessage(event.data, '*'); } catch (_) {}
+    try { frame.contentWindow && frame.contentWindow.postMessage(event.data, '*'); } catch (_) {} // Grist -> enfant
   }
 });
 
-// ── Navigation ────────────────────────────────────────────────────
+// ── Barre d'onglets ──
+navbar.innerHTML = TABS.map(function (t) {
+  return '<button class="tab" data-id="' + t.id + '">' + t.icon + t.label + '</button>';
+}).join('');
+navbar.querySelectorAll('.tab[data-id]').forEach(function (b) { b.onclick = function () { go(b.dataset.id); }; });
+
+// ── Navigation ──
 function go(id) {
   if (id === current) return;
   current = id;
-
-  // Highlight active tab
-  document.querySelectorAll('.tab').forEach(t =>
-    t.classList.toggle('active', t.dataset.id === id)
-  );
-
-  // Loading indicator
+  navbar.querySelectorAll('.tab[data-id]').forEach(function (t) { t.classList.toggle('active', t.dataset.id === id); });
+  frame.classList.remove('visible');
+  skLabel.textContent = 'Chargement ' + LABELS[id] + '…';
+  skeleton.classList.add('visible');
   loadBar.classList.add('loading');
-  frame.onload = () => loadBar.classList.remove('loading');
-
-  // Load widget directly by URL — widgets initialize normally with Grist
-  frame.src = URLS[id];
+  frame.onload = function () {
+    loadBar.classList.remove('loading');
+    skeleton.classList.remove('visible');
+    frame.classList.add('visible');
+  };
+  frame.src = urlFor(id);
 }
 
-// ── Init ──────────────────────────────────────────────────────────
-// Register this shell widget with Grist (minimal — only for relay to work)
-grist.ready({ requiredAccess: 'full' });
-
-// Default view
+// ── Init ── RELAIS PUR : pas d'API Grist dans le launcher (sinon elle intercepte et casse
+//   les appels des widgets enfants). Le "ready" et toute l'API viennent de l'enfant, relayés.
 go('dashboard');
 </script>
 </body>
