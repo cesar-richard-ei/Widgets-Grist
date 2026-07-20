@@ -10,7 +10,9 @@
 
 const TABLES_META = ['_grist_Tables', '_grist_Tables_column'];
 
-function createFakeGrist(documentInitial) {
+function createFakeGrist(documentInitial, options) {
+    const config = options || {};
+    const tableLiee = config.tableLiee || 'Tasks';
     // let plutot que const : appliquer() referme sur ces noms de variables,
     // un lot d'actions transactionnel doit pouvoir les reaffecter en bloc (voir applyUserActions).
     let doc = {};
@@ -203,10 +205,59 @@ function createFakeGrist(documentInitial) {
             throw e;
         }
         for (const action of actions || []) journal.push(action);
+        // Reemission apres coup uniquement : un lot en echec a deja restaure l'instantane
+        // plus haut et ne doit declencher aucune notification.
+        const tablesTouchees = (actions || []).map((a) => a[1]);
+        if (tablesTouchees.indexOf(tableLiee) !== -1) await emettreRecords();
         return { retValues: retValues };
     }
 
+    const abonnes = { records: [], record: [], options: [] };
+    let optionsWidget = {};
+
+    async function emettreRecords() {
+        if (!doc[tableLiee]) return;
+        const data = await fetchTable(tableLiee);
+        for (const cb of abonnes.records) cb(data, {});
+    }
+
+    async function ready(optionsPret) {
+        journal.push(['ready', optionsPret]);
+        await emettreRecords();
+    }
+
+    function onRecords(cb) { abonnes.records.push(cb); }
+    function onRecord(cb) { abonnes.record.push(cb); }
+    function onOptions(cb) { abonnes.options.push(cb); }
+
+    async function setOption(cle, valeur) {
+        optionsWidget = Object.assign({}, optionsWidget, { [cle]: valeur });
+        for (const cb of abonnes.options) cb(optionsWidget);
+    }
+
+    async function setOptions(nouvelles) {
+        optionsWidget = Object.assign({}, optionsWidget, nouvelles || {});
+        for (const cb of abonnes.options) cb(optionsWidget);
+    }
+
+    async function getOptions() { return optionsWidget; }
+
+    async function setSelectedRows(ids) {
+        journal.push(['setSelectedRows', ids]);
+        for (const cb of abonnes.record) cb(doc[tableLiee].records.find((r) => r.id === ids[0]) || null);
+    }
+
+    async function setCursorPos(pos) { journal.push(['setCursorPos', pos]); }
+
     return {
+        ready: ready,
+        onRecords: onRecords,
+        onRecord: onRecord,
+        onOptions: onOptions,
+        setOption: setOption,
+        setSelectedRows: setSelectedRows,
+        setCursorPos: setCursorPos,
+        widgetApi: { getOptions: getOptions, setOptions: setOptions },
         docApi: { fetchTable: fetchTable, listTables: listTables, applyUserActions: applyUserActions },
         // Accesseurs plutot que proprietes figees : un rollack de lot reaffecte
         // doc/refTable/refColonne (voir applyUserActions), l'expose doit suivre l'etat courant.
@@ -215,7 +266,8 @@ function createFakeGrist(documentInitial) {
         get _refTable() { return refTable; },
         get _refColonne() { return refColonne; },
         _declarerTable: declarerTable,
-        _declarerColonne: declarerColonne
+        _declarerColonne: declarerColonne,
+        _tableLiee: tableLiee
     };
 }
 
