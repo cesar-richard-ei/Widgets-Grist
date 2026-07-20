@@ -12,7 +12,8 @@
     "build:taskflow": "node scripts/build-taskflow.js",
     "check:taskflow": "node scripts/build-taskflow.js --check",
     "serve:dev": "node scripts/serve-dev.js",
-    "serve": "npx serve published -p 3000 --cors"
+    "serve": "npx serve published -p 3000 --cors",
+    "test": "node --test tests/unit/*.test.js"
   },
   "repository": {
     "type": "git",

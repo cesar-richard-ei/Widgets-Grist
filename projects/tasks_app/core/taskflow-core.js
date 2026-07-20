@@ -321,3 +321,6 @@ const TF = (function () {
         chargeMatrix: chargeMatrix
     };
 })();
+
+// Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
+if (typeof module !== 'undefined' && module.exports) module.exports = TF;
