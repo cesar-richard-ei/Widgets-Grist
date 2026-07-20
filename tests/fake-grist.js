@@ -79,9 +79,92 @@ function createFakeGrist(documentInitial) {
         return Object.keys(doc).filter((t) => TABLES_META.indexOf(t) === -1);
     }
 
+    const journal = [];
+    let prochainId = {};
+    for (const tableId of Object.keys(doc)) {
+        prochainId[tableId] = doc[tableId].records.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+    }
+
+    function table(tableId) {
+        if (!doc[tableId]) throw new Error('Table inconnue: ' + tableId);
+        return doc[tableId];
+    }
+
+    function appliquer(action) {
+        const type = action[0];
+
+        if (type === 'AddTable') {
+            const colonnes = {};
+            for (const c of action[2] || []) colonnes[c.id] = { type: c.type || 'Any' };
+            declarerTable(action[1], colonnes, []);
+            prochainId[action[1]] = 1;
+            return null;
+        }
+        if (type === 'AddColumn') {
+            declarerColonne(action[1], action[2], action[3]);
+            return null;
+        }
+        if (type === 'ModifyColumn') {
+            const colonne = table(action[1]).columns[action[2]];
+            if (!colonne) throw new Error('Colonne inconnue: ' + action[1] + '.' + action[2]);
+            Object.assign(colonne, action[3] || {});
+            return null;
+        }
+        if (type === 'SetDisplayFormula') {
+            // Signature reelle : ['SetDisplayFormula', tableId, null, colRef, formule].
+            // Aucun widget n'exploite l'effet, on se contente de journaliser.
+            return null;
+        }
+        if (type === 'AddRecord') {
+            const t = table(action[1]);
+            const id = action[2] != null ? action[2] : prochainId[action[1]]++;
+            t.records.push(Object.assign({ id: id }, action[3] || {}));
+            return id;
+        }
+        if (type === 'BulkAddRecord') {
+            const t = table(action[1]);
+            const valeurs = action[3] || {};
+            const colIds = Object.keys(valeurs);
+            const n = colIds.length ? valeurs[colIds[0]].length : (action[2] || []).length;
+            const ids = [];
+            for (let i = 0; i < n; i++) {
+                const rec = { id: prochainId[action[1]]++ };
+                for (const colId of colIds) rec[colId] = valeurs[colId][i];
+                t.records.push(rec);
+                ids.push(rec.id);
+            }
+            return ids;
+        }
+        if (type === 'UpdateRecord') {
+            const t = table(action[1]);
+            const rec = t.records.find((r) => r.id === action[2]);
+            if (!rec) throw new Error('Enregistrement inconnu: ' + action[1] + '#' + action[2]);
+            Object.assign(rec, action[3] || {});
+            return null;
+        }
+        if (type === 'RemoveRecord') {
+            const t = table(action[1]);
+            const index = t.records.findIndex((r) => r.id === action[2]);
+            if (index === -1) throw new Error('Enregistrement inconnu: ' + action[1] + '#' + action[2]);
+            t.records.splice(index, 1);
+            return null;
+        }
+        throw new Error('Action non geree par le simulacre: ' + type);
+    }
+
+    async function applyUserActions(actions) {
+        const retValues = [];
+        for (const action of actions || []) {
+            journal.push(action);
+            retValues.push(appliquer(action));
+        }
+        return { retValues: retValues };
+    }
+
     return {
-        docApi: { fetchTable: fetchTable, listTables: listTables },
+        docApi: { fetchTable: fetchTable, listTables: listTables, applyUserActions: applyUserActions },
         _doc: doc,
+        _log: journal,
         _refTable: refTable,
         _refColonne: refColonne,
         _declarerTable: declarerTable,
