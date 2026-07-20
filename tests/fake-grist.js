@@ -230,20 +230,30 @@ function createFakeGrist(documentInitial, options) {
     function onRecord(cb) { abonnes.record.push(cb); }
     function onOptions(cb) { abonnes.options.push(cb); }
 
+    // Divergence potentielle avec grist.numerique.gouv.fr : la forme exacte de ce second
+    // argument n'a pas ete verifiee sur le produit reel. Elle est deduite de la lecture du
+    // code consommateur (garde `interaction?.source !== 'self'` dans kanban/gantt/calendar),
+    // qui s'en sert pour ignorer une notification declenchee par sa propre ecriture d'options.
+    // A confronter a l'API reelle avant de s'y appuyer au-dela de ce cas.
+    function notifierOptions() {
+        for (const cb of abonnes.options) cb(optionsWidget, { source: 'self' });
+    }
+
     async function setOption(cle, valeur) {
         optionsWidget = Object.assign({}, optionsWidget, { [cle]: valeur });
-        for (const cb of abonnes.options) cb(optionsWidget);
+        notifierOptions();
     }
 
     async function setOptions(nouvelles) {
         optionsWidget = Object.assign({}, optionsWidget, nouvelles || {});
-        for (const cb of abonnes.options) cb(optionsWidget);
+        notifierOptions();
     }
 
     async function getOptions() { return optionsWidget; }
 
     async function setSelectedRows(ids) {
         journal.push(['setSelectedRows', ids]);
+        if (!doc[tableLiee]) return;
         for (const cb of abonnes.record) cb(doc[tableLiee].records.find((r) => r.id === ids[0]) || null);
     }
 
