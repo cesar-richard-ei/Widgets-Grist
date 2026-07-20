@@ -249,6 +249,29 @@ test('setSelectedRows et setCursorPos sont journalises', async () => {
     assert.deepEqual(grist._log.map((a) => a[0]), ['setSelectedRows', 'setCursorPos']);
 });
 
+test('setSelectedRows ne leve pas quand la table liee est absente', async () => {
+    const grist = createFakeGrist(documentMinimal(), { tableLiee: 'Projects' });
+    grist.onRecord(() => {});
+    await assert.doesNotReject(() => grist.setSelectedRows([1]));
+    assert.deepEqual(grist._log.map((a) => a[0]), ['setSelectedRows']);
+});
+
+test('onOptions recoit un second argument signalant une notification du widget lui meme', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const recus = [];
+    grist.onOptions((o, interaction) => recus.push(interaction));
+    await grist.setOption('filters', { project: [3] });
+    assert.deepEqual(recus[0], { source: 'self' });
+});
+
+test('setOptions notifie egalement onOptions avec source self', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const recus = [];
+    grist.onOptions((o, interaction) => recus.push(interaction));
+    await grist.widgetApi.setOptions({ dash: { colonnes: 4 } });
+    assert.deepEqual(recus[0], { source: 'self' });
+});
+
 test('la table liee est configurable', async () => {
     const grist = createFakeGrist(documentMinimal(), { tableLiee: 'Team' });
     const recus = [];
