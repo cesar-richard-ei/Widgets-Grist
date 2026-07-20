@@ -70,6 +70,8 @@ test('setRefDisplayColumns pose la colonne visible sur une Ref', async () => {
     const maj = grist._log.find((a) => a[0] === 'UpdateRecord' && a[1] === '_grist_Tables_column');
     assert.ok(maj, 'la colonne visible doit etre posee');
     assert.equal(maj[3].visibleCol, grist._refColonne.Projects.nom);
+    // Verifie l'effet sur le document et non seulement l'action emise.
+    assert.equal(grist._doc.Tasks.columns.projet.visibleCol, grist._refColonne.Projects.nom);
 });
 
 test('setRefDisplayColumns n emet rien si la colonne cible est absente', async () => {
