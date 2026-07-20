@@ -126,3 +126,66 @@ test('une action sur une table inconnue leve', async () => {
         /Absente/
     );
 });
+
+test('UpdateRecord sur _grist_Tables_column pose visibleCol via refColonne', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const refStatut = grist._refColonne.Tasks.statut;
+    await grist.docApi.applyUserActions([
+        ['UpdateRecord', '_grist_Tables_column', refStatut, { visibleCol: 42 }]
+    ]);
+    const cols = await grist.docApi.fetchTable('_grist_Tables_column');
+    const index = cols.colId.indexOf('statut');
+    assert.equal(cols.visibleCol[index], 42);
+});
+
+test('UpdateRecord sur _grist_Tables_column leve sur une reference inconnue', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await assert.rejects(
+        () => grist.docApi.applyUserActions([['UpdateRecord', '_grist_Tables_column', 9999, { visibleCol: 1 }]]),
+        /9999/
+    );
+});
+
+test('AddRecord a identifiant explicite fait avancer prochainId et refuse les collisions', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const premier = await grist.docApi.applyUserActions([['AddRecord', 'Tasks', 5, { titre: 'Cinq' }]]);
+    assert.equal(premier.retValues[0], 5);
+    const suivant = await grist.docApi.applyUserActions([['AddRecord', 'Tasks', null, { titre: 'Suivante' }]]);
+    assert.equal(suivant.retValues[0], 6);
+    await assert.rejects(
+        () => grist.docApi.applyUserActions([['AddRecord', 'Tasks', 6, { titre: 'Collision' }]]),
+        /6/
+    );
+});
+
+test('un lot d actions echoue entierement si une action leve en cours de route', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await assert.rejects(
+        () => grist.docApi.applyUserActions([
+            ['UpdateRecord', 'Tasks', 1, { statut: 'done' }],
+            ['UpdateRecord', 'Tasks', 999, { statut: 'done' }]
+        ]),
+        /999/
+    );
+    const data = await grist.docApi.fetchTable('Tasks');
+    assert.deepEqual(data.statut, ['todo']);
+    assert.deepEqual(grist._log, []);
+});
+
+test('BulkAddRecord honore les identifiants explicites presents dans le lot', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const retour = await grist.docApi.applyUserActions([
+        ['BulkAddRecord', 'Team', [10, null], { nom: ['Claire', 'David'] }]
+    ]);
+    assert.deepEqual(retour.retValues[0], [10, 11]);
+    const data = await grist.docApi.fetchTable('Team');
+    assert.deepEqual(data.id, [1, 2, 10, 11]);
+});
+
+test('AddColumn sur une table inconnue leve le message homogene des autres actions', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await assert.rejects(
+        () => grist.docApi.applyUserActions([['AddColumn', 'Absente', 'x', { type: 'Text' }]]),
+        /Table inconnue: Absente/
+    );
+});
