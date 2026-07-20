@@ -33,7 +33,7 @@ test('loadStatusConfig retombe sur les statuts par defaut sans choix ni donnees'
     assert.equal(cfg.terminalValue, 'done');
 });
 
-test('loadStatusConfig ne jette pas si la table est absente', async () => {
+test('loadStatusConfig retombe sur les statuts par defaut si la table n a pas d entree dans les metadonnees', async () => {
     const grist = createFakeGrist(documentMinimal());
     const cfg = await TF.loadStatusConfig(grist, 'Absente', 'statut');
     assert.equal(cfg.source, 'default');

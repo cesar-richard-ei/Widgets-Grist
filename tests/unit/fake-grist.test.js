@@ -158,6 +158,20 @@ test('AddRecord a identifiant explicite fait avancer prochainId et refuse les co
     );
 });
 
+test('_declarerTable initialise prochainId, AddRecord ne produit pas d identifiant NaN', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    grist._declarerTable('Nouvelle', { titre: { type: 'Text' } }, []);
+    const premier = await grist.docApi.applyUserActions([
+        ['AddRecord', 'Nouvelle', null, { titre: 'Un' }]
+    ]);
+    const second = await grist.docApi.applyUserActions([
+        ['AddRecord', 'Nouvelle', null, { titre: 'Deux' }]
+    ]);
+    assert.ok(Number.isInteger(premier.retValues[0]));
+    assert.ok(Number.isInteger(second.retValues[0]));
+    assert.notEqual(premier.retValues[0], second.retValues[0]);
+});
+
 test('un lot d actions echoue entierement si une action leve en cours de route', async () => {
     const grist = createFakeGrist(documentMinimal());
     await assert.rejects(
