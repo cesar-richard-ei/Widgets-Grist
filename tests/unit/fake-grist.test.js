@@ -49,3 +49,80 @@ test('_grist_Tables_column porte parentId, colId, type et widgetOptions', async 
     assert.equal(cols.type[index], 'Choice');
     assert.equal(JSON.parse(cols.widgetOptions[index]).choices.length, 4);
 });
+
+test('AddRecord ajoute un enregistrement et attribue un identifiant', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const retour = await grist.docApi.applyUserActions([
+        ['AddRecord', 'Tasks', null, { titre: 'Nouvelle', statut: 'todo' }]
+    ]);
+    assert.equal(retour.retValues[0], 2);
+    const data = await grist.docApi.fetchTable('Tasks');
+    assert.deepEqual(data.titre, ['Analyse', 'Nouvelle']);
+});
+
+test('UpdateRecord ne modifie que les champs fournis', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', 1, { statut: 'done' }]]);
+    const data = await grist.docApi.fetchTable('Tasks');
+    assert.deepEqual(data.statut, ['done']);
+    assert.deepEqual(data.titre, ['Analyse']);
+});
+
+test('RemoveRecord retire l enregistrement', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.docApi.applyUserActions([['RemoveRecord', 'Tasks', 1]]);
+    const data = await grist.docApi.fetchTable('Tasks');
+    assert.deepEqual(data.id, []);
+});
+
+test('BulkAddRecord ajoute plusieurs enregistrements au format colonnaire', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.docApi.applyUserActions([
+        ['BulkAddRecord', 'Team', [null, null], { nom: ['Claire', 'David'] }]
+    ]);
+    const data = await grist.docApi.fetchTable('Team');
+    assert.deepEqual(data.nom, ['Alice', 'Bob', 'Claire', 'David']);
+});
+
+test('AddTable rend la table lisible et visible dans les metadonnees', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.docApi.applyUserActions([
+        ['AddTable', 'Projects', [{ id: 'nom', type: 'Text' }, { id: 'couleur', type: 'Text' }]]
+    ]);
+    assert.deepEqual(await grist.docApi.fetchTable('Projects'), { id: [], nom: [], couleur: [] });
+    const meta = await grist.docApi.fetchTable('_grist_Tables');
+    assert.ok(meta.tableId.includes('Projects'));
+});
+
+test('AddColumn ajoute la colonne, valeur nulle sur les enregistrements existants', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.docApi.applyUserActions([['AddColumn', 'Tasks', 'charges', { type: 'Text' }]]);
+    const data = await grist.docApi.fetchTable('Tasks');
+    assert.deepEqual(data.charges, [null]);
+});
+
+test('ModifyColumn fusionne les proprietes de la colonne', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.docApi.applyUserActions([
+        ['ModifyColumn', 'Tasks', 'statut', { widgetOptions: '{"choices":["a"]}' }]
+    ]);
+    const cols = await grist.docApi.fetchTable('_grist_Tables_column');
+    const index = cols.colId.indexOf('statut');
+    assert.equal(cols.widgetOptions[index], '{"choices":["a"]}');
+    assert.equal(cols.type[index], 'Choice');
+});
+
+test('le journal conserve les actions dans l ordre', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', 1, { statut: 'done' }]]);
+    await grist.docApi.applyUserActions([['RemoveRecord', 'Tasks', 1]]);
+    assert.deepEqual(grist._log.map((a) => a[0]), ['UpdateRecord', 'RemoveRecord']);
+});
+
+test('une action sur une table inconnue leve', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await assert.rejects(
+        () => grist.docApi.applyUserActions([['UpdateRecord', 'Absente', 1, {}]]),
+        /Absente/
+    );
+});
