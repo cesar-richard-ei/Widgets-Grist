@@ -189,3 +189,70 @@ test('AddColumn sur une table inconnue leve le message homogene des autres actio
         /Table inconnue: Absente/
     );
 });
+
+test('ready declenche une premiere emission onRecords au format colonnaire', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const recus = [];
+    grist.onRecords((data) => recus.push(data));
+    await grist.ready({ requiredAccess: 'full' });
+    assert.equal(recus.length, 1);
+    assert.deepEqual(recus[0].titre, ['Analyse']);
+});
+
+test('onRecords est reemis apres une mutation de la table liee', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const recus = [];
+    grist.onRecords((data) => recus.push(data));
+    await grist.ready({ requiredAccess: 'full' });
+    await grist.docApi.applyUserActions([['AddRecord', 'Tasks', null, { titre: 'Nouvelle' }]]);
+    assert.equal(recus.length, 2);
+    assert.deepEqual(recus[1].titre, ['Analyse', 'Nouvelle']);
+});
+
+test('onRecords n est pas reemis pour une mutation d une autre table', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const recus = [];
+    grist.onRecords((data) => recus.push(data));
+    await grist.ready({ requiredAccess: 'full' });
+    await grist.docApi.applyUserActions([['UpdateRecord', 'Team', 1, { nom: 'Alice M' }]]);
+    assert.equal(recus.length, 1);
+});
+
+test('onRecords n est pas reemis quand un lot echoue', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const recus = [];
+    grist.onRecords((data) => recus.push(data));
+    await grist.ready({ requiredAccess: 'full' });
+    await assert.rejects(
+        () => grist.docApi.applyUserActions([
+            ['AddRecord', 'Tasks', null, { titre: 'Nouvelle' }],
+            ['UpdateRecord', 'Tasks', 999, { statut: 'done' }]
+        ]),
+        /999/
+    );
+    assert.equal(recus.length, 1);
+});
+
+test('setOption notifie onOptions et se relit par getOptions', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    const recus = [];
+    grist.onOptions((o) => recus.push(o));
+    await grist.setOption('filters', { project: [3] });
+    assert.deepEqual(recus[0], { filters: { project: [3] } });
+    assert.deepEqual(await grist.widgetApi.getOptions(), { filters: { project: [3] } });
+});
+
+test('setSelectedRows et setCursorPos sont journalises', async () => {
+    const grist = createFakeGrist(documentMinimal());
+    await grist.setSelectedRows([4]);
+    await grist.setCursorPos({ rowId: 4 });
+    assert.deepEqual(grist._log.map((a) => a[0]), ['setSelectedRows', 'setCursorPos']);
+});
+
+test('la table liee est configurable', async () => {
+    const grist = createFakeGrist(documentMinimal(), { tableLiee: 'Team' });
+    const recus = [];
+    grist.onRecords((data) => recus.push(data));
+    await grist.ready({ requiredAccess: 'full' });
+    assert.deepEqual(recus[0].nom, ['Alice', 'Bob']);
+});
