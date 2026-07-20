@@ -20,11 +20,17 @@ function createFakeGrist(documentInitial, options) {
     let refColonne = {};     // tableId -> { colId -> ref numerique }
     let prochainRefTable = 1;
     let prochainRefColonne = 1;
+    // Declare ici, avant declarerTable : la boucle d'initialisation du document
+    // plus bas invoque declarerTable des la construction, bien avant l'ancien
+    // emplacement de cette declaration.
+    let prochainId = {};
 
     function declarerTable(tableId, colonnes, enregistrements) {
-        doc[tableId] = { columns: {}, records: enregistrements || [] };
+        const enrs = enregistrements || [];
+        doc[tableId] = { columns: {}, records: enrs };
         refTable[tableId] = prochainRefTable++;
         refColonne[tableId] = {};
+        prochainId[tableId] = enrs.reduce((m, r) => Math.max(m, r.id), 0) + 1;
         for (const colId of Object.keys(colonnes || {})) declarerColonne(tableId, colId, colonnes[colId]);
     }
 
@@ -84,10 +90,6 @@ function createFakeGrist(documentInitial, options) {
     }
 
     const journal = [];
-    let prochainId = {};
-    for (const tableId of Object.keys(doc)) {
-        prochainId[tableId] = doc[tableId].records.reduce((m, r) => Math.max(m, r.id), 0) + 1;
-    }
 
     function table(tableId) {
         if (!doc[tableId]) throw new Error('Table inconnue: ' + tableId);
@@ -114,7 +116,6 @@ function createFakeGrist(documentInitial, options) {
             const colonnes = {};
             for (const c of action[2] || []) colonnes[c.id] = { type: c.type || 'Any' };
             declarerTable(action[1], colonnes, []);
-            prochainId[action[1]] = 1;
             return null;
         }
         if (type === 'AddColumn') {
