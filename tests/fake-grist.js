@@ -11,9 +11,11 @@
 const TABLES_META = ['_grist_Tables', '_grist_Tables_column'];
 
 function createFakeGrist(documentInitial) {
-    const doc = {};
-    const refTable = {};       // tableId -> ref numerique
-    const refColonne = {};     // tableId -> { colId -> ref numerique }
+    // let plutot que const : appliquer() referme sur ces noms de variables,
+    // un lot d'actions transactionnel doit pouvoir les reaffecter en bloc (voir applyUserActions).
+    let doc = {};
+    let refTable = {};       // tableId -> ref numerique
+    let refColonne = {};     // tableId -> { colId -> ref numerique }
     let prochainRefTable = 1;
     let prochainRefColonne = 1;
 
@@ -90,6 +92,19 @@ function createFakeGrist(documentInitial) {
         return doc[tableId];
     }
 
+    // Attribue l'identifiant d'un nouvel enregistrement. Un identifiant explicite
+    // fait avancer prochainId comme le ferait un vrai document Grist, et une collision
+    // avec un enregistrement existant leve : un document reel ne peut pas porter deux
+    // lignes de meme id.
+    function attribuerId(tableId, t, idDemande) {
+        if (idDemande == null) return prochainId[tableId]++;
+        if (t.records.some((r) => r.id === idDemande)) {
+            throw new Error('Identifiant deja utilise: ' + tableId + '#' + idDemande);
+        }
+        if (idDemande >= prochainId[tableId]) prochainId[tableId] = idDemande + 1;
+        return idDemande;
+    }
+
     function appliquer(action) {
         const type = action[0];
 
@@ -101,6 +116,7 @@ function createFakeGrist(documentInitial) {
             return null;
         }
         if (type === 'AddColumn') {
+            table(action[1]);
             declarerColonne(action[1], action[2], action[3]);
             return null;
         }
@@ -117,7 +133,7 @@ function createFakeGrist(documentInitial) {
         }
         if (type === 'AddRecord') {
             const t = table(action[1]);
-            const id = action[2] != null ? action[2] : prochainId[action[1]]++;
+            const id = attribuerId(action[1], t, action[2]);
             t.records.push(Object.assign({ id: id }, action[3] || {}));
             return id;
         }
@@ -125,15 +141,32 @@ function createFakeGrist(documentInitial) {
             const t = table(action[1]);
             const valeurs = action[3] || {};
             const colIds = Object.keys(valeurs);
-            const n = colIds.length ? valeurs[colIds[0]].length : (action[2] || []).length;
+            const idsDemandes = action[2] || [];
+            const n = colIds.length ? valeurs[colIds[0]].length : idsDemandes.length;
             const ids = [];
             for (let i = 0; i < n; i++) {
-                const rec = { id: prochainId[action[1]]++ };
+                const id = attribuerId(action[1], t, idsDemandes[i]);
+                const rec = { id: id };
                 for (const colId of colIds) rec[colId] = valeurs[colId][i];
                 t.records.push(rec);
-                ids.push(rec.id);
+                ids.push(id);
             }
             return ids;
+        }
+        if (type === 'UpdateRecord' && action[1] === '_grist_Tables_column') {
+            // Les widgets posent visibleCol par une mise a jour de la table de metadonnees.
+            for (const tableId of Object.keys(refColonne)) {
+                for (const colId of Object.keys(refColonne[tableId])) {
+                    if (refColonne[tableId][colId] === action[2]) {
+                        Object.assign(doc[tableId].columns[colId], action[3] || {});
+                        return null;
+                    }
+                }
+            }
+            // Un vrai document Grist refuse une mise a jour sur une reference de colonne
+            // qui n'existe pas ; rester coherent avec UpdateRecord sur les tables applicatives,
+            // qui leve deja dans ce cas (cf. plus bas).
+            throw new Error('Enregistrement inconnu: _grist_Tables_column#' + action[2]);
         }
         if (type === 'UpdateRecord') {
             const t = table(action[1]);
@@ -153,20 +186,34 @@ function createFakeGrist(documentInitial) {
     }
 
     async function applyUserActions(actions) {
+        // Un lot est transactionnel, comme applyUserActions sur un vrai document Grist :
+        // instantane avant d'appliquer, restauration integrale si une action leve, et le
+        // journal ne recoit les actions que si le lot entier a reussi.
+        const instantane = structuredClone({ doc: doc, refTable: refTable, refColonne: refColonne, prochainId: prochainId });
         const retValues = [];
-        for (const action of actions || []) {
-            journal.push(action);
-            retValues.push(appliquer(action));
+        try {
+            for (const action of actions || []) {
+                retValues.push(appliquer(action));
+            }
+        } catch (e) {
+            doc = instantane.doc;
+            refTable = instantane.refTable;
+            refColonne = instantane.refColonne;
+            prochainId = instantane.prochainId;
+            throw e;
         }
+        for (const action of actions || []) journal.push(action);
         return { retValues: retValues };
     }
 
     return {
         docApi: { fetchTable: fetchTable, listTables: listTables, applyUserActions: applyUserActions },
-        _doc: doc,
+        // Accesseurs plutot que proprietes figees : un rollack de lot reaffecte
+        // doc/refTable/refColonne (voir applyUserActions), l'expose doit suivre l'etat courant.
+        get _doc() { return doc; },
         _log: journal,
-        _refTable: refTable,
-        _refColonne: refColonne,
+        get _refTable() { return refTable; },
+        get _refColonne() { return refColonne; },
         _declarerTable: declarerTable,
         _declarerColonne: declarerColonne
     };
