@@ -519,6 +519,41 @@ Demandes remontées sur le forum Grist community :
 3. **`setOptions` ↔ `onOptions`** : appeler `setOptions` déclenche `onOptions` dans le même widget → utiliser le flag `_saving` pour éviter la boucle
 4. **broadcastFilters** : ne PAS appeler depuis le Dashboard (filtres locaux seulement)
 5. **Kanban = widget maître** : c'est lui qui initialise le schéma — toujours le charger en premier dans un nouveau document
+6. **Gantt : `render()` est différé pendant un geste souris** : voir ci-dessous, ne pas retirer la garde
+
+### Gantt : report du rendu pendant un geste souris
+
+`render()` (gantt.html) commence par une garde :
+
+```js
+if (gesteSourisEnCours) { renduEnAttente = true; return; }
+```
+
+**Pourquoi.** `render()` reconstruit `#taskList` et `#timelineGrid` par `innerHTML`. Le navigateur
+n'émet un `click` que si le `mousedown` et le `mouseup` partagent un ancêtre commun encore attaché
+au document. Si un rendu survient entre les deux, la ligne ou la barre visée est arrachée et
+**aucun `click` n'est émis**. Le clic est silencieusement perdu, l'utilisateur doit recommencer.
+
+**Deux chemins déclenchent ce cas :**
+
+- une saisie dans le titre ou la description, dont le `blur` provoque une écriture Grist, donc
+  `onRecords`, donc `loadAllData()` puis `render()` ;
+- tout clic sur une barre, `startDrag` et `endDrag` s'exécutant même sans déplacement et
+  appelant `render()`.
+
+**Le mécanisme.** Deux écouteurs posés en phase de **capture**, pour s'armer avant le
+`stopPropagation()` que `startDrag` pose sur le `mousedown` d'une barre ou d'une poignée. Le
+désarmement au `mouseup` est repoussé d'un tour de boucle par `setTimeout(..., 0)`, afin que le
+`click` du navigateur parte sur une cible encore attachée. Deux filets, sur `blur` de la fenêtre
+et `mouseleave` du document, évitent de rester bloqué si le relâchement n'arrive jamais dans la
+page.
+
+**Ne pas.** Supprimer la garde de `render()`, déplacer les écouteurs en phase de bulle, retirer le
+`setTimeout`, ou brancher la sélection des lignes sur `mousedown` pour contourner le problème.
+Chacun de ces changements ramène le clic perdu.
+
+Couvert par `tests/e2e/interaction.spec.js`, avec des gestes souris et clavier réels. Ces tests
+échouent si la garde est retirée.
 
 ### Déploiement
 
