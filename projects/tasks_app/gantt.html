@@ -1049,6 +1049,12 @@
         let effectiveCellWidth = 60;        // Largeur cellule adaptée (min = cfg.cellWidth, max = remplir widget)
         let effectivePxPerDay = 34;         // pxPerDay réel (utilisé aussi dans drag/drop)
         let saveTimeout = null;
+        // Geste souris en cours (mousedown -> mouseup, plus un court sursis apres le
+        // relachement) : tant qu'il dure, render() ne doit pas reconstruire #taskList ni
+        // #timelineGrid, sinon la ligne ou la barre visee est arrachee du DOM avant que le
+        // navigateur emette 'click'.
+        let gesteSourisEnCours = false;
+        let renduEnAttente = false;
 
         // ═══════════════════════════════════════════════════════════════════════
         // UTILITIES
@@ -1556,6 +1562,9 @@
         // RENDER FUNCTIONS
         // ═══════════════════════════════════════════════════════════════════════
         function render() {
+            // Un rendu demande pendant un clic ou un glisser en cours est reporte au
+            // relachement (voir les ecouteurs mousedown/mouseup plus bas).
+            if (gesteSourisEnCours) { renduEnAttente = true; return; }
             updatePeriodLabel();
             computeEffectiveRange();
             renderTimelineHeader();
@@ -3047,6 +3056,31 @@
         // ═══════════════════════════════════════════════════════════════════════
         // EVENT LISTENERS
         // ═══════════════════════════════════════════════════════════════════════
+        // Report de render() pendant un geste souris : capture pour s'armer avant tout
+        // stopPropagation() pose par startDrag() sur le mousedown d'une barre ou d'une
+        // poignee de redimensionnement.
+        document.addEventListener('mousedown', () => { gesteSourisEnCours = true; }, true);
+        document.addEventListener('mouseup', () => {
+            // Le navigateur emet 'click' juste apres 'mouseup' : le desarmement et le
+            // rendu differe sont repousses d'un tour de boucle pour laisser ce 'click'
+            // partir sur une cible encore attachee au DOM.
+            setTimeout(() => {
+                gesteSourisEnCours = false;
+                if (renduEnAttente) { renduEnAttente = false; render(); }
+            }, 0);
+        }, true);
+        // Filet : si le relachement n'arrive jamais dans la page (curseur sorti de la
+        // fenetre, perte de focus de l'onglet), on ne reste pas bloque avec un rendu
+        // jamais rejoue.
+        window.addEventListener('blur', () => {
+            gesteSourisEnCours = false;
+            if (renduEnAttente) { renduEnAttente = false; render(); }
+        });
+        document.addEventListener('mouseleave', () => {
+            gesteSourisEnCours = false;
+            if (renduEnAttente) { renduEnAttente = false; render(); }
+        });
+
         document.addEventListener('click', (e) => {
             // Fermer les menus dropdown
             if (!e.target.closest('.filter-dropdown')) {
