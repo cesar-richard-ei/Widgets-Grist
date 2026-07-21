@@ -22,4 +22,38 @@ const test = base.test.extend({
     }
 });
 
-module.exports = { test: test, expect: base.expect };
+// Ouvre la premiere ligne visible et renvoie son data-id : la liste est triee par
+// sortTasks() et la hierarchie WBS replie certaines lignes, donc l'identifiant de la
+// premiere ligne affichee ne correspond pas forcement au premier enregistrement de la table.
+async function ouvrirPremiereTache(page) {
+    const premiereLigne = page.locator('#taskList .task-row').first();
+    const id = Number(await premiereLigne.getAttribute('data-id'));
+    await premiereLigne.click();
+    await base.expect(page.locator('#panel')).toHaveClass(/open/);
+    return id;
+}
+
+// Ouvre la ligne visible a l'indice donne (0-based) et renvoie son data-id.
+async function ouvrirTacheAIndice(page, indice) {
+    const ligne = page.locator('#taskList .task-row').nth(indice);
+    const id = Number(await ligne.getAttribute('data-id'));
+    await ligne.click();
+    await base.expect(page.locator('#panel')).toHaveClass(/open/);
+    return id;
+}
+
+// Lit une colonne de la table Tasks pour un identifiant donne, via le simulacre.
+async function lireChampTache(page, id, colonne) {
+    return page.evaluate(async ({ taskId, col }) => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        return t[col][t.id.indexOf(taskId)];
+    }, { taskId: id, col: colonne });
+}
+
+module.exports = {
+    test: test,
+    expect: base.expect,
+    ouvrirPremiereTache: ouvrirPremiereTache,
+    ouvrirTacheAIndice: ouvrirTacheAIndice,
+    lireChampTache: lireChampTache
+};

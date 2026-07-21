@@ -1,28 +1,6 @@
 'use strict';
 
-const { test, expect } = require('./harness.js');
-
-async function ouvrirPremiereTache(page) {
-    await page.locator('#taskList .task-row').first().click();
-    await expect(page.locator('#panel')).toHaveClass(/open/);
-}
-
-// Ouvre la ligne visible a l'indice donne (0-based) et renvoie son data-id.
-async function ouvrirTacheAIndice(page, indice) {
-    const ligne = page.locator('#taskList .task-row').nth(indice);
-    const id = Number(await ligne.getAttribute('data-id'));
-    await ligne.click();
-    await expect(page.locator('#panel')).toHaveClass(/open/);
-    return id;
-}
-
-// Lit une colonne de la table Tasks pour un identifiant donne, via le simulacre.
-async function lireChampTache(page, id, colonne) {
-    return page.evaluate(async ({ taskId, col }) => {
-        const t = await window.grist.docApi.fetchTable('Tasks');
-        return t[col][t.id.indexOf(taskId)];
-    }, { taskId: id, col: colonne });
-}
+const { test, expect, ouvrirPremiereTache, ouvrirTacheAIndice, lireChampTache } = require('./harness.js');
 
 test('cliquer une autre tache bascule le panneau sans le fermer', async ({ gantt }) => {
     await ouvrirPremiereTache(gantt);
@@ -57,12 +35,28 @@ test('la timeline defile quand le panneau est ouvert', async ({ gantt }) => {
 
 test('aucun calque ne recouvre le Gantt', async ({ gantt }) => {
     await ouvrirPremiereTache(gantt);
-    await expect(gantt.locator('#panelOverlay')).toHaveCount(0);
+
+    // Verifie l'element reellement rendu au centre de la zone Gantt, plutot que l'absence
+    // d'un identifiant particulier : un calque bloquant reintroduit sous un autre nom passerait
+    // inapercu si on se contentait de chercher #panelOverlay, qui n'existe plus.
+    const centreEstDansLeGantt = await gantt.evaluate(() => {
+        const zone = document.getElementById('timelineScroll').getBoundingClientRect();
+        const cx = zone.left + zone.width / 2;
+        const cy = zone.top + zone.height / 2;
+        const el = document.elementFromPoint(cx, cy);
+        return !!el && !!el.closest('#timelineScroll, #timelineGrid, #taskList');
+    });
+    expect(centreEstDansLeGantt).toBe(true);
 });
 
 test('changer de tache panneau ouvert persiste la modification en attente', async ({ gantt }) => {
     const premierId = await ouvrirTacheAIndice(gantt, 0);
-    await gantt.locator('#taskDescription').fill('Description modifiee avant bascule');
+
+    // Geste reel : clic dans le champ puis frappe au clavier. Un fill() declencherait
+    // immediatement l'evenement change et masquerait le defaut vise, comme documente dans
+    // panneau.spec.js pour le meme motif.
+    await gantt.locator('#taskDescription').click();
+    await gantt.keyboard.type('Description modifiee avant bascule');
 
     await gantt.locator('#taskList .task-row').nth(1).click();
     await expect(gantt.locator('#panel')).toHaveClass(/open/);
