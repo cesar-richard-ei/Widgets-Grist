@@ -37,3 +37,8 @@ temp/
 coverage/
 .nyc_output/
 published/taskflow/HARMONIZATION.md
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/

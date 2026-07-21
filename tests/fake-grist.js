@@ -282,4 +282,10 @@ function createFakeGrist(documentInitial, options) {
     };
 }
 
-module.exports = { createFakeGrist };
+// Export Node pour les tests unitaires. Inerte dans le navigateur, ou le simulacre
+// est injecte comme script global et expose createFakeGrist sur window.
+// Note : un script ajoute via page.addInitScript({ path }) n'attache pas ses
+// declarations de premier niveau (function/var) a window, contrairement a une
+// balise <script> classique ; l'affectation explicite est necessaire cote navigateur.
+if (typeof module !== 'undefined' && module.exports) module.exports = { createFakeGrist };
+else if (typeof window !== 'undefined') window.createFakeGrist = createFakeGrist;
