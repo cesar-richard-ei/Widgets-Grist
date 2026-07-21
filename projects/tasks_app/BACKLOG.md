@@ -23,15 +23,15 @@ sur cette instance, la variable `GRIST_WIDGET_LIST_URL` n'étant pas accessible)
 | 8 | Le champ description du panneau latéral ne fonctionne pas | gantt | Retrait du flag `noSave` sur `updateField('description', …)` |
 | 9 | Les champs du panneau latéral ne se sauvegardent pas | gantt | Même correctif que #8, sur le titre |
 | 4 | Ne pas fermer la fenêtre tâche quand on clique sur une autre tâche | gantt | Retrait du calque `.panel-overlay` qui captait le clic |
-| 11 | Pouvoir scroller le Gantt quand le panneau latéral est ouvert | gantt | Même correctif que #4 |
+| 11 | Pouvoir scroller le Gantt quand le panneau latéral est ouvert | gantt | Même correctif que #4, sur gantt uniquement : `kanban.html` et `calendar.html` conservent encore `.panel-overlay`, les tickets 4 et 11 y subsistent donc |
 
 ## Relevé en cours d'analyse, hors demandes
 
 | Sujet | Cible | Détail |
 |-------|-------|--------|
-| Données de démonstration injectées dans un document réel | gantt | Le repli automatique l. 3142 teste `tasks.length === 0`, pas l'absence de Grist. Sur un document connecté mais vide, 13 tâches fictives et le badge « Démo » apparaissent au bout de 2,8 s |
+| Données de démonstration affichées sur un document réel | gantt | Le repli automatique l. 3170 teste `tasks.length === 0`, pas l'absence de Grist. Sur un document connecté mais vide, `useDemoMode` peuple les variables locales `tasks`/`team`/`projects` avec 13 tâches fictives et pose le badge « Démo » au bout de 2,8 s. Rien n'est écrit dans Grist : c'est une gêne visuelle, pas une pollution de données |
 | Échap ferme le panneau depuis un champ de saisie | gantt | Le listener l. 3070 n'exclut pas `input` et `textarea`. Combiné à #8 et #9, la saisie en cours est perdue |
-| `closePanel` n'attend pas l'écriture avant de réinitialiser | gantt | `closePanel` appelle `saveTaskToGrist` sans l'attendre puis réinitialise l'état du panneau. Si l'écriture échoue au moment de la fermeture, l'utilisateur voit un message d'erreur mais la saisie est déjà perdue, sans possibilité de reprise |
+| `closePanel` n'attend pas l'écriture avant de réinitialiser | gantt | `closePanel` appelle `saveTaskToGrist` sans l'attendre puis réinitialise l'état du panneau. Le défaut dépasse le seul risque d'erreur silencieuse : après son `await`, `saveTaskToGrist` reprend avec `panelState.taskId`, qui a pu changer entre-temps si l'utilisateur a rouvert une autre tâche pendant l'écriture, et applique alors en mémoire le record de la tâche quittée sur la tâche courante (`tasks[idx] = { ...tasks[idx], ...record }`). Le rechargement Grist qui suit (`onRecords` puis `loadAllData`) répare d'ordinaire cet état, mais l'ordre entre cette écriture tardive et ce rechargement n'est pas garanti avec de la latence réelle |
 
 ## Reporté
 
