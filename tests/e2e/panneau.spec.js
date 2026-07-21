@@ -5,7 +5,7 @@ const { test, expect, ouvrirPremiereTache, ouvrirTacheAIndice, lireChampTache } 
 // ═══════════════════════════════════════════════════════════════════════
 // Comportement existant du panneau (non lie a un correctif particulier)
 // ═══════════════════════════════════════════════════════════════════════
-test.describe('Panneau — comportement existant', () => {
+test.describe('Panneau : comportement existant', () => {
     test('cliquer une tache ouvre le panneau et decale le Gantt', async ({ gantt }) => {
         await ouvrirPremiereTache(gantt);
         await expect(gantt.locator('#ganttWrapper')).toHaveClass(/panel-open/);
@@ -66,7 +66,7 @@ test.describe('Panneau — comportement existant', () => {
 // ═══════════════════════════════════════════════════════════════════════
 // Correctifs de persistance de la saisie en attente
 // ═══════════════════════════════════════════════════════════════════════
-test.describe('Panneau — persistance de la saisie en attente (correctifs)', () => {
+test.describe('Panneau : persistance de la saisie en attente (correctifs)', () => {
     test('la description saisie est persistee des la perte du focus', async ({ gantt }) => {
         const id = await ouvrirPremiereTache(gantt);
 
