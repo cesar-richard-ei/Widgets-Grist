@@ -13,6 +13,23 @@ async function ouvrirPremiereTache(page) {
     return id;
 }
 
+// Ouvre la ligne visible a l'indice donne (0-based) et renvoie son data-id.
+async function ouvrirTacheAIndice(page, indice) {
+    const ligne = page.locator('#taskList .task-row').nth(indice);
+    const id = Number(await ligne.getAttribute('data-id'));
+    await ligne.click();
+    await expect(page.locator('#panel')).toHaveClass(/open/);
+    return id;
+}
+
+// Lit une colonne de la table Tasks pour un identifiant donne, via le simulacre.
+async function lireChampTache(page, id, colonne) {
+    return page.evaluate(async ({ taskId, col }) => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        return t[col][t.id.indexOf(taskId)];
+    }, { taskId: id, col: colonne });
+}
+
 test('cliquer une tache ouvre le panneau et decale le Gantt', async ({ gantt }) => {
     await ouvrirPremiereTache(gantt);
     await expect(gantt.locator('#ganttWrapper')).toHaveClass(/panel-open/);
@@ -32,24 +49,39 @@ test('la touche Echap ferme le panneau', async ({ gantt }) => {
 });
 
 test('changer le statut persiste immediatement', async ({ gantt }) => {
-    const id = await ouvrirPremiereTache(gantt);
-    await gantt.locator('.status-pill[data-status="done"]').click();
+    // Deuxieme ligne affichee (tri priorite par defaut) : "API backend", cinquieme
+    // enregistrement seede. Sa position affichee (indice 1) differe de sa position en
+    // table (indice 4), ce qui exerce reellement la recherche par identifiant.
+    const id = await ouvrirTacheAIndice(gantt, 1);
+    const statutInitial = await lireChampTache(gantt, id, 'statut');
+
+    // Choisit un statut different du statut courant parmi les pills reellement rendues,
+    // plutot que de coder une valeur en dur.
+    const statuts = await gantt.locator('.status-pill').evaluateAll((pills) => pills.map((p) => p.dataset.status));
+    const statutCible = statuts.find((s) => s !== statutInitial);
+    expect(statutCible).toBeTruthy();
+
+    await gantt.locator('.status-pill[data-status="' + statutCible + '"]').click();
     await expect(gantt.locator('#saveIndicator')).toHaveClass(/visible/);
 
-    // Retrouve l'enregistrement par son identifiant plutot que par position : le tri de
-    // la liste ne garantit aucune correspondance entre l'ordre affiche et l'ordre en table.
-    const statut = await gantt.evaluate(async (taskId) => {
-        const t = await window.grist.docApi.fetchTable('Tasks');
-        const index = t.id.indexOf(taskId);
-        return t.statut[index];
-    }, id);
-    expect(statut).toBe('done');
+    const statutFinal = await lireChampTache(gantt, id, 'statut');
+    expect(statutFinal).toBe(statutCible);
+    expect(statutFinal).not.toBe(statutInitial);
 });
 
 test('les fleches naviguent entre les taches', async ({ gantt }) => {
-    await ouvrirPremiereTache(gantt);
+    const premierId = await ouvrirPremiereTache(gantt);
     const premier = await gantt.locator('#taskTitle').inputValue();
+
+    // La tache attendue apres un clic sur "suivant" est celle qui occupe la deuxieme
+    // position dans la liste affichee, pas simplement une tache differente de la premiere.
+    const idSuivantAttendu = Number(await gantt.locator('#taskList .task-row').nth(1).getAttribute('data-id'));
+    expect(idSuivantAttendu).not.toBe(premierId);
+    const titreSuivantAttendu = await lireChampTache(gantt, idSuivantAttendu, 'titre');
+
     await gantt.locator('#panelHeader .panel-nav-btn').last().click();
     const suivant = await gantt.locator('#taskTitle').inputValue();
+
     expect(suivant).not.toBe(premier);
+    expect(suivant).toBe(titreSuivantAttendu);
 });
