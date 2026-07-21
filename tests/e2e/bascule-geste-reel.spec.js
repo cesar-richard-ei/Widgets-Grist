@@ -1,14 +1,6 @@
 'use strict';
 
-const { test, expect } = require('./harness.js');
-
-// Lit une colonne de la table Tasks pour un identifiant donne, via le simulacre.
-async function lireChampTache(page, id, colonne) {
-    return page.evaluate(async ({ taskId, col }) => {
-        const t = await window.grist.docApi.fetchTable('Tasks');
-        return t[col][t.id.indexOf(taskId)];
-    }, { taskId: id, col: colonne });
-}
+const { test, expect, lireChampTache } = require('./harness.js');
 
 // Ces deux tests reproduisent le geste utilisateur reel : clic pour donner le focus au
 // champ, frappe clavier (keyboard.type, pas fill), puis un unique clic souris sur une
@@ -53,4 +45,30 @@ test('taper dans la description puis cliquer une autre barre bascule le panneau 
 
     const titreAffiche = await gantt.locator('#taskTitle').inputValue();
     expect(titreAffiche).toBe(titreAttendu);
+});
+
+// Un glisser natif HTML5 (Sortable.js, reordonnancement manuel de la liste des taches) emet
+// mousedown, dragstart, drop, dragend, jamais mouseup. Reproduit ici via des evenements
+// synthetiques : seule la sequence importe pour exercer le desarmement, pas le deplacement
+// visuel reellement produit par Sortable.
+test('un glisser natif sans mouseup ne bloque pas le rendu suivant', async ({ gantt }) => {
+    await gantt.evaluate(() => {
+        const ligne = document.querySelector('#taskList .task-row');
+        ligne.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        ligne.dispatchEvent(new DragEvent('dragstart', { bubbles: true }));
+        ligne.dispatchEvent(new DragEvent('drop', { bubbles: true }));
+        ligne.dispatchEvent(new DragEvent('dragend', { bubbles: true }));
+    });
+
+    // Aucun mouseup n'a suivi. Si le geste restait arme, cet appel a render() se contenterait
+    // de marquer un rendu en attente sans reconstruire #taskList.
+    const titreAffiche = await gantt.evaluate(() => {
+        const ligne = document.querySelector('#taskList .task-row');
+        const t = tasks.find((x) => x.id === Number(ligne.dataset.id));
+        t.titre = 'Titre modifie apres glisser natif';
+        render();
+        return document.querySelector('#taskList .task-row .task-name').textContent;
+    });
+
+    expect(titreAffiche).toContain('Titre modifie apres glisser natif');
 });
