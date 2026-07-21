@@ -120,6 +120,33 @@ test('fermer sans rien modifier n emet aucune ecriture', async ({ gantt }) => {
     expect(apres).toBe(avant);
 });
 
+test('basculer sur une autre tache n emet aucune ecriture parasite a la fermeture', async ({ gantt }) => {
+    const premierId = await ouvrirPremiereTache(gantt);
+
+    // Saisie declenchee sans donner le focus au champ : un vrai clic dans le champ puis
+    // ailleurs provoquerait un blur natif, qui sauvegarde et vide l indicateur via la voie
+    // normale (onchange) avant meme que la bascule de tache n intervienne, masquant ainsi
+    // le defaut vise. On reproduit uniquement l evenement input (comme le ferait la frappe),
+    // qui laisse l indicateur arme jusqu a la bascule elle-meme.
+    await gantt.evaluate(() => {
+        const champ = document.getElementById('taskDescription');
+        champ.value = 'Description modifiee avant bascule';
+        champ.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+
+    // Clique sur la deuxieme ligne affichee : la premiere tache doit s ecrire au passage.
+    const deuxiemeId = await ouvrirTacheAIndice(gantt, 1);
+    expect(deuxiemeId).not.toBe(premierId);
+
+    const descriptionPremiere = await lireChampTache(gantt, premierId, 'description');
+    expect(descriptionPremiere).toBe('Description modifiee avant bascule');
+
+    const avant = await gantt.evaluate(() => window.grist._log.length);
+    await gantt.locator('#panelHeader .panel-close').click();
+    const apres = await gantt.evaluate(() => window.grist._log.length);
+    expect(apres).toBe(avant);
+});
+
 test('les fleches naviguent entre les taches', async ({ gantt }) => {
     const premierId = await ouvrirPremiereTache(gantt);
     const premier = await gantt.locator('#taskTitle').inputValue();
