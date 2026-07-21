@@ -152,4 +152,24 @@ test.describe('Panneau : persistance de la saisie en attente (correctifs)', () =
         const description = await lireChampTache(gantt, id, 'description');
         expect(description).toBe('Description saisie avant creation');
     });
+
+    test('ouvrir la creation sans clic prealable persiste la saisie en attente', async ({ gantt }) => {
+        const id = await ouvrirPremiereTache(gantt);
+
+        // Meme technique que pour la bascule de tache : un evenement input sans donner le
+        // focus au champ, comme le ferait la frappe. Un clic sur le bouton de la barre
+        // d'outils declencherait lui-meme un blur natif qui sauvegarde et vide l'indicateur
+        // avant l'ouverture en creation, masquant le defaut vise. L'ouverture en creation est
+        // ici appelee directement, sans passer par ce clic.
+        await gantt.evaluate(() => {
+            const champ = document.getElementById('taskDescription');
+            champ.value = 'Description modifiee sans clic prealable';
+            champ.dispatchEvent(new Event('input', { bubbles: true }));
+        });
+
+        await gantt.evaluate(() => { openCreateTaskWithParent(null); });
+
+        const description = await lireChampTache(gantt, id, 'description');
+        expect(description).toBe('Description modifiee sans clic prealable');
+    });
 });
