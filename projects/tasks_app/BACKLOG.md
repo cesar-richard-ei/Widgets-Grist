@@ -8,10 +8,6 @@ sur cette instance, la variable `GRIST_WIDGET_LIST_URL` n'étant pas accessible)
 
 | # | Demande | Cible | Cause identifiée |
 |---|---------|-------|------------------|
-| 8 | Le champ description du panneau latéral ne fonctionne pas | gantt | `updateField('description', …, true)` l. 2355 : le flag `noSave` empêche la persistance |
-| 9 | Les champs du panneau latéral ne se sauvegardent pas | gantt | Même cause que #8, sur le titre l. 2280. Les autres champs persistent déjà |
-| 4 | Ne pas fermer la fenêtre tâche quand on clique sur une autre tâche | gantt | `.panel-overlay` capte le clic et ferme le panneau |
-| 11 | Pouvoir scroller le Gantt quand le panneau latéral est ouvert | gantt | Le scroll fonctionne, mais l'overlay neutralise clics et drag. Même cause que #4 |
 | 7 | Recherche dans les sélecteurs dépendance / personne / tâche racine | gantt | Dropdowns maison sans champ de recherche ; le parent impose un détachement avant reparentage |
 | 10 | Replier toutes les tâches d'un coup (repli seul, pas le dépli) | gantt | Repli par tâche existant ; `_expandAllForExport` / `_restoreExpandState` réservées à l'export, non exposées |
 | 3 | Masquer les onglets Dashboard, Kanban, Calendar, Whiteboard | index | Onglets désactivés par indicateur, entrées conservées |
@@ -20,12 +16,22 @@ sur cette instance, la variable `GRIST_WIDGET_LIST_URL` n'étant pas accessible)
 | 6 | Filtrer par Domaine | gantt | Notion absente du modèle |
 | 13 | Vue Gantt depuis une fiche projet ou chantier | à définir | Dépend du modèle de données |
 
+## Corrigé
+
+| # | Demande | Cible | Résolution |
+|---|---------|-------|------------|
+| 8 | Le champ description du panneau latéral ne fonctionne pas | gantt | Retrait du flag `noSave` sur `updateField('description', …)` |
+| 9 | Les champs du panneau latéral ne se sauvegardent pas | gantt | Même correctif que #8, sur le titre |
+| 4 | Ne pas fermer la fenêtre tâche quand on clique sur une autre tâche | gantt | Retrait du calque `.panel-overlay` qui captait le clic |
+| 11 | Pouvoir scroller le Gantt quand le panneau latéral est ouvert | gantt | Même correctif que #4 |
+
 ## Relevé en cours d'analyse, hors demandes
 
 | Sujet | Cible | Détail |
 |-------|-------|--------|
 | Données de démonstration injectées dans un document réel | gantt | Le repli automatique l. 3142 teste `tasks.length === 0`, pas l'absence de Grist. Sur un document connecté mais vide, 13 tâches fictives et le badge « Démo » apparaissent au bout de 2,8 s |
 | Échap ferme le panneau depuis un champ de saisie | gantt | Le listener l. 3070 n'exclut pas `input` et `textarea`. Combiné à #8 et #9, la saisie en cours est perdue |
+| `closePanel` n'attend pas l'écriture avant de réinitialiser | gantt | `closePanel` appelle `saveTaskToGrist` sans l'attendre puis réinitialise l'état du panneau. Si l'écriture échoue au moment de la fermeture, l'utilisateur voit un message d'erreur mais la saisie est déjà perdue, sans possibilité de reprise |
 
 ## Reporté
 

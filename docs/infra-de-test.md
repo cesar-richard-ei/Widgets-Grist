@@ -99,7 +99,8 @@ publication.
 
 ### Niveau 1, unitaire sur le core
 
-Runner `node:test`, intégré à Node 20, déjà la version utilisée par la CI. Aucune dépendance.
+Runner `node:test`, intégré à Node 20, déjà la version utilisée par la CI. Aucune dépendance pour
+ce niveau : Playwright n'intervient qu'au niveau 2.
 
 Une ligne ajoutée en fin de `core/taskflow-core.js` :
 
@@ -189,12 +190,15 @@ désynchronisation entre le core et les widgets inlinés passerait actuellement 
 
 ## Trajectoire
 
-| Phase | Contenu | Code de production |
-|-------|---------|--------------------|
-| 0 | Simulacre, unitaires sur le core, CI | Une ligne d'export |
-| 1 | Tests figeant le comportement du panneau, puis #8/#9 et #4/#11 | Correctifs ciblés |
-| 2 | #7, #10, #3, #5 | Correctifs ciblés |
-| 3 | Extraction du panneau en module | Refonte garantie par la phase 1 |
+| Phase | Contenu | Code de production | État |
+|-------|---------|--------------------|------|
+| 0 | Simulacre, unitaires sur le core, CI | Une ligne d'export | Faite |
+| 1 | Tests figeant le comportement du panneau, puis #8/#9 et #4/#11 | Correctifs ciblés | Faite |
+| 2 | #7, #10, #3, #5 | Correctifs ciblés | À venir |
+| 3 | Extraction du panneau en module | Refonte garantie par la phase 1 | À venir |
+
+La phase 1 a ajouté Playwright comme dépendance de développement et une étape d'installation en
+CI, jusque-là inutile faute de dépendance.
 
 **Règle de migration.** On n'extrait que ce que les tickets font toucher, et jamais avant que des
 tests de niveau 2 aient figé le comportement existant du morceau concerné. Le panneau latéral est
