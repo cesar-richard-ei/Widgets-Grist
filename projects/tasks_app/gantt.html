@@ -2105,6 +2105,8 @@
         function openCreateTaskWithParent(parentId) {
             const today = new Date();
             const parent = parentId ? tasks.find(t => t.id === parentId) : null;
+            // Ecrit la saisie en cours avant de passer en creation, meme condition que closePanel et openTaskPanel.
+            if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
             panelState = {
                 open: true, isNew: true, taskId: null, taskIndex: -1, taskList: panelState.taskList, dirty: false,
                 editData: {
