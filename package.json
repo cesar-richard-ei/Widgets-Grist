@@ -13,7 +13,8 @@
     "check:taskflow": "node scripts/build-taskflow.js --check",
     "serve:dev": "node scripts/serve-dev.js",
     "serve": "npx serve published -p 3000 --cors",
-    "test": "node --test tests/unit/*.test.js"
+    "test": "node --test tests/unit/*.test.js",
+    "test:e2e": "playwright test"
   },
   "repository": {
     "type": "git",
@@ -28,5 +29,8 @@
     "no-code"
   ],
   "author": "nicO1asFr",
-  "license": "MIT"
+  "license": "MIT",
+  "devDependencies": {
+    "@playwright/test": "^1.61.1"
+  }
 }
