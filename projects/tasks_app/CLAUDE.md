@@ -546,14 +546,28 @@ au document. Si un rendu survient entre les deux, la ligne ou la barre visée es
 désarmement au `mouseup` est repoussé d'un tour de boucle par `setTimeout(..., 0)`, afin que le
 `click` du navigateur parte sur une cible encore attachée. Deux filets, sur `blur` de la fenêtre
 et `mouseleave` du document, évitent de rester bloqué si le relâchement n'arrive jamais dans la
-page.
+page. Si plusieurs rendus sont demandés pendant un même geste, ils sont fusionnés : seul
+`renduEnAttente` compte, pas leur nombre, donc une seule reconstruction est jouée au désarmement.
+
+**Un troisième chemin, sans `mouseup` du tout.** Le glisser natif HTML5 (Sortable.js,
+réordonnancement manuel de la liste des tâches, ou tout glisser de texte déjà sélectionné hors
+du champ titre) émet `mousedown`, `dragstart`, `drop`, `dragend` : jamais `mouseup`, le
+navigateur ne l'émet pas dans ce cas. Sans désarmement dédié, `gesteSourisEnCours` restait armé
+indéfiniment : le rendu d'annulation d'un déplacement hors fratrie ne s'exécutait pas (le
+déplacement interdit restait affiché), et toute mise à jour entrante (`onRecords`, changement de
+vue, filtres) restait sans effet jusqu'au clic suivant. `dragend` et `drop` sont donc ajoutés
+aux événements qui désarment le geste, via `terminerGesteSouris`, en phase de capture et sans le
+tour de boucle du `mouseup` : aucun `click` ne suit un glisser natif, il n'y a rien à laisser
+partir sur une cible encore attachée.
 
 **Ne pas.** Supprimer la garde de `render()`, déplacer les écouteurs en phase de bulle, retirer le
-`setTimeout`, ou brancher la sélection des lignes sur `mousedown` pour contourner le problème.
-Chacun de ces changements ramène le clic perdu.
+`setTimeout` du `mouseup`, ou brancher la sélection des lignes sur `mousedown` pour contourner le
+problème. Chacun de ces changements ramène le clic perdu.
 
-Couvert par `tests/e2e/interaction.spec.js`, avec des gestes souris et clavier réels. Ces tests
-échouent si la garde est retirée.
+Couvert par `tests/e2e/bascule-geste-reel.spec.js`, avec des gestes souris et clavier réels, y
+compris le glisser natif sans `mouseup`. Ces tests échouent si la garde ou le désarmement sont
+retirés. `tests/e2e/interaction.spec.js` couvre le panneau lui-même mais n'exerce pas ce
+mécanisme : il reste entièrement vert dans ce cas.
 
 ### Déploiement
 

@@ -30,7 +30,7 @@ sur cette instance, la variable `GRIST_WIDGET_LIST_URL` n'étant pas accessible)
 | Sujet | Cible | Détail |
 |-------|-------|--------|
 | Données de démonstration affichées sur un document réel | gantt | Le repli automatique l. 3170 teste `tasks.length === 0`, pas l'absence de Grist. Sur un document connecté mais vide, `useDemoMode` peuple les variables locales `tasks`/`team`/`projects` avec 13 tâches fictives et pose le badge « Démo » au bout de 2,8 s. Rien n'est écrit dans Grist : c'est une gêne visuelle, pas une pollution de données |
-| Échap ferme le panneau depuis un champ de saisie | gantt | Le listener l. 3070 n'exclut pas `input` et `textarea`. Combiné à #8 et #9, la saisie en cours est perdue |
+| Échap ferme le panneau depuis un champ de saisie | gantt | Le listener l. 3118 n'exclut pas `input` et `textarea`. Combiné à #8 et #9, la saisie en cours est perdue |
 | `closePanel` n'attend pas l'écriture avant de réinitialiser | gantt | `closePanel` appelle `saveTaskToGrist` sans l'attendre puis réinitialise l'état du panneau. Le défaut dépasse le seul risque d'erreur silencieuse : après son `await`, `saveTaskToGrist` reprend avec `panelState.taskId`, qui a pu changer entre-temps si l'utilisateur a rouvert une autre tâche pendant l'écriture, et applique alors en mémoire le record de la tâche quittée sur la tâche courante (`tasks[idx] = { ...tasks[idx], ...record }`). Le rechargement Grist qui suit (`onRecords` puis `loadAllData`) répare d'ordinaire cet état, mais l'ordre entre cette écriture tardive et ce rechargement n'est pas garanti avec de la latence réelle |
 
 ## Reporté
