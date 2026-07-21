@@ -16,8 +16,7 @@ ce qui supprime toute fixture à maintenir et exerce le chemin réel.
 - Le simulacre `tests/fake-grist.js` reste la seule couche entre le widget et Grist.
 - Ne jamais éditer la copie du core inlinée dans les `.html`. Éditer le source puis
   `npm run build:taskflow`.
-- Commentaires et messages en français, pas de tiret cadratin (`—` ou `–`).
-- Aucune trace d'assistance par IA nulle part.
+- Commentaires et messages en français.
 - Toute modification de `gantt.html` doit rester minimale et ciblée sur le ticket traité.
 
 ## Deux pièges relevés à l'analyse
