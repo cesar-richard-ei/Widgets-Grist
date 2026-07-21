@@ -17,8 +17,17 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Installation des dependances
+        run: npm ci
+
       - name: Tests unitaires
         run: npm test
 
       - name: Synchronisation du core inline
         run: npm run check:taskflow
+
+      - name: Installation du navigateur
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests de bout en bout
+        run: npm run test:e2e
