@@ -1046,7 +1046,7 @@
         let sortableInstance = null;
         let filters = { project: [], assignee: [], priority: [] };  // GEN-02: Arrays pour compatibilité inter-widgets
         let dragState = { active: false, type: null, taskId: null, startX: 0, originalLeft: 0, originalWidth: 0, originalStart: null, originalEnd: null };
-        let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null };
+        let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null, dirty: false };
         let overlayPointerStart = { x: 0, y: 0 };
         let effectiveStart = new Date();    // Plage effective calculée à chaque render()
         let effectiveDays = 30;             // = période vue + extension pour tâches qui chevauchent
@@ -2058,11 +2058,13 @@
         }
 
         function closePanel() {
+            // Ecrit la saisie en cours du titre ou de la description, que rien d'autre ne persiste.
+            if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
             panelState.open = false;
             document.getElementById('panel').classList.remove('open');
             document.getElementById('ganttWrapper').classList.remove('panel-open');
             document.getElementById('panelOverlay').classList.remove('visible');
-            panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: panelState.taskList, editData: null };
+            panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: panelState.taskList, editData: null, dirty: false };
             selectedTaskId = null;
             render();
         }
@@ -2096,7 +2098,7 @@
             const today = new Date();
             const parent = parentId ? tasks.find(t => t.id === parentId) : null;
             panelState = {
-                open: true, isNew: true, taskId: null, taskIndex: -1, taskList: panelState.taskList,
+                open: true, isNew: true, taskId: null, taskIndex: -1, taskList: panelState.taskList, dirty: false,
                 editData: {
                     titre: '', description: '', type: 'tache', priorite: '3', statut: 'todo', progression: 0,
                     dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)),
@@ -2280,7 +2282,7 @@
                     '<span class="type-pill ' + (data.type === 'reunion' ? 'selected' : '') + '" onclick="updateField(\'type\',\'reunion\')"> Réunion</span>' +
                 '</div>' +
                 (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
-                '<input type="text" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" value="' + escapeHtml(data.titre) + '" oninput="updateField(\'titre\', this.value, true)">' +
+                '<input type="text" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" value="' + escapeHtml(data.titre) + '" oninput="updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' +
 
                 '<div class="props-list">' +
                     '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
@@ -2355,7 +2357,7 @@
                 '</div>' +
 
                 '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">' + descLabel + '</span></div>' +
-                '<div class="form-group"><textarea class="form-textarea" placeholder="' + descLabel + '..." oninput="updateField(\'description\', this.value, true)">' + escapeHtml(data.description) + '</textarea></div></div>' +
+                '<div class="form-group"><textarea class="form-textarea" id="taskDescription" placeholder="' + descLabel + '..." oninput="updateField(\'description\', this.value, true)" onchange="updateField(\'description\', this.value)">' + escapeHtml(data.description) + '</textarea></div></div>' +
 
                 // WBS-02: Section "Sous-tâches (enfants)" — structurelles, vraies tâches Grist
                 (!panelState.isNew ? (function() {
@@ -2445,7 +2447,8 @@
                 if (btn) btn.disabled = !value || !value.trim();
             }
 
-            if (!panelState.isNew && !noSave && gristReady) saveTaskToGrist();
+            if (noSave) panelState.dirty = true;
+            if (!panelState.isNew && !noSave && gristReady) { panelState.dirty = false; saveTaskToGrist(); }
         }
 
         function setProgressPreset(value) {

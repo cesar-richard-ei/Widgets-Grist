@@ -69,6 +69,57 @@ test('changer le statut persiste immediatement', async ({ gantt }) => {
     expect(statutFinal).not.toBe(statutInitial);
 });
 
+test('la description saisie est persistee a la fermeture du panneau', async ({ gantt }) => {
+    await ouvrirPremiereTache(gantt);
+    await gantt.locator('#taskDescription').fill('Cadrage a valider avec le metier');
+    await gantt.locator('#panelHeader .panel-close').click();
+
+    const description = await gantt.evaluate(async () => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        return t.description[0];
+    });
+    expect(description).toBe('Cadrage a valider avec le metier');
+});
+
+test('le titre saisi est persiste a la fermeture du panneau', async ({ gantt }) => {
+    await ouvrirPremiereTache(gantt);
+    await gantt.locator('#taskTitle').fill('Titre revise');
+    await gantt.locator('#panelHeader .panel-close').click();
+
+    const titre = await gantt.evaluate(async () => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        return t.titre[0];
+    });
+    expect(titre).toBe('Titre revise');
+});
+
+test('la saisie est persistee meme en fermant par Echap', async ({ gantt }) => {
+    await ouvrirPremiereTache(gantt);
+    await gantt.locator('#taskDescription').fill('Saisie fermee au clavier');
+    await gantt.keyboard.press('Escape');
+
+    const description = await gantt.evaluate(async () => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        return t.description[0];
+    });
+    expect(description).toBe('Saisie fermee au clavier');
+});
+
+test('quitter le champ persiste sans fermer le panneau', async ({ gantt }) => {
+    await ouvrirPremiereTache(gantt);
+    await gantt.locator('#taskDescription').fill('Persistee en quittant le champ');
+    await gantt.locator('#taskTitle').click();
+    await expect(gantt.locator('#saveIndicator')).toHaveClass(/visible/);
+});
+
+test('fermer sans rien modifier n emet aucune ecriture', async ({ gantt }) => {
+    await ouvrirPremiereTache(gantt);
+    const avant = await gantt.evaluate(() => window.grist._log.length);
+    await gantt.locator('#panelHeader .panel-close').click();
+    const apres = await gantt.evaluate(() => window.grist._log.length);
+    expect(apres).toBe(avant);
+});
+
 test('les fleches naviguent entre les taches', async ({ gantt }) => {
     const premierId = await ouvrirPremiereTache(gantt);
     const premier = await gantt.locator('#taskTitle').inputValue();
