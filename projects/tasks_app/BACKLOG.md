@@ -20,6 +20,13 @@ sur cette instance, la variable `GRIST_WIDGET_LIST_URL` n'étant pas accessible)
 | 6 | Filtrer par Domaine | gantt | Notion absente du modèle |
 | 13 | Vue Gantt depuis une fiche projet ou chantier | à définir | Dépend du modèle de données |
 
+## Relevé en cours d'analyse, hors demandes
+
+| Sujet | Cible | Détail |
+|-------|-------|--------|
+| Données de démonstration injectées dans un document réel | gantt | Le repli automatique l. 3142 teste `tasks.length === 0`, pas l'absence de Grist. Sur un document connecté mais vide, 13 tâches fictives et le badge « Démo » apparaissent au bout de 2,8 s |
+| Échap ferme le panneau depuis un champ de saisie | gantt | Le listener l. 3070 n'exclut pas `input` et `textarea`. Combiné à #8 et #9, la saisie en cours est perdue |
+
 ## Reporté
 
 | # | Demande | Raison |
