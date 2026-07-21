@@ -3062,26 +3062,22 @@
         // stopPropagation() pose par startDrag() sur le mousedown d'une barre ou d'une
         // poignee de redimensionnement.
         document.addEventListener('mousedown', () => { gesteSourisEnCours = true; }, true);
+        // Desarme le geste en cours et rejoue le rendu s'il a ete reporte.
+        function terminerGesteSouris() {
+            gesteSourisEnCours = false;
+            if (renduEnAttente) { renduEnAttente = false; render(); }
+        }
         document.addEventListener('mouseup', () => {
             // Le navigateur emet 'click' juste apres 'mouseup' : le desarmement et le
             // rendu differe sont repousses d'un tour de boucle pour laisser ce 'click'
             // partir sur une cible encore attachee au DOM.
-            setTimeout(() => {
-                gesteSourisEnCours = false;
-                if (renduEnAttente) { renduEnAttente = false; render(); }
-            }, 0);
+            setTimeout(terminerGesteSouris, 0);
         }, true);
         // Filet : si le relachement n'arrive jamais dans la page (curseur sorti de la
         // fenetre, perte de focus de l'onglet), on ne reste pas bloque avec un rendu
         // jamais rejoue.
-        window.addEventListener('blur', () => {
-            gesteSourisEnCours = false;
-            if (renduEnAttente) { renduEnAttente = false; render(); }
-        });
-        document.addEventListener('mouseleave', () => {
-            gesteSourisEnCours = false;
-            if (renduEnAttente) { renduEnAttente = false; render(); }
-        });
+        window.addEventListener('blur', terminerGesteSouris);
+        document.addEventListener('mouseleave', terminerGesteSouris);
 
         document.addEventListener('click', (e) => {
             // Fermer les menus dropdown
