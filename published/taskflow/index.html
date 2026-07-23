@@ -108,7 +108,9 @@ body { display: flex; flex-direction: column; background: var(--bg); }
 <script>
 // ── Config (auto local / prod) ─────────────────────────────────────
 const LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-const PROD  = 'https://nic01asfr.github.io/Widgets-Grist/taskflow/';
+// Dossier du launcher lui-meme (.../taskflow/) : les vues sont servies a cote, sur la meme
+// origine que le launcher. Evite de pointer en dur vers un depot precis.
+const PROD  = new URL('./', location.href).href;
 // dev : tasks_app/<id>.html ; whiteboard est dans projects/whiteboard/. prod : taskflow/<id>/
 function urlFor(id) {
   if (id === 'whiteboard') return (LOCAL ? 'http://localhost:3001/whiteboard/index.html' : PROD + 'whiteboard/') + '?shell=1';
@@ -125,6 +127,16 @@ const TABS = [
   { id: 'whiteboard', label: 'Whiteboard', icon: '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="14" rx="2"/><line x1="3" y1="20" x2="21" y2="20"/><line x1="8" y1="17" x2="8" y2="20"/><line x1="16" y1="17" x2="16" y2="20"/></svg>' },
 ];
 const LABELS = {}; TABS.forEach(function (t) { LABELS[t.id] = t.label; });
+
+// ── Onglets visibles ── Toutes les vues restent chargeables (rien n'est retire) ; seules
+//   celles listees ici apparaissent dans la barre. Defaut Gantt + Plan, surchargeable via
+//   ?tabs=gantt,plan sur l'URL du widget.
+const DEFAULT_VISIBLE = ['gantt', 'plan'];
+const byId = {}; TABS.forEach(function (t) { byId[t.id] = t; });
+const askedTabs = new URLSearchParams(window.location.search).get('tabs');
+const wantedIds = askedTabs ? askedTabs.split(',').map(function (s) { return s.trim(); }).filter(Boolean) : DEFAULT_VISIBLE;
+let VISIBLE_TABS = wantedIds.map(function (id) { return byId[id]; }).filter(Boolean);
+if (!VISIBLE_TABS.length) VISIBLE_TABS = DEFAULT_VISIBLE.map(function (id) { return byId[id]; }).filter(Boolean);
 
 const navbar   = document.getElementById('navbar');
 const frame    = document.getElementById('frame');
@@ -146,7 +158,7 @@ window.addEventListener('message', function (event) {
 });
 
 // ── Barre d'onglets ──
-navbar.innerHTML = TABS.map(function (t) {
+navbar.innerHTML = VISIBLE_TABS.map(function (t) {
   return '<button class="tab" data-id="' + t.id + '">' + t.icon + t.label + '</button>';
 }).join('');
 navbar.querySelectorAll('.tab[data-id]').forEach(function (b) { b.onclick = function () { go(b.dataset.id); }; });
@@ -170,7 +182,7 @@ function go(id) {
 
 // ── Init ── RELAIS PUR : pas d'API Grist dans le launcher (sinon elle intercepte et casse
 //   les appels des widgets enfants). Le "ready" et toute l'API viennent de l'enfant, relayés.
-go('dashboard');
+go(VISIBLE_TABS[0].id);
 </script>
 </body>
 </html>
