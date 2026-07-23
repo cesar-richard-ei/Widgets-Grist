@@ -1035,6 +1035,15 @@
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
+        // Bascule unique vers les defauts recommandes : appliquee une fois a chacun (y compris ceux
+        // qui avaient deja des preferences), puis les choix ulterieurs de l'utilisateur persistent.
+        const GANTT_DEFAULTS_VERSION = '2';
+        if (localStorage.getItem('taskflow_gantt_defaults') !== GANTT_DEFAULTS_VERSION) {
+            localStorage.setItem('taskflow_gantt_view', 'semester');
+            localStorage.setItem('taskflow_gantt_sort', 'date');
+            localStorage.setItem('taskflow_gantt_colormode', 'project');
+            localStorage.setItem('taskflow_gantt_defaults', GANTT_DEFAULTS_VERSION);
+        }
         let currentView = localStorage.getItem('taskflow_gantt_view') || 'semester';
         let viewStartDate = new Date();
         let selectedTaskId = null;
