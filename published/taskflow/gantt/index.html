@@ -281,6 +281,9 @@
         .multi-select-option.selected { background: var(--primary-light); }
         .multi-select-option input { width: 14px; height: 14px; }
         .multi-select-empty { padding: 12px; text-align: center; color: var(--text-muted); font-size: 0.8rem; }
+        .multi-select-search { position: sticky; top: 0; z-index: 1; width: 100%; box-sizing: border-box; border: none; border-bottom: 1px solid var(--border); padding: 8px 10px; font-size: 0.8rem; background: var(--card-bg); color: var(--text); outline: none; }
+        .multi-select-search::placeholder { color: var(--text-muted); }
+        .multi-select-noresult { padding: 12px; text-align: center; color: var(--text-muted); font-size: 0.8rem; display: none; }
 
         /* Tags */
         .tags-input { display: flex; flex-wrap: wrap; gap: 5px; padding: 6px 10px; border: 1px solid var(--border); border-radius: 8px; min-height: 40px; align-items: center; cursor: text; background: var(--card-bg); }
@@ -2227,6 +2230,13 @@
             const assignLabel = data.type === 'reunion' ? 'Participants' : 'Assignés';
             const titlePlaceholder = data.type === 'jalon' ? 'Nom du jalon...' : data.type === 'reunion' ? 'Sujet de la réunion...' : 'Titre de la tâche...';
 
+            // Recherche dans les sélecteurs (dépendance / personne / tâche racine) : filtrage
+            // des options en direct, sans re-render, focus posé à l'ouverture du dropdown.
+            const msSearch = '<input type="text" class="multi-select-search" placeholder="Rechercher…" oninput="filterMultiSelectOptions(this)" onclick="event.stopPropagation()">';
+            const msNoResult = '<div class="multi-select-noresult">Aucun résultat</div>';
+            const parentOptions = (!panelState.isNew ? tasks.filter(t => t.id !== panelState.taskId && canSetParent(panelState.taskId, t.id)) : [])
+                .map(t => '<div class="multi-select-option" onclick="setParent(' + t.id + ')">' + escapeHtml(t.titre) + '</div>').join('');
+
             const assigneesChips = data.assignees.map(id =>
                 '<span class="multi-select-chip">' + escapeHtml(getTeamMemberName(id)) + '<span class="remove" onclick="event.stopPropagation();removeAssignee(' + id + ')">×</span></span>'
             ).join('');
@@ -2329,9 +2339,7 @@
                                     '<span class="multi-select-chip" ' + (panelState.isNew ? '' : 'onclick="openTaskPanel(' + data.parentTask + ')"') + ' style="' + (panelState.isNew ? '' : 'cursor:pointer;') + 'background:var(--primary-light);color:var(--primary)">↑ ' + escapeHtml((tasks.find(t => t.id === data.parentTask) || {}).titre || '(inconnu)') + '</span>' +
                                     '<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="detachFromParent()">Détacher</button>' +
                                   '</div>'
-                                : '<select class="form-select" onchange="if(this.value)setParent(parseInt(this.value))"><option value="">— Tâche racine —</option>' +
-                                    tasks.filter(t => t.id !== panelState.taskId && canSetParent(panelState.taskId, t.id)).map(t => '<option value="' + t.id + '">' + escapeHtml(t.titre) + '</option>').join('') +
-                                  '</select>') +
+                                : '<div class="multi-select" id="parentSelect"><button class="addbtn" onclick="toggleMultiSelect(\'parentSelect\')"><span style="font-size:1rem;line-height:1">+</span> Choisir une tâche parent</button><div class="multi-select-dropdown">' + msSearch + (parentOptions || '<div class="multi-select-empty">Aucune tâche disponible</div>') + msNoResult + '</div></div>') +
                         '</div></div>'
                         : '') +
                     '<div class="prop-row"><span class="prop-label">Couleur</span><div class="prop-value"><div style="display:flex;gap:8px;align-items:center">' +
@@ -2342,7 +2350,7 @@
                     '</div></div></div>' +
                     '<div class="prop-row"><span class="prop-label">' + assignLabel + '</span><div class="prop-value">' +
                         (data.assignees.length ? '<div class="asg-list">' + data.assignees.map(function(id){ var nm=getTeamMemberName(id)||'?'; var initials=nm.split(' ').filter(Boolean).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase(); var mem=team.find(function(x){return x.id===id;}); return '<div class="asg"><span class="asg-ava" style="background:'+getTeamMemberColor(id)+'">'+escapeHtml(initials)+'</span><span class="an">'+escapeHtml(nm)+'</span>'+(mem&&mem.role?'<span class="ar">'+escapeHtml(mem.role)+'</span>':'')+'<button class="asg-x" title="Retirer" onclick="removeAssignee('+id+')">×</button></div>'; }).join('') + '</div>' : '') +
-                        '<div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect(\'assigneesSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' + (data.type === 'reunion' ? 'Ajouter un participant' : 'Assigner un membre') + '</button><div class="multi-select-dropdown">' + (assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>') + '</div></div>' +
+                        '<div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect(\'assigneesSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' + (data.type === 'reunion' ? 'Ajouter un participant' : 'Assigner un membre') + '</button><div class="multi-select-dropdown">' + msSearch + (assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>') + msNoResult + '</div></div>' +
                     '</div></div>' +
                     (data.type === 'tache' ?
                         '<div class="prop-row"><span class="prop-label">Temps &amp; charge</span><div class="prop-value">' +
@@ -2403,7 +2411,7 @@
                     '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Détails</span></div>' +
                     '<div class="form-group"><div class="tags-input" onclick="document.getElementById(\'tagInput\').focus()">' + tagsChips + '<input type="text" id="tagInput" placeholder="' + (data.tags.length ? '' : 'Ajouter un tag...') + '" onkeydown="handleTagKeydown(event)"></div></div>' +
                     (data.type !== 'reunion' ?
-                        '<div class="form-group"><div class="multi-select" id="depsSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'depsSelect\')"><div class="multi-select-values">' + (depsChips || '<span class="multi-select-placeholder">Dépendances...</span>') + '</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">' + (depsOptions || '<div class="multi-select-empty">Aucune</div>') + '</div></div>' + blockedHtml + '</div>' : '') +
+                        '<div class="form-group"><div class="multi-select" id="depsSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'depsSelect\')"><div class="multi-select-values">' + (depsChips || '<span class="multi-select-placeholder">Dépendances...</span>') + '</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">' + msSearch + (depsOptions || '<div class="multi-select-empty">Aucune</div>') + msNoResult + '</div></div>' + blockedHtml + '</div>' : '') +
                     '</div>' : '') +
 
                 (!panelState.isNew ?
@@ -2567,6 +2575,25 @@
             const el = document.getElementById(id);
             document.querySelectorAll('.multi-select').forEach(s => { if (s.id !== id) s.classList.remove('open'); });
             el.classList.toggle('open');
+            if (el.classList.contains('open')) {
+                const search = el.querySelector('.multi-select-search');
+                if (search) { search.value = ''; filterMultiSelectOptions(search); search.focus(); }
+            }
+        }
+
+        // Filtre les options d'un dropdown selon la saisie, sans re-render (le focus reste dans le champ).
+        function filterMultiSelectOptions(input) {
+            const dd = input.closest('.multi-select-dropdown');
+            if (!dd) return;
+            const q = input.value.trim().toLowerCase();
+            let shown = 0;
+            dd.querySelectorAll('.multi-select-option').forEach(opt => {
+                const match = !q || (opt.textContent || '').toLowerCase().indexOf(q) !== -1;
+                opt.style.display = match ? '' : 'none';
+                if (match) shown++;
+            });
+            const nr = dd.querySelector('.multi-select-noresult');
+            if (nr) nr.style.display = (q && shown === 0) ? 'block' : 'none';
         }
 
         function toggleAssignee(id) {
