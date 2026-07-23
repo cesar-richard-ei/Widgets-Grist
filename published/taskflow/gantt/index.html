@@ -1032,11 +1032,11 @@
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
-        let currentView = localStorage.getItem('taskflow_gantt_view') || 'month';
+        let currentView = localStorage.getItem('taskflow_gantt_view') || 'semester';
         let viewStartDate = new Date();
         let selectedTaskId = null;
-        let sortMode = localStorage.getItem('taskflow_gantt_sort') || 'priority';
-        let colorMode = localStorage.getItem('taskflow_gantt_colormode') || 'priority';
+        let sortMode = localStorage.getItem('taskflow_gantt_sort') || 'date';
+        let colorMode = localStorage.getItem('taskflow_gantt_colormode') || 'project';
         // WBS-02: état expand/collapse par tâche parente
         let expandedTasks = new Set();
         try { expandedTasks = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_expanded') || '[]').map(Number).filter(n => !isNaN(n))); } catch (e) {}
