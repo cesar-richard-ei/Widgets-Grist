@@ -201,8 +201,6 @@
         .legend-separator { width: 1px; height: 16px; background: var(--border); }
 
         /* Panel Slide-in */
-        .panel-overlay { position: absolute; top: 0; left: 0; right: var(--panel-width); bottom: 0; z-index: 40; opacity: 0; pointer-events: none; transition: opacity 0.25s ease; }
-        .panel-overlay.visible { opacity: 1; pointer-events: auto; cursor: pointer; }
         .panel { position: absolute; top: 0; right: 0; width: var(--panel-width); height: 100%; background: var(--card-bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.25s ease; z-index: 50; }
         .panel.open { transform: translateX(0); }
         .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg); gap: 8px; }
@@ -654,7 +652,6 @@
             <div class="legend" id="ganttLegend"></div>
         </div>
 
-        <div class="panel-overlay" id="panelOverlay"></div>
         <div class="panel" id="panel">
             <div class="panel-header" id="panelHeader"></div>
             <div class="panel-content" id="panelContent"></div>
@@ -1022,6 +1019,9 @@
                 chargeMatrix: chargeMatrix
             };
         })();
+
+        // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
+        if (typeof module !== 'undefined' && module.exports) module.exports = TF;
         // </taskflow-core>
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -1043,13 +1043,19 @@
         let sortableInstance = null;
         let filters = { project: [], assignee: [], priority: [] };  // GEN-02: Arrays pour compatibilité inter-widgets
         let dragState = { active: false, type: null, taskId: null, startX: 0, originalLeft: 0, originalWidth: 0, originalStart: null, originalEnd: null };
-        let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null };
-        let overlayPointerStart = { x: 0, y: 0 };
+        let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null, dirty: false };
         let effectiveStart = new Date();    // Plage effective calculée à chaque render()
         let effectiveDays = 30;             // = période vue + extension pour tâches qui chevauchent
         let effectiveCellWidth = 60;        // Largeur cellule adaptée (min = cfg.cellWidth, max = remplir widget)
         let effectivePxPerDay = 34;         // pxPerDay réel (utilisé aussi dans drag/drop)
         let saveTimeout = null;
+        // Geste souris en cours (mousedown -> mouseup, plus un court sursis apres le
+        // relachement) : tant qu'il dure, render() ne doit pas reconstruire #taskList ni
+        // #timelineGrid, sinon la ligne ou la barre visee est arrachee du DOM avant que le
+        // navigateur emette 'click'.
+        let gesteSourisEnCours = false;
+        let renduEnAttente = false;
+        let timeoutDesarmement = null; // id du setTimeout de desarmement du mouseup, pour pouvoir l'annuler
 
         // ═══════════════════════════════════════════════════════════════════════
         // UTILITIES
@@ -1557,6 +1563,9 @@
         // RENDER FUNCTIONS
         // ═══════════════════════════════════════════════════════════════════════
         function render() {
+            // Un rendu demande pendant un clic ou un glisser en cours est reporte au
+            // relachement (voir les ecouteurs mousedown/mouseup plus bas).
+            if (gesteSourisEnCours) { renduEnAttente = true; return; }
             updatePeriodLabel();
             computeEffectiveRange();
             renderTimelineHeader();
@@ -2051,15 +2060,15 @@
             const _tt = document.getElementById('tooltip'); if (_tt) _tt.classList.remove('visible'); // masque le tooltip survol quand le panel s'ouvre
             document.getElementById('panel').classList.add('open');
             document.getElementById('ganttWrapper').classList.add('panel-open');
-            document.getElementById('panelOverlay').classList.add('visible');
         }
 
         function closePanel() {
+            // Ecrit la saisie en cours du titre ou de la description, que rien d'autre ne persiste.
+            if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
             panelState.open = false;
             document.getElementById('panel').classList.remove('open');
             document.getElementById('ganttWrapper').classList.remove('panel-open');
-            document.getElementById('panelOverlay').classList.remove('visible');
-            panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: panelState.taskList, editData: null };
+            panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: panelState.taskList, editData: null, dirty: false };
             selectedTaskId = null;
             render();
         }
@@ -2072,6 +2081,11 @@
         function openTaskPanel(taskId) {
             const task = tasks.find(t => t.id === taskId);
             if (!task) return;
+
+            // Ecrit la saisie en cours avant de basculer sur une autre tache, meme condition que closePanel.
+            if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
+            // L'indicateur doit repartir a faux : editData va etre remplace par celui de la nouvelle tache.
+            panelState.dirty = false;
 
             selectedTaskId = taskId;
             const idx = panelState.taskList.findIndex(t => t.id === taskId);
@@ -2092,8 +2106,10 @@
         function openCreateTaskWithParent(parentId) {
             const today = new Date();
             const parent = parentId ? tasks.find(t => t.id === parentId) : null;
+            // Ecrit la saisie en cours avant de passer en creation, meme condition que closePanel et openTaskPanel.
+            if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
             panelState = {
-                open: true, isNew: true, taskId: null, taskIndex: -1, taskList: panelState.taskList,
+                open: true, isNew: true, taskId: null, taskIndex: -1, taskList: panelState.taskList, dirty: false,
                 editData: {
                     titre: '', description: '', type: 'tache', priorite: '3', statut: 'todo', progression: 0,
                     dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)),
@@ -2277,7 +2293,7 @@
                     '<span class="type-pill ' + (data.type === 'reunion' ? 'selected' : '') + '" onclick="updateField(\'type\',\'reunion\')"> Réunion</span>' +
                 '</div>' +
                 (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
-                '<input type="text" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" value="' + escapeHtml(data.titre) + '" oninput="updateField(\'titre\', this.value, true)">' +
+                '<input type="text" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" value="' + escapeHtml(data.titre) + '" oninput="updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' +
 
                 '<div class="props-list">' +
                     '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
@@ -2352,7 +2368,7 @@
                 '</div>' +
 
                 '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">' + descLabel + '</span></div>' +
-                '<div class="form-group"><textarea class="form-textarea" placeholder="' + descLabel + '..." oninput="updateField(\'description\', this.value, true)">' + escapeHtml(data.description) + '</textarea></div></div>' +
+                '<div class="form-group"><textarea class="form-textarea" id="taskDescription" placeholder="' + descLabel + '..." oninput="updateField(\'description\', this.value, true)" onchange="updateField(\'description\', this.value)">' + escapeHtml(data.description) + '</textarea></div></div>' +
 
                 // WBS-02: Section "Sous-tâches (enfants)" — structurelles, vraies tâches Grist
                 (!panelState.isNew ? (function() {
@@ -2442,7 +2458,8 @@
                 if (btn) btn.disabled = !value || !value.trim();
             }
 
-            if (!panelState.isNew && !noSave && gristReady) saveTaskToGrist();
+            if (noSave) panelState.dirty = true;
+            if (!panelState.isNew && !noSave && gristReady) { panelState.dirty = false; saveTaskToGrist(); }
         }
 
         function setProgressPreset(value) {
@@ -3042,6 +3059,41 @@
         // ═══════════════════════════════════════════════════════════════════════
         // EVENT LISTENERS
         // ═══════════════════════════════════════════════════════════════════════
+        // Report de render() pendant un geste souris : capture pour s'armer avant tout
+        // stopPropagation() pose par startDrag() sur le mousedown d'une barre ou d'une
+        // poignee de redimensionnement.
+        document.addEventListener('mousedown', () => {
+            // Annule un desarmement encore en attente (mouseup precedent) : sans cela, un
+            // mousedown survenant avant l'execution de ce setTimeout (fil occupe par un rendu
+            // lourd) se ferait desarmer par erreur des que ce minuteur perime se declenche.
+            if (timeoutDesarmement !== null) { clearTimeout(timeoutDesarmement); timeoutDesarmement = null; }
+            gesteSourisEnCours = true;
+        }, true);
+        // Desarme le geste en cours et rejoue le rendu s'il a ete reporte.
+        function terminerGesteSouris() {
+            gesteSourisEnCours = false;
+            if (renduEnAttente) { renduEnAttente = false; render(); }
+        }
+        document.addEventListener('mouseup', () => {
+            // Le navigateur emet 'click' juste apres 'mouseup' : le desarmement et le
+            // rendu differe sont repousses d'un tour de boucle pour laisser ce 'click'
+            // partir sur une cible encore attachee au DOM.
+            timeoutDesarmement = setTimeout(() => { timeoutDesarmement = null; terminerGesteSouris(); }, 0);
+        }, true);
+        // Filet : si le relachement n'arrive jamais dans la page (curseur sorti de la
+        // fenetre, perte de focus de l'onglet), on ne reste pas bloque avec un rendu
+        // jamais rejoue.
+        window.addEventListener('blur', terminerGesteSouris);
+        document.addEventListener('mouseleave', terminerGesteSouris);
+        // Un glisser natif HTML5 (reordonnancement manuel de la liste des taches, Sortable.js)
+        // n'emet jamais de 'mouseup' : la sequence reelle est mousedown, dragstart, drop,
+        // dragend. Sans ce desarmement, gesteSourisEnCours resterait arme et tout render()
+        // ulterieur serait avale jusqu'au prochain clic. Desarmement immediat, sans le tour de
+        // boucle utilise pour le mouseup : aucun 'click' ne suit un glisser natif, il n'y a rien
+        // a laisser partir sur une cible encore attachee.
+        document.addEventListener('dragend', terminerGesteSouris, true);
+        document.addEventListener('drop', terminerGesteSouris, true);
+
         document.addEventListener('click', (e) => {
             // Fermer les menus dropdown
             if (!e.target.closest('.filter-dropdown')) {
@@ -3069,14 +3121,6 @@
                 if (e.key === 'ArrowLeft') navigatePanelTask(-1);
                 if (e.key === 'ArrowRight') navigatePanelTask(1);
             }
-        });
-
-        const panelOverlay = document.getElementById('panelOverlay');
-        panelOverlay.addEventListener('mousedown', (e) => { overlayPointerStart = { x: e.clientX, y: e.clientY }; });
-        panelOverlay.addEventListener('mouseup', (e) => {
-            const dx = Math.abs(e.clientX - overlayPointerStart.x);
-            const dy = Math.abs(e.clientY - overlayPointerStart.y);
-            if (dx < 5 && dy < 5) confirmClosePanel();
         });
 
         // ═══════════════════════════════════════════════════════════════════════
