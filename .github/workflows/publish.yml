@@ -1,7 +1,5 @@
 name: Publish to GitHub Pages
 
-# Déploie le contenu de published/ sur GitHub Pages (déploiement par Actions).
-
 on:
   push:
     branches: [main]
