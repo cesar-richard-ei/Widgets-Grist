@@ -1046,6 +1046,7 @@
         }
         let currentView = localStorage.getItem('taskflow_gantt_view') || 'semester';
         let viewStartDate = new Date();
+        let ganttNowAligned = false;
         let selectedTaskId = null;
         let sortMode = localStorage.getItem('taskflow_gantt_sort') || 'date';
         let colorMode = localStorage.getItem('taskflow_gantt_colormode') || 'project';
@@ -1912,6 +1913,15 @@
                 todayLine.className = 'today-line';
                 todayLine.style.left = Math.round(todayOffset * pxPerDay) + 'px';
                 grid.appendChild(todayLine);
+
+                // Au premier rendu, amener la colonne du jour près du bord gauche (marge d'une cellule).
+                if (!ganttNowAligned) {
+                    const sc = document.getElementById('timelineScroll');
+                    if (sc && sc.scrollWidth > sc.clientWidth) {
+                        sc.scrollLeft = Math.max(0, Math.round(todayOffset * pxPerDay - effectiveCellWidth));
+                        ganttNowAligned = true;
+                    }
+                }
             }
 
             // Barres et jalons — ordre Y = currentVisible (DFS avec expand/collapse)
