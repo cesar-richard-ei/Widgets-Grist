@@ -108,8 +108,7 @@ body { display: flex; flex-direction: column; background: var(--bg); }
 <script>
 // ── Config (auto local / prod) ─────────────────────────────────────
 const LOCAL = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
-// Dossier du launcher lui-meme (.../taskflow/) : les vues sont servies a cote, sur la meme
-// origine que le launcher. Evite de pointer en dur vers un depot precis.
+// Dossier du launcher : les vues sont servies a cote, meme origine.
 const PROD  = new URL('./', location.href).href;
 // dev : tasks_app/<id>.html ; whiteboard est dans projects/whiteboard/. prod : taskflow/<id>/
 function urlFor(id) {
@@ -128,9 +127,7 @@ const TABS = [
 ];
 const LABELS = {}; TABS.forEach(function (t) { LABELS[t.id] = t.label; });
 
-// ── Onglets visibles ── Toutes les vues restent chargeables (rien n'est retire) ; seules
-//   celles listees ici apparaissent dans la barre. Defaut Gantt + Plan, surchargeable via
-//   ?tabs=gantt,plan sur l'URL du widget.
+// Onglets affiches (les autres vues restent joignables). Surchargeable via ?tabs=gantt,plan.
 const DEFAULT_VISIBLE = ['gantt', 'plan'];
 const byId = {}; TABS.forEach(function (t) { byId[t.id] = t; });
 const askedTabs = new URLSearchParams(window.location.search).get('tabs');

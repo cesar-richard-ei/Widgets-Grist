@@ -1035,8 +1035,7 @@
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
-        // Bascule unique vers les defauts recommandes : appliquee une fois a chacun (y compris ceux
-        // qui avaient deja des preferences), puis les choix ulterieurs de l'utilisateur persistent.
+        // Applique une fois les defauts recommandes, meme par-dessus d'anciennes preferences.
         const GANTT_DEFAULTS_VERSION = '2';
         if (localStorage.getItem('taskflow_gantt_defaults') !== GANTT_DEFAULTS_VERSION) {
             localStorage.setItem('taskflow_gantt_view', 'semester');
@@ -2249,8 +2248,7 @@
             const assignLabel = data.type === 'reunion' ? 'Participants' : 'Assignés';
             const titlePlaceholder = data.type === 'jalon' ? 'Nom du jalon...' : data.type === 'reunion' ? 'Sujet de la réunion...' : 'Titre de la tâche...';
 
-            // Recherche dans les sélecteurs (dépendance / personne / tâche racine) : filtrage
-            // des options en direct, sans re-render, focus posé à l'ouverture du dropdown.
+            // Champ de recherche partagé par les sélecteurs recherchables.
             const msSearch = '<input type="text" class="multi-select-search" placeholder="Rechercher…" oninput="filterMultiSelectOptions(this)" onclick="event.stopPropagation()">';
             const msNoResult = '<div class="multi-select-noresult">Aucun résultat</div>';
             const parentOptions = (!panelState.isNew ? tasks.filter(t => t.id !== panelState.taskId && canSetParent(panelState.taskId, t.id)) : [])
@@ -2600,7 +2598,7 @@
             }
         }
 
-        // Filtre les options d'un dropdown selon la saisie, sans re-render (le focus reste dans le champ).
+        // Filtre les options sans re-render, pour garder le focus dans le champ.
         function filterMultiSelectOptions(input) {
             const dd = input.closest('.multi-select-dropdown');
             if (!dd) return;
