@@ -91,3 +91,33 @@ test('setRefDisplayColumns n emet rien si la colonne n est pas une Ref', async (
     await TF.setRefDisplayColumns(grist, [{ table: 'Tasks', column: 'projet', visibleColId: 'nom' }]);
     assert.equal(grist._log.length, 0);
 });
+
+test('ensureUntiedLabels delie le colId du label sur les colonnes demandees', async () => {
+    const grist = createFakeGrist({
+        Tasks: { columns: { titre: { type: 'Text' }, statut: { type: 'Choice' } }, records: [] },
+        Projects: { columns: { nom: { type: 'Text' } }, records: [] }
+    });
+    await TF.ensureUntiedLabels(grist, { Tasks: ['titre', 'statut'], Projects: ['nom'] });
+
+    assert.equal(grist._doc.Tasks.columns.titre.untieColIdFromLabel, true);
+    assert.equal(grist._doc.Tasks.columns.statut.untieColIdFromLabel, true);
+    assert.equal(grist._doc.Projects.columns.nom.untieColIdFromLabel, true);
+});
+
+test('ensureUntiedLabels ne reemet rien si les colonnes sont deja deliees', async () => {
+    const grist = createFakeGrist({
+        Tasks: { columns: { titre: { type: 'Text', untieColIdFromLabel: true } }, records: [] }
+    });
+    await TF.ensureUntiedLabels(grist, { Tasks: ['titre'] });
+    assert.equal(grist._log.length, 0);
+});
+
+test('ensureUntiedLabels ignore une table ou une colonne absente sans lever', async () => {
+    const grist = createFakeGrist({
+        Tasks: { columns: { titre: { type: 'Text' } }, records: [] }
+    });
+    await TF.ensureUntiedLabels(grist, { Tasks: ['titre', 'absente'], Manquante: ['x'] });
+
+    assert.equal(grist._doc.Tasks.columns.titre.untieColIdFromLabel, true);
+    assert.equal('absente' in grist._doc.Tasks.columns, false);
+});

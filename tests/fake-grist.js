@@ -67,7 +67,8 @@ function createFakeGrist(documentInitial, options) {
                     colId: colId,
                     type: info.type,
                     widgetOptions: info.widgetOptions != null ? info.widgetOptions : '',
-                    visibleCol: info.visibleCol != null ? info.visibleCol : 0
+                    visibleCol: info.visibleCol != null ? info.visibleCol : 0,
+                    untieColIdFromLabel: info.untieColIdFromLabel != null ? info.untieColIdFromLabel : false
                 });
             }
         }
@@ -79,7 +80,7 @@ function createFakeGrist(documentInitial, options) {
             return versColonnaire(lignesMetaTables(), ['tableId']);
         }
         if (nom === '_grist_Tables_column') {
-            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'type', 'widgetOptions', 'visibleCol']);
+            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'type', 'widgetOptions', 'visibleCol', 'untieColIdFromLabel']);
         }
         if (!doc[nom]) throw new Error('Table inconnue: ' + nom);
         return versColonnaire(doc[nom].records, Object.keys(doc[nom].columns));
