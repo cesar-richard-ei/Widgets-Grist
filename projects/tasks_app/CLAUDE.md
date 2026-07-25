@@ -214,6 +214,7 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 - Tooltip configurable au survol (`TOOLTIP_FIELDS`)
 - Filtre assigné + projet
 - Sous-tâches dans panel — **FUT-01**
+- Bouton discret « replier toutes les tâches » dans l'en-tête de la colonne (fermeture seule, visible seulement quand une branche est dépliée)
 - Couleurs avatars membres depuis `couleur` Team — **TEAM-01**
 - Export Print/PDF + PNG — **GEN-03**
 

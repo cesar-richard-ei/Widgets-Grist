@@ -124,6 +124,8 @@
         .tree-chevron:hover { background: var(--bg); color: var(--text); }
         .tree-chevron.expanded { transform: rotate(90deg); }
         .tree-chevron-placeholder { display: inline-block; width: 16px; flex-shrink: 0; }
+        .collapse-all-btn { display: none; align-items: center; justify-content: center; width: 18px; height: 18px; padding: 0; border: none; background: transparent; color: var(--text-light); cursor: pointer; border-radius: 3px; font-size: 0.72rem; line-height: 1; transition: background 0.15s, color 0.15s; }
+        .collapse-all-btn:hover { background: var(--bg); color: var(--text); }
         .task-row.dimmed { opacity: 0.4; }
         .task-row.dimmed:hover { opacity: 0.7; }
         .task-row.parent .task-name { font-weight: 600; }
@@ -637,7 +639,7 @@
     <div class="main-content">
         <div class="gantt-wrapper" id="ganttWrapper">
             <div class="gantt-header">
-                <div class="task-list-header"><span>Tâches</span><span id="taskCount" style="font-size:0.7rem;color:var(--text-muted);">0</span></div>
+                <div class="task-list-header"><span style="display:inline-flex;align-items:center;gap:4px;"><span>Tâches</span><button id="collapseAllBtn" class="collapse-all-btn" onclick="collapseAll()" title="Replier toutes les tâches" aria-label="Replier toutes les tâches">⊟</button></span><span id="taskCount" style="font-size:0.7rem;color:var(--text-muted);">0</span></div>
                 <div class="timeline-header" id="timelineHeader">
                     <div class="timeline-header-scroll" id="timelineHeaderScroll">
                         <div class="timeline-header-months" id="monthsHeader"></div>
@@ -1258,6 +1260,13 @@
             localStorage.setItem('taskflow_gantt_expanded', JSON.stringify([...expandedTasks]));
             render();
         }
+        // WBS-02: replie toutes les branches d'un coup (fermeture seule, pas d'ouverture)
+        function collapseAll() {
+            if (!expandedTasks.size) return;
+            expandedTasks.clear();
+            localStorage.setItem('taskflow_gantt_expanded', JSON.stringify([]));
+            render();
+        }
         // Tri au sein d'une fratrie selon sortMode
         function sortFratrie(arr) {
             if (sortMode === 'priority') {
@@ -1761,6 +1770,8 @@
             currentVisible = buildVisibleTasks();
             panelState.taskList = currentVisible.map(v => v.task);
             document.getElementById('taskCount').textContent = currentVisible.length;
+            const collapseBtn = document.getElementById('collapseAllBtn');
+            if (collapseBtn) collapseBtn.style.display = tasks.some(t => hasChildren(t) && expandedTasks.has(t.id)) ? 'inline-flex' : 'none';
 
             let html = '';
             currentVisible.forEach(({ task: t, depth, dimmed }) => {
