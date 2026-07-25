@@ -1088,9 +1088,27 @@
                 return { effectiveStart: eStart, effectiveDays: effectiveDays, numCells: numCells, cellWidth: effCellWidth, pxPerDay: pxPerDay };
             }
 
+            /* Géométrie d'une barre / d'un jalon sur la timeline (pur). Reprend le clamping
+             * exact de gantt.html : plancher de largeur, décalage du diamant. Partagé avec le lite.
+             * Entrée : { start:Date, tStart:Date, tEnd:Date, pxPerDay:number }
+             * Sortie : { left, width, barLeft, barWidth, isNarrow, diamondLeft } (px)
+             */
+            function computeBarGeometry(o) {
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const startOffset = daysDiff(o.start, o.tStart);
+                const duration = Math.max(daysDiff(o.tStart, o.tEnd) + 1, 1);
+                const left = Math.round(startOffset * o.pxPerDay);
+                const width = Math.round(duration * o.pxPerDay);
+                const barLeft = Math.max(0, left);
+                const barWidth = Math.max(width - (barLeft - left), 12);
+                const diamondLeft = Math.max(0, left + Math.round(o.pxPerDay / 2) - 7);
+                return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
+            }
+
             return {
                 DEFAULT_STATUSES: DEFAULT_STATUSES,
                 computeTimelineScale: computeTimelineScale,
+                computeBarGeometry: computeBarGeometry,
                 columnarToRows: columnarToRows,
                 fetchSchemaMeta: fetchSchemaMeta,
                 loadStatusConfig: loadStatusConfig,
@@ -2016,10 +2034,8 @@
                 const p = getTaskPriority(t);
                 const jalon = isJalon(t);
                 const top = idx * 44 + 10;
-                const startOffset = getDaysDiff(start, tStart);
-                const duration = Math.max(getDaysDiff(tStart, tEnd) + 1, 1);
-                const left = Math.round(startOffset * pxPerDay);
-                const width = Math.round(duration * pxPerDay);
+                const geo = TF.computeBarGeometry({ start: start, tStart: tStart, tEnd: tEnd, pxPerDay: pxPerDay });
+                const left = geo.left, width = geo.width;
                 const selected = t.id === selectedTaskId;
                 const dimmed = dimmedSet.has(t.id);
 
@@ -2029,7 +2045,7 @@
                     const m = document.createElement('div');
                     m.className = 'gantt-milestone p' + p + (selected ? ' selected' : '') + (dimmed ? ' dimmed' : '');
                     m.dataset.id = t.id;
-                    m.style.left = Math.max(0, left + Math.round(pxPerDay / 2) - 7) + 'px';
+                    m.style.left = geo.diamondLeft + 'px';
                     m.style.top = top + 'px';
                     const jColor = getTaskColor(t);
                     m.innerHTML = '<div class="milestone-diamond" style="background:' + jColor + '"></div><span class="milestone-label">' + escapeHtml(t.titre) + '</span>';
@@ -2038,9 +2054,7 @@
                     grid.appendChild(m);
                 } else {
                     const bar = document.createElement('div');
-                    const barLeft = Math.max(0, left);
-                    const barWidth = Math.max(width - (barLeft - left), 12);
-                    const isNarrow = barWidth < 60;
+                    const barLeft = geo.barLeft, barWidth = geo.barWidth, isNarrow = geo.isNarrow;
                     const progVal = isParent ? aggregateProgress(t) : (t.progression || 0);
                     bar.className = 'gantt-bar p' + p + (selected ? ' selected' : '') + (isNarrow ? ' narrow-bar' : '') + (isParent ? ' parent' : '') + (dimmed ? ' dimmed' : '');
                     bar.dataset.id = t.id;
