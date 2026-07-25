@@ -443,6 +443,35 @@ const TF = (function () {
         } catch (e) { console.warn('TF.setRefDisplayColumns:', e && e.message); }
     }
 
+    /* ----- #2bis : delier colId <-> label (renommage libre des libelles) ----
+     * Pose untieColIdFromLabel=true sur les colonnes du widget. Sans ca, Grist
+     * regenere le colId a chaque changement de libelle, et le widget (qui lit et
+     * ecrit tout par colId) perd ses colonnes. Idempotent (saute les colonnes
+     * deja deliees) et defensif (jamais de casse), applique aux docs neufs comme
+     * existants a chaque ouverture.
+     * tableColumns : { Tasks:['titre',...], Team:[...], Projects:[...] }
+     * --------------------------------------------------------------------- */
+    async function ensureUntiedLabels(grist, tableColumns) {
+        if (!tableColumns) return;
+        try {
+            const tables = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+            const actions = [];
+            for (const tableName of Object.keys(tableColumns)) {
+                const tid = tidOf(tableName);
+                if (tid == null) continue;
+                for (const colId of tableColumns[tableName] || []) {
+                    const col = cols.find(c => c.parentId === tid && c.colId === colId);
+                    if (!col) continue;
+                    if (col.untieColIdFromLabel === true) continue;
+                    actions.push(['ModifyColumn', tableName, colId, { untieColIdFromLabel: true }]);
+                }
+            }
+            if (actions.length) await grist.docApi.applyUserActions(actions);
+        } catch (e) { console.warn('TF.ensureUntiedLabels:', e && e.message); }
+    }
+
     /* ----- #3 : plan de charge (heures par personne) ------------------------
      * Stockage : colonne Text `charges` sur Tasks, JSON [{teamId, heures}].
      * Parse defensif identique au pattern subtasks.
@@ -571,6 +600,7 @@ const TF = (function () {
         isTerminal: isTerminal,
         seedStatusChoices: seedStatusChoices,
         setRefDisplayColumns: setRefDisplayColumns,
+        ensureUntiedLabels: ensureUntiedLabels,
         parseCharges: parseCharges,
         chargesToJson: chargesToJson,
         chargeTotal: chargeTotal,

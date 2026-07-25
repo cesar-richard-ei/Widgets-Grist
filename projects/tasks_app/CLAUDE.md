@@ -118,8 +118,17 @@ async function ensureSchema() {
     // 2. Non → AddTable avec toutes les colonnes
     // 3. Oui → AddColumn pour chaque colonne manquante
     // 4. Tasks créée → seedData() avec exemples
+    // 5. TF.ensureUntiedLabels() → délie colId ↔ label (voir ci-dessous)
 }
 ```
+
+#### Renommage des libellés sans casse (`untieColIdFromLabel`)
+
+Le widget lit et écrit **tout par colId**. Or Grist régénère le colId à chaque changement de libellé tant que la colonne n'est pas *déliée* (`untieColIdFromLabel = false` par défaut) : renommer un libellé casse alors le widget (données lues sous une clé absente, `ensureSchema` recrée une colonne vide en doublon).
+
+`TF.ensureUntiedLabels(grist, { Tasks:[...], Team:[...], Projects:[...] })` pose `untieColIdFromLabel = true` sur les colonnes du schéma. Appelé depuis `ensureSchema` (Kanban/Gantt/Calendar), idempotent (saute les colonnes déjà déliées) et défensif. Une fois délié, l'utilisateur renomme les libellés dans Grist sans impact sur le widget.
+
+> **Limite** : une colonne déjà renommée *avant* ce correctif a déjà perdu son colId d'origine ; le widget ne peut pas la remapper automatiquement, remise à la main nécessaire une fois.
 
 ---
 
