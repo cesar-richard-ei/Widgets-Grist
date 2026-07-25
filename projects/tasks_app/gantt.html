@@ -2170,7 +2170,17 @@
             const root = tasks.find(t => t.id === rootId);
             if (!root) return '';
             const scoped = [root].concat(getAllDescendants(rootId));
-            const datedOf = (t) => { let s = gristToDate(t.dateDebut), e = gristToDate(t.dateEcheance); if (hasChildren(t) && (!s || !e)) { const a = aggregateDates(t); if (!s) s = gristToDate(a.start); if (!e) e = gristToDate(a.end); } return { s: s, e: e }; };
+            // Dates avant 2000 = non renseignées (epoch 0 = 01/01/1970), à ignorer.
+            const cleanTs = (ts) => { const n = Number(ts); return (n && n > 946684800) ? n : null; };
+            const aggClean = (t, seen) => {
+                seen = seen || new Set();
+                if (seen.has(t.id)) return { s: cleanTs(t.dateDebut), e: cleanTs(t.dateEcheance) };
+                seen.add(t.id);
+                let s = cleanTs(t.dateDebut), e = cleanTs(t.dateEcheance);
+                for (const k of getChildren(t.id)) { const sub = aggClean(k, seen); if (sub.s != null && (s == null || sub.s < s)) s = sub.s; if (sub.e != null && (e == null || sub.e > e)) e = sub.e; }
+                return { s: s, e: e };
+            };
+            const datedOf = (t) => { const a = hasChildren(t) ? aggClean(t) : { s: cleanTs(t.dateDebut), e: cleanTs(t.dateEcheance) }; return { s: a.s != null ? gristToDate(a.s) : null, e: a.e != null ? gristToDate(a.e) : null }; };
             const dated = scoped.map(t => datedOf(t)).filter(x => x.s && x.e);
             if (!dated.length) return '<div class="mini-gantt-empty">Aucune date sur le sous-arbre.</div>';
 
