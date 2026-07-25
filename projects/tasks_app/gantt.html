@@ -2244,7 +2244,7 @@
             // Champ de recherche partagé par les sélecteurs recherchables.
             const msSearch = '<input type="text" class="multi-select-search" placeholder="Rechercher…" oninput="filterMultiSelectOptions(this)" onclick="event.stopPropagation()">';
             const msNoResult = '<div class="multi-select-noresult">Aucun résultat</div>';
-            const parentOptions = (!panelState.isNew ? tasks.filter(t => t.id !== panelState.taskId && canSetParent(panelState.taskId, t.id)) : [])
+            const parentOptions = tasks.filter(t => t.id !== panelState.taskId && (t.projet || null) === (data.projet || null) && canSetParent(panelState.taskId, t.id))
                 .map(t => '<div class="multi-select-option" onclick="setParent(' + t.id + ')">' + escapeHtml(t.titre) + '</div>').join('');
 
             const assigneesChips = data.assignees.map(id =>
@@ -2338,20 +2338,15 @@
                             : '<span class="project-color-dot" style="background:' + projectColor + '"></span>') +
                         '<select class="form-select" onchange="updateField(\'projet\', parseInt(this.value) || null)"><option value="">Aucun projet</option>' + projectOptions + '</select>' +
                     '</div></div></div>' +
-                    // WBS-02: prop-row "Parent" — affichée uniquement si pertinente :
-                    // - tâche existante : oui (permet reparenter/détacher)
-                    // - nouvelle sous-tâche (parentTask pré-rempli) : oui (chip parent visible)
-                    // - nouvelle tâche racine : masquée (pas de bruit)
-                    ((!panelState.isNew || data.parentTask)
-                        ? '<div class="prop-row"><span class="prop-label">Parent</span><div class="prop-value">' +
-                            (data.parentTask
-                                ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-                                    '<span class="multi-select-chip" ' + (panelState.isNew ? '' : 'onclick="openTaskPanel(' + data.parentTask + ')"') + ' style="' + (panelState.isNew ? '' : 'cursor:pointer;') + 'background:var(--primary-light);color:var(--primary)">↑ ' + escapeHtml((tasks.find(t => t.id === data.parentTask) || {}).titre || '(inconnu)') + '</span>' +
-                                    '<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="detachFromParent()">Détacher</button>' +
-                                  '</div>'
-                                : '<div class="multi-select" id="parentSelect"><button class="addbtn" onclick="toggleMultiSelect(\'parentSelect\')"><span style="font-size:1rem;line-height:1">+</span> Choisir une tâche parent</button><div class="multi-select-dropdown">' + msSearch + (parentOptions || '<div class="multi-select-empty">Aucune tâche disponible</div>') + msNoResult + '</div></div>') +
-                        '</div></div>'
-                        : '') +
+                    // WBS-02: prop-row "Parent" — toujours affichée (création comprise), candidats filtrés par projet
+                    '<div class="prop-row"><span class="prop-label">Parent</span><div class="prop-value">' +
+                        (data.parentTask
+                            ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+                                '<span class="multi-select-chip" ' + (panelState.isNew ? '' : 'onclick="openTaskPanel(' + data.parentTask + ')"') + ' style="' + (panelState.isNew ? '' : 'cursor:pointer;') + 'background:var(--primary-light);color:var(--primary)">↑ ' + escapeHtml((tasks.find(t => t.id === data.parentTask) || {}).titre || '(inconnu)') + '</span>' +
+                                '<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="detachFromParent()">Détacher</button>' +
+                              '</div>'
+                            : '<div class="multi-select" id="parentSelect"><button class="addbtn" onclick="toggleMultiSelect(\'parentSelect\')"><span style="font-size:1rem;line-height:1">+</span> Choisir une tâche parent</button><div class="multi-select-dropdown">' + msSearch + (parentOptions || '<div class="multi-select-empty">Aucune tâche dans ce projet</div>') + msNoResult + '</div></div>') +
+                    '</div></div>' +
                     '<div class="prop-row"><span class="prop-label">Couleur</span><div class="prop-value"><div style="display:flex;gap:8px;align-items:center">' +
                         '<input type="color" value="' + (data.couleur || getTaskColor(data)) + '" onchange="updateField(\'couleur\', this.value)" style="width:36px;height:28px;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:2px">' +
                         (data.couleur
