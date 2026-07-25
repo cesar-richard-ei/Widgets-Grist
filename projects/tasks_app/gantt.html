@@ -1399,6 +1399,7 @@
             currentView = view;
             document.querySelectorAll('.view-controls .btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
             document.documentElement.style.setProperty('--cell-width', VIEW_CONFIG[view].cellWidth + 'px');
+            ganttNowAligned = false;
             render();
         }
         function navigate(dir) {
@@ -1408,9 +1409,10 @@
             else if (cfg.navStep === 'quarter') viewStartDate = new Date(viewStartDate.getFullYear(), viewStartDate.getMonth() + dir * 3, 1);
             else if (cfg.navStep === 'semester') viewStartDate = new Date(viewStartDate.getFullYear(), viewStartDate.getMonth() + dir * 6, 1);
             else if (cfg.navStep === 'year') viewStartDate = new Date(viewStartDate.getFullYear() + dir, 0, 1);
+            ganttNowAligned = false;
             render();
         }
-        function goToToday() { viewStartDate = new Date(); render(); }
+        function goToToday() { viewStartDate = new Date(); ganttNowAligned = false; render(); }
 
         function fitToTasks() {
             const ft = getFilteredTasks();
@@ -1899,11 +1901,16 @@
                 todayLine.style.left = Math.round(todayOffset * pxPerDay) + 'px';
                 grid.appendChild(todayLine);
 
-                // Au premier rendu, amener la colonne du jour près du bord gauche (marge d'une cellule).
+                // Caler le début de la colonne d'en-tête du dessus contenant aujourd'hui (le mois, ou
+                // l'année en vue Année) près du bord gauche, avec un léger écart. Réarmé à chaque navigation.
                 if (!ganttNowAligned) {
                     const sc = document.getElementById('timelineScroll');
                     if (sc && sc.scrollWidth > sc.clientWidth) {
-                        sc.scrollLeft = Math.max(0, Math.round(todayOffset * pxPerDay - effectiveCellWidth));
+                        const colStart = VIEW_CONFIG[currentView].unit === 'month'
+                            ? new Date(today.getFullYear(), 0, 1)
+                            : new Date(today.getFullYear(), today.getMonth(), 1);
+                        const colPx = getDaysDiff(start, colStart) * pxPerDay;
+                        sc.scrollLeft = Math.max(0, Math.round(colPx - 12));
                         ganttNowAligned = true;
                     }
                 }
