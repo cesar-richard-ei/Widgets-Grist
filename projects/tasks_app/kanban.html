@@ -1008,9 +1008,27 @@
                 return { effectiveStart: eStart, effectiveDays: effectiveDays, numCells: numCells, cellWidth: effCellWidth, pxPerDay: pxPerDay };
             }
 
+            /* Géométrie d'une barre / d'un jalon sur la timeline (pur). Reprend le clamping
+             * exact de gantt.html : plancher de largeur, décalage du diamant. Partagé avec le lite.
+             * Entrée : { start:Date, tStart:Date, tEnd:Date, pxPerDay:number }
+             * Sortie : { left, width, barLeft, barWidth, isNarrow, diamondLeft } (px)
+             */
+            function computeBarGeometry(o) {
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const startOffset = daysDiff(o.start, o.tStart);
+                const duration = Math.max(daysDiff(o.tStart, o.tEnd) + 1, 1);
+                const left = Math.round(startOffset * o.pxPerDay);
+                const width = Math.round(duration * o.pxPerDay);
+                const barLeft = Math.max(0, left);
+                const barWidth = Math.max(width - (barLeft - left), 12);
+                const diamondLeft = Math.max(0, left + Math.round(o.pxPerDay / 2) - 7);
+                return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
+            }
+
             return {
                 DEFAULT_STATUSES: DEFAULT_STATUSES,
                 computeTimelineScale: computeTimelineScale,
+                computeBarGeometry: computeBarGeometry,
                 columnarToRows: columnarToRows,
                 fetchSchemaMeta: fetchSchemaMeta,
                 loadStatusConfig: loadStatusConfig,
