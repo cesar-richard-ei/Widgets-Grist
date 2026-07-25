@@ -25,6 +25,20 @@ test('le panneau d une sous-tache affiche le Gantt du parent avec elle surlignee
     await expect(hl).toHaveText(titre); // la ligne surlignée est bien la tâche courante
 });
 
+test('le mini Gantt du panneau est cale sur aujourd hui', async ({ gantt }) => {
+    await gantt.evaluate(() => { const p = tasks.find(t => getChildren(t.id).length > 0); openTaskPanel(p.id); });
+    await gantt.locator('.mg-right').waitFor();
+    const info = await gantt.evaluate(() => {
+        const right = document.querySelector('#panelContent .mg-right');
+        const today = right.querySelector('.mg-today');
+        const todayLeft = today ? parseInt(today.style.left, 10) : null;
+        const maxScroll = Math.max(0, right.scrollWidth - right.clientWidth);
+        return { hasToday: !!today, scrollLeft: right.scrollLeft, target: Math.min(Math.max(0, (todayLeft || 0) - 16), maxScroll) };
+    });
+    expect(info.hasToday).toBe(true);
+    expect(info.scrollLeft).toBe(info.target); // calé sur aujourd'hui (borné par le scroll max)
+});
+
 test('les dates a l epoch (1970) sont ignorees dans le mini Gantt', async ({ gantt }) => {
     await gantt.evaluate(() => {
         const p = tasks.find(t => getChildren(t.id).length > 0);
