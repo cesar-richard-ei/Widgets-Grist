@@ -209,7 +209,7 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 
 ### Gantt (v15)
 - Timeline avec 6 vues : semaine / mois / trimestre / semestre / année / 5 jours
-- Vue mémorisée (localStorage `taskflow_gantt_view`)
+- Vue par défaut Semestre (en mémoire, non persistée entre sessions)
 - Texte hors bande pour barres étroites
 - Tooltip configurable au survol (`TOOLTIP_FIELDS`)
 - Filtre assigné + projet
@@ -389,13 +389,11 @@ Utilisée par les pickers Project/Team. Tasks.couleur utilise un `<input type="c
 3. fallback '#94a3b8' (gris neutre)
 ```
 
-### Mode "Colorer par" — persistance locale (pas serveur)
+### Mode "Colorer par" / tri — persistance locale (sauf Gantt)
 
-`colorMode` et `sortMode` Gantt sont stockés **uniquement en `localStorage`** par widget (clés `taskflow_<widget>_colormode`, `taskflow_gantt_sort`).
+Pour **Kanban et Calendar**, `colorMode` et `sortMode` sont stockés en `localStorage` par widget (clés `taskflow_<widget>_colormode`, `taskflow_<widget>_sort`), sans `grist.setOption` (Grist marque sinon le document comme modifié à chaque changement de préférence UI).
 
-**Décision** : ne pas utiliser `grist.setOption()` pour ces préférences UI, car Grist marque le document comme modifié à chaque écriture (pop-up "Enregistrer les modifications ?") — disproportionné pour un simple changement de tri ou de mode couleur.
-
-**Trade-off assumé** : chaque utilisateur/navigateur garde son propre tri et mode couleur. Pas de partage inter-utilisateurs ni inter-widgets via Grist. Si l'utilisateur ouvre le Gantt en mode "Projet" et le Kanban en mode "Priorité", c'est un cas légitime.
+**Gantt : pas de persistance.** `colorMode`, `sortMode` et `currentView` vivent uniquement en mémoire, réinitialisés à leurs défauts (`project` / `date` / `semester`) à chaque chargement, conservés le temps de la session, remis à zéro à la réouverture. Décision issue des tests : les défauts doivent toujours revenir à l'ouverture.
 
 **Les filtres** (`filters.project`, `filters.priority`, `filters.assignee`) continuent d'utiliser `grist.setOption` (partagés inter-widgets) — c'est le comportement attendu pour un filtre collaboratif.
 
@@ -415,7 +413,7 @@ function getTaskColor(t) { /* hiérarchie ci-dessus */ }
 function getTaskBarGradient(t) { return 'linear-gradient(135deg, ' + c + ', color-mix(in srgb, ' + c + ' 70%, white))'; }
 async function setProjectColor(projectId, color) { /* UpdateRecord Projects.couleur */ }
 async function setMemberColor(memberId, color) { /* UpdateRecord Team.couleur */ }
-function changeColorMode(mode) { /* localStorage + grist.setOption */ }
+function changeColorMode(mode) { /* met à jour colorMode + re-render (Gantt : en mémoire) */ }
 ```
 
 ### Légende (Gantt uniquement)
