@@ -1043,8 +1043,54 @@
                 return out;
             }
 
+            /* ----- Timeline Gantt : calcul pur de l'echelle -------------------------
+             * Extrait de gantt.html (computeEffectiveRange) pour etre partage avec le
+             * Gantt de fiche. Aucun effet de bord (ni etat, ni DOM) : rend les nombres,
+             * l'appelant les applique. Math des dates repliquee a l'identique.
+             * Entree : { tasks:[{start:Date|null,end:Date|null}], unit:'day'|'week'|'month',
+             *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number }
+             * Sortie : { effectiveStart:Date, effectiveDays, numCells, cellWidth, pxPerDay }
+             * --------------------------------------------------------------------- */
+            function computeTimelineScale(opts) {
+                const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const startOfWeek = (d) => { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - day + (day === 0 ? -6 : 1)); r.setHours(0, 0, 0, 0); return r; };
+                const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+                const unit = opts.unit, viewStart = opts.viewStart, viewDays = opts.viewDays;
+                let eStart = new Date(viewStart.getTime());
+                let eEnd = addDays(viewStart, viewDays);
+                const vEnd = new Date(eEnd.getTime());
+                const PADDING = unit === 'day' ? 3 : unit === 'week' ? 7 : 14;
+                for (const t of (opts.tasks || [])) {
+                    const ts = t.start, te = t.end;
+                    if (!ts || !te) continue;
+                    if (te < viewStart || ts > vEnd) continue;
+                    if (ts < eStart) eStart = addDays(ts, -PADDING);
+                    if (te > eEnd) eEnd = addDays(te, PADDING);
+                }
+                if (unit === 'week') eStart = startOfWeek(eStart);
+                else if (unit === 'month') eStart = startOfMonth(eStart);
+                else eStart = new Date(eStart.getFullYear(), eStart.getMonth(), eStart.getDate());
+
+                const effectiveDays = Math.max(daysDiff(eStart, eEnd), viewDays);
+                let numCells;
+                if (unit === 'month') {
+                    const eEnd2 = addDays(eStart, effectiveDays);
+                    numCells = Math.max(1, (eEnd2.getFullYear() - eStart.getFullYear()) * 12 + (eEnd2.getMonth() - eStart.getMonth()));
+                } else if (unit === 'week') {
+                    numCells = Math.ceil(effectiveDays / 7);
+                } else {
+                    numCells = effectiveDays;
+                }
+                const effCellWidth = Math.max(opts.cellWidth, Math.floor(opts.availableWidth / numCells));
+                const pxPerDay = effectiveDays > 0 ? (numCells * effCellWidth) / effectiveDays : opts.cellWidth;
+                return { effectiveStart: eStart, effectiveDays: effectiveDays, numCells: numCells, cellWidth: effCellWidth, pxPerDay: pxPerDay };
+            }
+
             return {
                 DEFAULT_STATUSES: DEFAULT_STATUSES,
+                computeTimelineScale: computeTimelineScale,
                 columnarToRows: columnarToRows,
                 fetchSchemaMeta: fetchSchemaMeta,
                 loadStatusConfig: loadStatusConfig,
@@ -1700,61 +1746,23 @@
             el.innerHTML = html;
         }
 
-        // Calcule la plage effective = période vue étendue uniquement pour les tâches qui la chevauchent
+        // Calcule la plage effective = période vue étendue uniquement pour les tâches qui la chevauchent.
+        // Le calcul pur est dans TF.computeTimelineScale (partagé avec le Gantt de fiche) ; ici on applique état + DOM.
         function computeEffectiveRange() {
-            const ft = getFilteredTasks();
             const cfg = VIEW_CONFIG[currentView];
-            const vStart = getViewStartDate();
-            const vDays = getTotalDays();
-
-            let eStart = new Date(vStart.getTime());
-            let eEnd = addDays(vStart, vDays);
-            const vEnd = new Date(eEnd.getTime());
-
-            // Padding en jours selon la résolution de la vue
-            const PADDING = cfg.unit === 'day' ? 3 : cfg.unit === 'week' ? 7 : 14;
-
-            // N'étendre que pour les tâches qui chevauchent la période courante.
-            // Les tâches entièrement hors-période restent invisibles (navigation cohérente).
-            ft.forEach(t => {
-                const ts = gristToDate(t.dateDebut);
-                const te = gristToDate(t.dateEcheance);
-                if (!ts || !te) return;
-                if (te < vStart || ts > vEnd) return; // pas d'overlap → ignorer
-                if (ts < eStart) eStart = addDays(ts, -PADDING);
-                if (te > eEnd) eEnd = addDays(te, PADDING);
-            });
-
-            // Aligner le début sur la frontière de la grille
-            if (cfg.unit === 'week') eStart = getStartOfWeek(eStart);
-            else if (cfg.unit === 'month') eStart = getStartOfMonth(eStart);
-            else eStart = new Date(eStart.getFullYear(), eStart.getMonth(), eStart.getDate());
-
-            effectiveStart = eStart;
-            effectiveDays = Math.max(getDaysDiff(eStart, eEnd), vDays);
-
-            // Nombre de cellules effectives selon l'unité de la vue
-            const eCfg = VIEW_CONFIG[currentView];
-            let numCells;
-            if (eCfg.unit === 'month') {
-                const eEnd2 = addDays(eStart, effectiveDays);
-                numCells = Math.max(1, (eEnd2.getFullYear() - eStart.getFullYear()) * 12 + (eEnd2.getMonth() - eStart.getMonth()));
-            } else if (eCfg.unit === 'week') {
-                numCells = Math.ceil(effectiveDays / 7);
-            } else {
-                numCells = effectiveDays;
-            }
-
-            // Largeur de cellule : remplit la largeur disponible, min = cfg.cellWidth
             const timelineEl = document.getElementById('timelineScroll');
             const availableWidth = (timelineEl && timelineEl.clientWidth > 10) ? timelineEl.clientWidth : 600;
-            effectiveCellWidth = Math.max(eCfg.cellWidth, Math.floor(availableWidth / numCells));
-
-            // Mettre à jour --cell-width pour les vues jour (Sem/Mois)
+            const scale = TF.computeTimelineScale({
+                tasks: getFilteredTasks().map(t => ({ start: gristToDate(t.dateDebut), end: gristToDate(t.dateEcheance) })),
+                unit: cfg.unit, cellWidth: cfg.cellWidth,
+                viewStart: getViewStartDate(), viewDays: getTotalDays(),
+                availableWidth: availableWidth
+            });
+            effectiveStart = scale.effectiveStart;
+            effectiveDays = scale.effectiveDays;
+            effectiveCellWidth = scale.cellWidth;
+            effectivePxPerDay = scale.pxPerDay;
             document.documentElement.style.setProperty('--cell-width', effectiveCellWidth + 'px');
-
-            // pxPerDay depuis le ratio réel (précis même en vue année)
-            effectivePxPerDay = effectiveDays > 0 ? (numCells * effectiveCellWidth) / effectiveDays : eCfg.cellWidth;
         }
 
         function renderTimelineHeader() {
