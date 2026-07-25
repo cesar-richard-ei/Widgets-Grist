@@ -1078,6 +1078,29 @@
         try { expandedTasks = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_expanded') || '[]').map(Number).filter(n => !isNaN(n))); } catch (e) {}
         let sortableInstance = null;
         let filters = { project: [], assignee: [], priority: [] };  // GEN-02: Arrays pour compatibilité inter-widgets
+        // Filtres cross-page : persistés en localStorage, cloisonnés par document (setOption reste par-section).
+        let filterDocId = 'local';
+        function filterStorageKey() { return 'taskflow_gantt_filters:' + filterDocId; }
+        function persistFilters() {
+            try { localStorage.setItem(filterStorageKey(), JSON.stringify({ project: filters.project, assignee: filters.assignee, priority: filters.priority })); } catch (e) {}
+        }
+        function hydrateFilters() {
+            try {
+                const s = JSON.parse(localStorage.getItem(filterStorageKey()) || 'null');
+                if (!s) return;
+                filters.project = Array.isArray(s.project) ? s.project : [];
+                filters.assignee = Array.isArray(s.assignee) ? s.assignee : [];
+                filters.priority = Array.isArray(s.priority) ? s.priority : [];
+            } catch (e) {}
+        }
+        // Vue appliquée : on retire les ids absents des données courantes (ex. autre page/table), la priorité reste universelle.
+        function effectiveFilters() {
+            return {
+                project: filters.project.filter(id => projects.some(p => p.id === id)),
+                assignee: filters.assignee.filter(id => team.some(m => m.id === id)),
+                priority: filters.priority
+            };
+        }
         let dragState = { active: false, type: null, taskId: null, startX: 0, originalLeft: 0, originalWidth: 0, originalStart: null, originalEnd: null };
         let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null, dirty: false };
         let effectiveStart = new Date();    // Plage effective calculée à chaque render()
@@ -1547,14 +1570,15 @@
         // GEN-02: Gestion des filtres avec arrays et synchronisation
         function toggleFilter(key, val) { 
             const arr = filters[key]; 
-            const idx = arr.indexOf(val); 
-            if (idx === -1) arr.push(val); 
-            else arr.splice(idx, 1); 
-            updateFilterUI(); 
+            const idx = arr.indexOf(val);
+            if (idx === -1) arr.push(val);
+            else arr.splice(idx, 1);
+            updateFilterUI();
             broadcastFilters();
-            render(); 
+            persistFilters();
+            render();
         }
-        function clearFilter(key) { filters[key] = []; updateFilterUI(); broadcastFilters(); render(); }
+        function clearFilter(key) { filters[key] = []; updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
         function broadcastFilters() {
             if (gristReady && typeof grist !== 'undefined' && grist.setOption) {
                 try { grist.setOption('filters', { project: filters.project, priority: filters.priority, assignee: filters.assignee }); } 
@@ -1573,7 +1597,8 @@
             updateFilterUI();
         }
         function updateFilterUI() {
-            const total = filters.project.length + filters.priority.length + filters.assignee.length;
+            const eff = effectiveFilters();
+            const total = eff.project.length + eff.priority.length + eff.assignee.length;
             const cnt = document.getElementById('filterCount'); if (cnt) { cnt.textContent = total; cnt.style.display = total ? 'inline-flex' : 'none'; }
             const fbtn = document.querySelector('#filterGantt .filter-btn'); if (fbtn) fbtn.classList.toggle('has-filter', total > 0);
             renderFilterChips();
@@ -1582,21 +1607,23 @@
             const bar = document.getElementById('filterChips'); if (!bar) return;
             const X = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
             const chip = (key, val, label, color) => { const dot = color ? `<span class="fc-dot" style="background:${color}"></span>` : ''; return `<span class="fc-chip">${dot}${label}<span class="fc-x" title="Retirer" onclick="toggleFilter('${key}', ${val})">${X}</span></span>`; };
+            const eff = effectiveFilters();
             const chips = [];
-            filters.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', p&&p.couleur)); });
-            filters.priority.forEach(v => chips.push(chip('priority', v, PRIORITY_LABELS[v], PRIORITY_COLORS[v])));
-            filters.assignee.forEach(id => { const m = team.find(x=>x.id===id); chips.push(chip('assignee', id, m?escapeHtml(m.nom):'Membre')); });
+            eff.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', p&&p.couleur)); });
+            eff.priority.forEach(v => chips.push(chip('priority', v, PRIORITY_LABELS[v], PRIORITY_COLORS[v])));
+            eff.assignee.forEach(id => { const m = team.find(x=>x.id===id); chips.push(chip('assignee', id, m?escapeHtml(m.nom):'Membre')); });
             if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
             bar.style.display = 'flex';
             bar.innerHTML = '<span class="fc-label">Filtres actifs</span>' + chips.join('') + '<span class="fc-clear-all" onclick="clearAllGanttFilters()">Tout effacer</span>';
         }
-                function taskMatchesFilters(t) {
-            if (filters.project.length && !filters.project.includes(t.projet)) return false;
-            if (filters.assignee.length && !getAssigneesArray(t).some(a => filters.assignee.includes(a))) return false;
-            if (filters.priority.length && !filters.priority.includes(getTaskPriority(t))) return false;
+                function taskMatchesFilters(t, f) {
+            f = f || effectiveFilters();
+            if (f.project.length && !f.project.includes(t.projet)) return false;
+            if (f.assignee.length && !getAssigneesArray(t).some(a => f.assignee.includes(a))) return false;
+            if (f.priority.length && !f.priority.includes(getTaskPriority(t))) return false;
             return true;
         }
-        function getFilteredTasks() { return tasks.filter(taskMatchesFilters); }
+        function getFilteredTasks() { const f = effectiveFilters(); return tasks.filter(t => taskMatchesFilters(t, f)); }
 
         // ═══════════════════════════════════════════════════════════════════════
         // RENDER FUNCTIONS
@@ -1625,11 +1652,12 @@
             ov.innerHTML = '<div class="tf-gskel">'+rows+'</div>';
             ov.style.display = "flex";
         }
-        function clearAllGanttFilters() { filters = { project: [], assignee: [], priority: [] }; updateFilterUI(); broadcastFilters(); render(); }
+        function clearAllGanttFilters() { filters = { project: [], assignee: [], priority: [] }; updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
         function updateGanttOverlay() {
             const ov = document.getElementById("ganttOverlay"); if (!ov) return;
             if (currentVisible && currentVisible.length > 0) { ov.style.display = "none"; ov.innerHTML = ""; return; }
-            const hasFilters = filters.project.length || filters.assignee.length || filters.priority.length;
+            const eff = effectiveFilters();
+            const hasFilters = eff.project.length || eff.assignee.length || eff.priority.length;
             const gicon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
             const search = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
             let html;
@@ -3056,6 +3084,8 @@
                 console.error('ensureSchema error (continuing):', e);
                 showToast('Schéma: ' + (e?.message || e), 'error');
             }
+            try { filterDocId = await grist.docApi.getDocName(); } catch (e) {}
+            hydrateFilters();
             try {
                 await loadAllData();
             } catch (e) {
@@ -3075,15 +3105,22 @@
                         render();
                     }
                 });
+                let filtersBootstrapConsumed = false;
                 grist.onOptions((options, interaction) => {
                     if (options?.filters && interaction?.source !== 'self') {
+                        // Le premier onOptions rejoue les options du store de section : on l'ignore, localStorage fait foi.
+                        if (!filtersBootstrapConsumed) { filtersBootstrapConsumed = true; return; }
                         const f = options.filters;
                         filters.project = Array.isArray(f.project) ? f.project : [];
                         filters.priority = Array.isArray(f.priority) ? f.priority : [];
                         filters.assignee = Array.isArray(f.assignee) ? f.assignee : [];
+                        persistFilters();
                         updateFilterMenus();
                         render();
                     }
+                });
+                window.addEventListener('storage', (e) => {
+                    if (e.key === filterStorageKey()) { hydrateFilters(); updateFilterMenus(); render(); }
                 });
             } catch (e) {
                 console.error('Grist listeners error:', e);
@@ -3126,6 +3163,7 @@
 
             rebuildChildrenCache();
             sortTasks();
+            hydrateFilters();
             updateFilterMenus();
             render();
         }
