@@ -689,7 +689,7 @@
             render();
         }
         async function initGrist() {
-            try { await grist.ready({ requiredAccess: 'read table' }); }
+            try { await grist.ready({ requiredAccess: 'full' }); }
             catch (e) { render(); return; }
             try { await loadAllData(); } catch (e) {}
             try {
