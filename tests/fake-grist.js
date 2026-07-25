@@ -261,6 +261,8 @@ function createFakeGrist(documentInitial, options) {
 
     async function setCursorPos(pos) { journal.push(['setCursorPos', pos]); }
 
+    async function getDocName() { return config.docId || 'fake-doc'; }
+
     return {
         ready: ready,
         onRecords: onRecords,
@@ -270,7 +272,7 @@ function createFakeGrist(documentInitial, options) {
         setSelectedRows: setSelectedRows,
         setCursorPos: setCursorPos,
         widgetApi: { getOptions: getOptions, setOptions: setOptions },
-        docApi: { fetchTable: fetchTable, listTables: listTables, applyUserActions: applyUserActions },
+        docApi: { fetchTable: fetchTable, listTables: listTables, applyUserActions: applyUserActions, getDocName: getDocName },
         // Accesseurs plutot que proprietes figees : un rollack de lot reaffecte
         // doc/refTable/refColonne (voir applyUserActions), l'expose doit suivre l'etat courant.
         get _doc() { return doc; },
