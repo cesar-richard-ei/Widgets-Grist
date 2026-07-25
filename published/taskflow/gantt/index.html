@@ -188,8 +188,22 @@
         /* Today Line */
         .today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); z-index: 25; }
         .today-line::before { content: "▼"; position: absolute; top: -8px; left: 50%; transform: translateX(-50%); font-size: 0.6rem; color: var(--danger); }
-        .mini-gantt-scroll { overflow-x: auto; overflow-y: hidden; max-height: 220px; border: 1px solid var(--border); border-radius: 6px; background: var(--card-bg); padding: 4px 0; }
-        .mini-gantt-canvas { position: relative; }
+        .mg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--card-bg); }
+        .mg-left { flex-shrink: 0; width: 116px; border-right: 1px solid var(--border); }
+        .mg-right { flex: 1; min-width: 0; overflow-x: auto; overflow-y: hidden; }
+        .mg-canvas { position: relative; }
+        .mg-head-cell { height: 22px; border-bottom: 1px solid var(--border); background: var(--bg); }
+        .mg-time-header { position: relative; height: 22px; border-bottom: 1px solid var(--border); background: var(--bg); }
+        .mg-month { position: absolute; top: 0; height: 22px; display: flex; align-items: center; padding-left: 5px; font-size: 0.6rem; color: var(--text-muted); border-left: 1px solid var(--border); white-space: nowrap; overflow: hidden; box-sizing: border-box; }
+        .mg-name { height: 26px; display: flex; align-items: center; padding: 0 8px; font-size: 0.68rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-bottom: 1px solid var(--border); }
+        .mg-track { position: relative; height: 26px; border-bottom: 1px solid var(--border); }
+        .mg-bar { position: absolute; top: 5px; height: 16px; border-radius: 3px; overflow: hidden; }
+        .mg-bar.parent { top: 9px; height: 8px; opacity: 0.85; }
+        .mg-bar.p1 { background: var(--danger); } .mg-bar.p2 { background: var(--warning); } .mg-bar.p3 { background: var(--info); } .mg-bar.p4 { background: var(--text-muted); }
+        .mg-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(255,255,255,0.32); }
+        .mg-milestone { position: absolute; top: 7px; width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px; }
+        .mg-milestone.p1 { background: var(--danger); } .mg-milestone.p2 { background: var(--warning); } .mg-milestone.p3 { background: var(--info); } .mg-milestone.p4 { background: var(--text-muted); }
+        .mg-today { position: absolute; top: 22px; bottom: 0; width: 2px; background: var(--danger); z-index: 5; }
         .mini-gantt-empty { font-size: 0.78rem; color: var(--text-muted); padding: 8px 4px; }
 
         /* Tooltip */
@@ -2147,60 +2161,64 @@
         }
 
         // Mini Gantt read-only du sous-arbre d'une tâche (affiché dans son panneau de détail).
-        // Réutilise les briques partagées TF.* et le CSS des barres. Rien d'interactif.
+        // Structure compacte : colonne de noms à gauche, en-tête de mois + pistes scrollables à droite.
+        // Calculs via les briques partagées TF.*. Rien d'interactif.
         function buildMiniGanttHtml(rootId) {
             const root = tasks.find(t => t.id === rootId);
             if (!root) return '';
             const scoped = [root].concat(getAllDescendants(rootId));
             const datedOf = (t) => { let s = gristToDate(t.dateDebut), e = gristToDate(t.dateEcheance); if (hasChildren(t) && (!s || !e)) { const a = aggregateDates(t); if (!s) s = gristToDate(a.start); if (!e) e = gristToDate(a.end); } return { s: s, e: e }; };
-            const dated = scoped.map(t => Object.assign({ t: t }, datedOf(t))).filter(x => x.s && x.e);
+            const dated = scoped.map(t => datedOf(t)).filter(x => x.s && x.e);
             if (!dated.length) return '<div class="mini-gantt-empty">Aucune date sur le sous-arbre.</div>';
 
             let minS = dated[0].s, maxE = dated[0].e;
             dated.forEach(x => { if (x.s < minS) minS = x.s; if (x.e > maxE) maxE = x.e; });
             const viewDays = Math.max(getDaysDiff(minS, maxE), 7);
-            const view = viewDays <= 60 ? { unit: 'day', cellWidth: 22 } : viewDays <= 200 ? { unit: 'week', cellWidth: 26 } : { unit: 'month', cellWidth: 58 };
-            const scale = TF.computeTimelineScale({ tasks: dated.map(x => ({ start: x.s, end: x.e })), unit: view.unit, cellWidth: view.cellWidth, viewStart: minS, viewDays: viewDays, availableWidth: 320 });
+            const view = viewDays <= 45 ? { unit: 'day', cellWidth: 20 } : viewDays <= 240 ? { unit: 'week', cellWidth: 24 } : { unit: 'month', cellWidth: 54 };
+            const scale = TF.computeTimelineScale({ tasks: dated.map(x => ({ start: x.s, end: x.e })), unit: view.unit, cellWidth: view.cellWidth, viewStart: minS, viewDays: viewDays, availableWidth: 240 });
             const start = scale.effectiveStart, totalDays = scale.effectiveDays, pxPerDay = scale.pxPerDay;
             const totalWidth = scale.numCells * scale.cellWidth;
-            const idxOf = {}; scoped.forEach((t, i) => idxOf[t.id] = i);
 
-            let bars = '';
-            scoped.forEach((t, idx) => {
-                const d = datedOf(t); if (!d.s || !d.e) return;
-                const p = getTaskPriority(t);
-                const top = idx * 44 + 10;
-                const geo = TF.computeBarGeometry({ start: start, tStart: d.s, tEnd: d.e, pxPerDay: pxPerDay });
-                if (isJalon(t)) {
-                    bars += '<div class="gantt-milestone p' + p + '" style="left:' + geo.diamondLeft + 'px;top:' + top + 'px"><div class="milestone-diamond"></div><span class="milestone-label">' + escapeHtml(t.titre) + '</span></div>';
-                } else {
-                    const isParent = hasChildren(t);
-                    bars += '<div class="gantt-bar p' + p + (geo.isNarrow ? ' narrow-bar' : '') + (isParent ? ' parent' : '') + '" style="left:' + geo.barLeft + 'px;top:' + top + 'px;width:' + geo.barWidth + 'px">' +
-                        '<div class="gantt-bar-progress" style="width:' + (t.progression || 0) + '%"></div>' +
-                        '<span class="gantt-bar-label" style="position:relative;z-index:1">' + escapeHtml(t.titre) + '</span>' +
-                        '<span class="gantt-bar-external-label">' + escapeHtml(t.titre) + '</span>' +
-                    '</div>';
-                }
-            });
+            // En-tête : un libellé de mois par mois de la plage, positionné par date.
+            let header = '';
+            let cur = new Date(start.getFullYear(), start.getMonth(), 1);
+            const rangeEnd = addDays(start, totalDays);
+            while (cur < rangeEnd) {
+                const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
+                const from = cur < start ? start : cur;
+                const x = Math.max(0, Math.round(getDaysDiff(start, from) * pxPerDay));
+                const w = Math.round(getDaysDiff(from, next) * pxPerDay);
+                const label = cur.toLocaleDateString('fr-FR', { month: 'short' }) + ' ' + String(cur.getFullYear()).slice(2);
+                header += '<div class="mg-month" style="left:' + x + 'px;width:' + w + 'px">' + label + '</div>';
+                cur = next;
+            }
 
-            let deps = '';
+            let names = '', tracks = '';
             scoped.forEach(t => {
-                getDependsOnArray(t).forEach(depId => {
-                    if (idxOf[depId] === undefined || idxOf[t.id] === undefined) return;
-                    const depTask = scoped.find(x => x.id === depId); if (!depTask) return;
-                    const dEnd = datedOf(depTask).e, tStart = datedOf(t).s; if (!dEnd || !tStart) return;
-                    const dp = TF.computeDependencyPath({ start: start, depEnd: dEnd, tStart: tStart, depIdx: idxOf[depId], tIdx: idxOf[t.id], pxPerDay: pxPerDay });
-                    deps += '<path class="dependency-line" d="' + dp.pathD + '"></path><polygon class="dependency-arrow" points="' + dp.arrowPoints + '"></polygon>';
-                });
+                names += '<div class="mg-name" title="' + escapeHtml(t.titre) + '">' + escapeHtml(t.titre) + '</div>';
+                const d = datedOf(t);
+                let mark = '';
+                if (d.s && d.e) {
+                    const p = getTaskPriority(t);
+                    const geo = TF.computeBarGeometry({ start: start, tStart: d.s, tEnd: d.e, pxPerDay: pxPerDay });
+                    if (isJalon(t)) {
+                        mark = '<div class="mg-milestone p' + p + '" style="left:' + geo.diamondLeft + 'px"></div>';
+                    } else {
+                        mark = '<div class="mg-bar p' + p + (hasChildren(t) ? ' parent' : '') + '" style="left:' + geo.barLeft + 'px;width:' + geo.barWidth + 'px"><div class="mg-progress" style="width:' + (t.progression || 0) + '%"></div></div>';
+                    }
+                }
+                tracks += '<div class="mg-track">' + mark + '</div>';
             });
 
             const today = new Date();
             const todayOffset = getDaysDiff(start, today);
-            const todayLine = (todayOffset >= 0 && todayOffset <= totalDays) ? '<div class="today-line" style="left:' + Math.round(todayOffset * pxPerDay) + 'px"></div>' : '';
+            const todayLine = (todayOffset >= 0 && todayOffset <= totalDays) ? '<div class="mg-today" style="left:' + Math.round(todayOffset * pxPerDay) + 'px"></div>' : '';
 
-            return '<div class="mini-gantt-scroll"><div class="mini-gantt-canvas" style="position:relative;width:' + totalWidth + 'px;height:' + (scoped.length * 44) + 'px">' +
-                (deps ? '<svg style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible">' + deps + '</svg>' : '') +
-                bars + todayLine + '</div></div>';
+            return '<div class="mg">' +
+                '<div class="mg-left"><div class="mg-head-cell"></div>' + names + '</div>' +
+                '<div class="mg-right"><div class="mg-canvas" style="width:' + totalWidth + 'px">' +
+                    '<div class="mg-time-header">' + header + '</div>' + tracks + todayLine +
+                '</div></div></div>';
         }
 
         function setupTooltip(el, task) {
