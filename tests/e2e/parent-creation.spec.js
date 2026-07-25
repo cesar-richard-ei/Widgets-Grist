@@ -26,9 +26,21 @@ test('les parents proposes sont limites au projet courant', async ({ gantt }) =>
 test('taper filtre la liste des parents', async ({ gantt }) => {
     await gantt.getByRole('button', { name: '+ Tâche' }).click();
     await expect(gantt.locator('#panel')).toHaveClass(/open/);
+
+    await gantt.locator('#parentSearch').click();
+    const total = await gantt.locator('#parentComboList .parent-opt').count();
+    expect(total).toBeGreaterThan(0);
+
+    // Correspondance positive : un prefixe d'un titre reel garde au moins cette option.
+    const titre = await gantt.locator('#parentComboList .parent-opt').first().textContent();
+    await gantt.locator('#parentSearch').fill(titre.slice(0, 3));
+    const visiblesMatch = await gantt.locator('#parentComboList .parent-opt:visible').count();
+    expect(visiblesMatch).toBeGreaterThan(0);
+
+    // Aucune correspondance : tout est masque.
     await gantt.locator('#parentSearch').fill('zzz_aucune_correspondance');
-    const visibles = await gantt.locator('#parentComboList .parent-opt:visible').count();
-    expect(visibles).toBe(0);
+    const visiblesNone = await gantt.locator('#parentComboList .parent-opt:visible').count();
+    expect(visiblesNone).toBe(0);
 });
 
 test('choisir un parent le pose et il persiste a la creation', async ({ gantt }) => {

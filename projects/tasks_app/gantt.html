@@ -2307,6 +2307,8 @@
                 return '<div class="prereq-item ' + (TF.isTerminal(statusCfg, st) ? 'done' : '') + '" onclick="openTaskPanel(' + id + ')"><span class="prereq-item-icon">' + (TF.isTerminal(statusCfg, st) ? '✓' : '○') + '</span><span class="prereq-item-title">' + escapeHtml(t.titre) + '</span><span class="prereq-badge" style="background:' + TF.getStatus(statusCfg, st).fillColor + ';color:' + TF.getStatus(statusCfg, st).textColor + '">' + escapeHtml(TF.getStatus(statusCfg, st).label) + '</span></div>';
             }).join('');
 
+            const parentCands = parentCandidates();
+
             content.innerHTML =
                 '<div class="panel-accent-bar" style="background:' + priorityColor + '"></div>' +
                 '<div class="panel-type-row">' +
@@ -2353,8 +2355,8 @@
                                     'onfocus="document.getElementById(\'parentCombo\').classList.add(\'open\')" ' +
                                     'onblur="setTimeout(function(){var c=document.getElementById(\'parentCombo\'); if(c) c.classList.remove(\'open\');},150)">' +
                                 '<div class="multi-select-dropdown" id="parentComboList">' +
-                                    (parentCandidates().length
-                                        ? parentCandidates().map(t => '<div class="multi-select-option parent-opt" data-id="' + t.id + '" onmousedown="setParent(' + t.id + ')">' + escapeHtml(t.titre) + '</div>').join('')
+                                    (parentCands.length
+                                        ? parentCands.map(t => '<div class="multi-select-option parent-opt" data-id="' + t.id + '" onmousedown="setParent(' + t.id + ')">' + escapeHtml(t.titre) + '</div>').join('')
                                         : '<div class="multi-select-empty">Aucune tâche dans ce projet</div>') +
                                 '</div>' +
                               '</div>') +
