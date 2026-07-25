@@ -48,10 +48,20 @@ const TF = (function () {
     }
 
     // Resout le rowId d'une table depuis son tableId via _grist_Tables.
-    async function tableRowId(grist, tableId) {
-        const meta = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
-        const row = meta.find(r => r.tableId === tableId);
+    // `meta` (optionnel) = { tables, cols } deja lus : evite un fetchTable de plus.
+    async function tableRowId(grist, tableId, meta) {
+        const rows = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+        const row = rows.find(r => r.tableId === tableId);
         return row ? row.id : null;
+    }
+
+    // Lit les deux tables de metadonnees en une passe (parallele), a partager entre helpers.
+    async function fetchSchemaMeta(grist) {
+        const [t, c] = await Promise.all([
+            grist.docApi.fetchTable('_grist_Tables'),
+            grist.docApi.fetchTable('_grist_Tables_column')
+        ]);
+        return { tables: columnarToRows(t), cols: columnarToRows(c) };
     }
 
     // Construit une config de statuts normalisee depuis une liste brute.
@@ -87,11 +97,11 @@ const TF = (function () {
      *   3. DEFAULT_STATUSES
      * Ne jette jamais : retourne toujours une config exploitable.
      */
-    async function loadStatusConfig(grist, table, column, distinctFallback) {
+    async function loadStatusConfig(grist, table, column, distinctFallback, meta) {
         try {
-            const tid = await tableRowId(grist, table);
+            const tid = await tableRowId(grist, table, meta);
             if (tid != null) {
-                const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
                 const col = cols.find(c => c.parentId === tid && c.colId === column);
                 if (col && col.widgetOptions) {
                     let opt = {};
@@ -127,11 +137,11 @@ const TF = (function () {
     /* Seme les options (choix + couleurs) sur une colonne Choice si elle n'en a
      * pas encore. Defensif. A appeler depuis ensureSchema apres creation.
      */
-    async function seedStatusChoices(grist, table, column, statuses) {
+    async function seedStatusChoices(grist, table, column, statuses, meta) {
         try {
-            const tid = await tableRowId(grist, table);
+            const tid = await tableRowId(grist, table, meta);
             if (tid == null) return;
-            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
             const col = cols.find(c => c.parentId === tid && c.colId === column);
             if (!col) return;
             let opt = {};
@@ -152,11 +162,11 @@ const TF = (function () {
      * DEFENSIF : si Grist refuse une action, on log et on continue ; au pire
      * l'affichage reste en IDs (comportement actuel), jamais de casse.
      * --------------------------------------------------------------------- */
-    async function setRefDisplayColumns(grist, specs) {
+    async function setRefDisplayColumns(grist, specs, meta) {
         if (!Array.isArray(specs) || !specs.length) return;
         try {
-            const tables = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
-            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+            const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
             const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
             const colOf = (tableRow, colId) => cols.find(c => c.parentId === tableRow && c.colId === colId);
 
@@ -190,11 +200,11 @@ const TF = (function () {
      * existants a chaque ouverture.
      * tableColumns : { Tasks:['titre',...], Team:[...], Projects:[...] }
      * --------------------------------------------------------------------- */
-    async function ensureUntiedLabels(grist, tableColumns) {
+    async function ensureUntiedLabels(grist, tableColumns, meta) {
         if (!tableColumns) return;
         try {
-            const tables = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
-            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+            const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
             const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
             const actions = [];
             for (const tableName of Object.keys(tableColumns)) {
@@ -333,6 +343,7 @@ const TF = (function () {
     return {
         DEFAULT_STATUSES: DEFAULT_STATUSES,
         columnarToRows: columnarToRows,
+        fetchSchemaMeta: fetchSchemaMeta,
         loadStatusConfig: loadStatusConfig,
         buildStatusConfig: buildStatusConfig,
         getStatus: getStatus,

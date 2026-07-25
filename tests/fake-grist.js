@@ -76,6 +76,7 @@ function createFakeGrist(documentInitial, options) {
     }
 
     async function fetchTable(nom) {
+        fetches.push(nom);
         if (nom === '_grist_Tables') {
             return versColonnaire(lignesMetaTables(), ['tableId']);
         }
@@ -91,6 +92,7 @@ function createFakeGrist(documentInitial, options) {
     }
 
     const journal = [];
+    const fetches = [];  // noms des tables lues via fetchTable, pour les tests de perf (compte d'aller-retours)
 
     function table(tableId) {
         if (!doc[tableId]) throw new Error('Table inconnue: ' + tableId);
@@ -277,6 +279,7 @@ function createFakeGrist(documentInitial, options) {
         // doc/refTable/refColonne (voir applyUserActions), l'expose doit suivre l'etat courant.
         get _doc() { return doc; },
         _log: journal,
+        _fetches: fetches,
         get _refTable() { return refTable; },
         get _refColonne() { return refColonne; },
         _declarerTable: declarerTable,
