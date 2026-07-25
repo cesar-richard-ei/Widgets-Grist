@@ -31,6 +31,7 @@ const CORE_PATH = path.join(ROOT, 'projects', 'tasks_app', 'core', 'taskflow-cor
 const TARGETS = [
     path.join(ROOT, 'projects', 'tasks_app', 'kanban.html'),
     path.join(ROOT, 'projects', 'tasks_app', 'gantt.html'),
+    path.join(ROOT, 'projects', 'tasks_app', 'gantt-fiche.html'),
     path.join(ROOT, 'projects', 'tasks_app', 'calendar.html'),
     path.join(ROOT, 'projects', 'tasks_app', 'dashboard.html'),
     path.join(ROOT, 'projects', 'tasks_app', 'plan.html'),
