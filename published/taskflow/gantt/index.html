@@ -204,6 +204,9 @@
         .mg-milestone { position: absolute; top: 7px; width: 12px; height: 12px; transform: rotate(45deg); border-radius: 2px; }
         .mg-milestone.p1 { background: var(--danger); } .mg-milestone.p2 { background: var(--warning); } .mg-milestone.p3 { background: var(--info); } .mg-milestone.p4 { background: var(--text-muted); }
         .mg-today { position: absolute; top: 22px; bottom: 0; width: 2px; background: var(--danger); z-index: 5; }
+        .mg-name.hl { font-weight: 700; color: var(--primary); }
+        .mg-track.hl { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+        .mg-bar.hl, .mg-milestone.hl { outline: 2px solid var(--primary); outline-offset: 1px; }
         .mini-gantt-empty { font-size: 0.78rem; color: var(--text-muted); padding: 8px 4px; }
 
         /* Tooltip */
@@ -2163,7 +2166,7 @@
         // Mini Gantt read-only du sous-arbre d'une tâche (affiché dans son panneau de détail).
         // Structure compacte : colonne de noms à gauche, en-tête de mois + pistes scrollables à droite.
         // Calculs via les briques partagées TF.*. Rien d'interactif.
-        function buildMiniGanttHtml(rootId) {
+        function buildMiniGanttHtml(rootId, highlightId) {
             const root = tasks.find(t => t.id === rootId);
             if (!root) return '';
             const scoped = [root].concat(getAllDescendants(rootId));
@@ -2195,19 +2198,20 @@
 
             let names = '', tracks = '';
             scoped.forEach(t => {
-                names += '<div class="mg-name" title="' + escapeHtml(t.titre) + '">' + escapeHtml(t.titre) + '</div>';
+                const hl = t.id === highlightId ? ' hl' : '';
+                names += '<div class="mg-name' + hl + '" title="' + escapeHtml(t.titre) + '">' + escapeHtml(t.titre) + '</div>';
                 const d = datedOf(t);
                 let mark = '';
                 if (d.s && d.e) {
                     const p = getTaskPriority(t);
                     const geo = TF.computeBarGeometry({ start: start, tStart: d.s, tEnd: d.e, pxPerDay: pxPerDay });
                     if (isJalon(t)) {
-                        mark = '<div class="mg-milestone p' + p + '" style="left:' + geo.diamondLeft + 'px"></div>';
+                        mark = '<div class="mg-milestone p' + p + hl + '" style="left:' + geo.diamondLeft + 'px"></div>';
                     } else {
-                        mark = '<div class="mg-bar p' + p + (hasChildren(t) ? ' parent' : '') + '" style="left:' + geo.barLeft + 'px;width:' + geo.barWidth + 'px"><div class="mg-progress" style="width:' + (t.progression || 0) + '%"></div></div>';
+                        mark = '<div class="mg-bar p' + p + (hasChildren(t) ? ' parent' : '') + hl + '" style="left:' + geo.barLeft + 'px;width:' + geo.barWidth + 'px"><div class="mg-progress" style="width:' + (t.progression || 0) + '%"></div></div>';
                     }
                 }
-                tracks += '<div class="mg-track">' + mark + '</div>';
+                tracks += '<div class="mg-track' + hl + '">' + mark + '</div>';
             });
 
             const today = new Date();
@@ -2601,9 +2605,13 @@
                         addBtn + adjustBtn + '</div>';
                 })() : '') +
 
-                // Mini Gantt du sous-arbre — seulement si la tâche a des sous-tâches
-                (!panelState.isNew && getChildren(panelState.taskId).length ?
-                    '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Planning</span></div>' + buildMiniGanttHtml(panelState.taskId) + '</div>' : '') +
+                // Mini Gantt : sous-arbre de la tâche si elle a des enfants, sinon celui de son parent (tâche courante surlignée).
+                (function () {
+                    if (panelState.isNew) return '';
+                    const miniRoot = getChildren(panelState.taskId).length ? panelState.taskId : (data.parentTask || null);
+                    if (!miniRoot) return '';
+                    return '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Planning</span></div>' + buildMiniGanttHtml(miniRoot, panelState.taskId) + '</div>';
+                })() +
 
                 (data.type === 'jalon' ?
                     '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Prérequis</span>' + (data.dependDe.length ? '<span class="panel-section-badge">' + doneCount + '/' + data.dependDe.length + '</span>' : '') + '</div>' +
