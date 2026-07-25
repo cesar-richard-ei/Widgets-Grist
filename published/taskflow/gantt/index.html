@@ -1113,11 +1113,6 @@
                 priority: filters.priority
             };
         }
-        // Sonde de perf opt-in : ?perf dans l'URL du widget, ou localStorage.taskflow_gantt_perf=1.
-        const PERF_ON = (() => { try { return new URLSearchParams(location.search).has('perf') || !!localStorage.getItem('taskflow_gantt_perf'); } catch (e) { return false; } })();
-        function perfLog(label, ms) { if (PERF_ON) console.log('[gantt-perf] ' + label + ': ' + ms.toFixed(1) + 'ms'); }
-        function perfS(label, fn) { if (!PERF_ON) return fn(); const t = performance.now(); const r = fn(); perfLog(label, performance.now() - t); return r; }
-        async function perfA(label, fn) { if (!PERF_ON) return fn(); const t = performance.now(); const r = await fn(); perfLog(label, performance.now() - t); return r; }
         let dragState = { active: false, type: null, taskId: null, startX: 0, originalLeft: 0, originalWidth: 0, originalStart: null, originalEnd: null };
         let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null, dirty: false };
         let effectiveStart = new Date();    // Plage effective calculée à chaque render()
@@ -1649,16 +1644,14 @@
             // Un rendu demande pendant un clic ou un glisser en cours est reporte au
             // relachement (voir les ecouteurs mousedown/mouseup plus bas).
             if (gesteSourisEnCours) { renduEnAttente = true; return; }
-            const _t0 = PERF_ON ? performance.now() : 0;
             updatePeriodLabel();
-            perfS('computeEffectiveRange', computeEffectiveRange);
-            perfS('renderTimelineHeader', renderTimelineHeader);
-            perfS('renderTaskList', renderTaskList);
-            perfS('renderTimeline', renderTimeline);
-            perfS('renderLegend', renderLegend);
+            computeEffectiveRange();
+            renderTimelineHeader();
+            renderTaskList();
+            renderTimeline();
+            renderLegend();
             syncScroll();
             updateGanttOverlay();
-            if (PERF_ON) { perfLog('render TOTAL', performance.now() - _t0); console.log('[gantt-perf] ctx: tasks=' + tasks.length + ' visible=' + (currentVisible ? currentVisible.length : 0) + ' view=' + currentView + ' days=' + effectiveDays); }
         }
 
         function renderGanttSkeleton() {
@@ -3103,10 +3096,9 @@
                 return;
             }
             // Phase 2 : ici on est dans Grist. Toute erreur est logguée mais ne bascule PAS en démo.
-            const _tInit = PERF_ON ? performance.now() : 0;
             let prefetched = null;
             try {
-                prefetched = await perfA('ensureSchema', () => ensureSchema());
+                prefetched = await ensureSchema();
             } catch (e) {
                 console.error('ensureSchema error (continuing):', e);
                 showToast('Schéma: ' + (e?.message || e), 'error');
@@ -3114,8 +3106,7 @@
             try { filterDocId = await grist.docApi.getDocName(); } catch (e) {}
             hydrateFilters();
             try {
-                await perfA('loadAllData', () => loadAllData(prefetched));
-                perfLog('init TOTAL (ensureSchema + load + 1er render)', PERF_ON ? performance.now() - _tInit : 0);
+                await loadAllData(prefetched);
             } catch (e) {
                 console.error('loadAllData error (continuing):', e);
                 showToast('Chargement: ' + (e?.message || e), 'error');
