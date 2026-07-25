@@ -1,6 +1,6 @@
 {
   "name": "taskflow",
-  "version": "1.1.2",
+  "version": "1.1.3",
   "description": "Suite de widgets de gestion de projet pour Grist",
   "authors": [
     {
@@ -50,6 +50,13 @@
       "url": "plan/",
       "accessLevel": "full",
       "description": "Plan de charge : capacité/charge par personne, prévu/réalisé/reste/dispo, disponibilités"
+    },
+    {
+      "widgetId": "taskflow-gantt-fiche",
+      "name": "TaskFlow Gantt de fiche",
+      "url": "gantt-fiche/",
+      "accessLevel": "full",
+      "description": "Gantt read-only scopé à une fiche projet/chantier (lier via Select By)"
     }
   ]
 }
