@@ -1035,20 +1035,12 @@
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
-        // Applique une fois les defauts recommandes, meme par-dessus d'anciennes preferences.
-        const GANTT_DEFAULTS_VERSION = '2';
-        if (localStorage.getItem('taskflow_gantt_defaults') !== GANTT_DEFAULTS_VERSION) {
-            localStorage.setItem('taskflow_gantt_view', 'semester');
-            localStorage.setItem('taskflow_gantt_sort', 'date');
-            localStorage.setItem('taskflow_gantt_colormode', 'project');
-            localStorage.setItem('taskflow_gantt_defaults', GANTT_DEFAULTS_VERSION);
-        }
-        let currentView = localStorage.getItem('taskflow_gantt_view') || 'semester';
+        let currentView = 'semester';
         let viewStartDate = new Date();
         let ganttNowAligned = false;
         let selectedTaskId = null;
-        let sortMode = localStorage.getItem('taskflow_gantt_sort') || 'date';
-        let colorMode = localStorage.getItem('taskflow_gantt_colormode') || 'project';
+        let sortMode = 'date';
+        let colorMode = 'project';
         // WBS-02: état expand/collapse par tâche parente
         let expandedTasks = new Set();
         try { expandedTasks = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_expanded') || '[]').map(Number).filter(n => !isNaN(n))); } catch (e) {}
@@ -1405,7 +1397,6 @@
         // ═══════════════════════════════════════════════════════════════════════
         function setView(view) {
             currentView = view;
-            localStorage.setItem('taskflow_gantt_view', view);
             document.querySelectorAll('.view-controls .btn').forEach(b => b.classList.toggle('active', b.dataset.view === view));
             document.documentElement.style.setProperty('--cell-width', VIEW_CONFIG[view].cellWidth + 'px');
             render();
@@ -1457,7 +1448,6 @@
             }
 
             viewStartDate = minDate;
-            localStorage.setItem('taskflow_gantt_view', currentView);
             document.querySelectorAll('.view-controls .btn').forEach(b => b.classList.toggle('active', b.dataset.view === currentView));
             document.documentElement.style.setProperty('--cell-width', VIEW_CONFIG[currentView].cellWidth + 'px');
             render();
@@ -1480,14 +1470,10 @@
         // ═══════════════════════════════════════════════════════════════════════
         function changeSortMode(mode) {
             sortMode = mode;
-            localStorage.setItem('taskflow_gantt_sort', mode);
-            // Persistance locale uniquement — pas de grist.setOption pour éviter
-            // la demande d'enregistrement du document à chaque changement de préférence UI.
             sortTasks(); render();
         }
         function changeColorMode(mode) {
             colorMode = mode;
-            localStorage.setItem('taskflow_gantt_colormode', mode);
             render();
         }
         // Édite la couleur d'un projet (lue par tous les widgets TaskFlow via getProjectColor)
