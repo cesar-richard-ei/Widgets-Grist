@@ -3023,12 +3023,13 @@
         async function ensureSchema() {
             let created = 0, added = 0;
             const tablesCreated = [];
+            const prefetched = {};  // données lues ici pour la vérif, réutilisables par loadAllData si le schéma n'a pas bougé
 
             for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) {
-                let existingCols = [], tableExists = false;
-                try { existingCols = Object.keys(await grist.docApi.fetchTable(tableName)).filter(c => c !== 'id' && c !== 'manualSort'); tableExists = true; }
+                let raw = null, tableExists = false;
+                try { raw = await grist.docApi.fetchTable(tableName); tableExists = true; }
                 catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } }
-                if (tableExists) { const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); added++; } catch (e) {} } }
+                if (tableExists) { prefetched[tableName] = raw; const existingCols = Object.keys(raw).filter(c => c !== 'id' && c !== 'manualSort'); const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); added++; } catch (e) {} } }
             }
             if (tablesCreated.includes('Tasks')) await seedData();
             // Métadonnées lues une seule fois (après création éventuelle), partagées par les helpers ci-dessous.
@@ -3043,6 +3044,8 @@
                 { table: 'Projects', column: 'responsable', visibleColId: 'nom' }
             ], schemaMeta);
             if (created > 0 || added > 0) showToast('Schema initialisé (' + created + ' tables, ' + added + ' colonnes)', 'success');
+            // Réutilisable seulement si le schéma n'a rien changé (sinon les données lues sont périmées).
+            return (created === 0 && added === 0) ? prefetched : null;
         }
 
         async function seedData() {
@@ -3077,10 +3080,11 @@
             } catch (e) { console.log('Seed error:', e); }
         }
 
-        async function loadAllData() {
-            try { const _raw = await grist.docApi.fetchTable('Tasks'); TASK_COLS = new Set(Object.keys(_raw || {})); tasks = convert(_raw); } catch (e) { tasks = []; }
-            try { team = convert(await grist.docApi.fetchTable('Team')); } catch (e) { team = []; }
-            try { projects = convert(await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; }
+        async function loadAllData(prefetched) {
+            // prefetched : données déjà lues par ensureSchema à l'ouverture (évite une seconde lecture). Absent sur les rechargements onRecords → lecture fraîche.
+            try { const _raw = (prefetched && prefetched.Tasks) || await grist.docApi.fetchTable('Tasks'); TASK_COLS = new Set(Object.keys(_raw || {})); tasks = convert(_raw); } catch (e) { tasks = []; }
+            try { team = convert((prefetched && prefetched.Team) || await grist.docApi.fetchTable('Team')); } catch (e) { team = []; }
+            try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; }
             gristReady = true;
             rebuildChildrenCache();
             sortTasks();
@@ -3100,8 +3104,9 @@
             }
             // Phase 2 : ici on est dans Grist. Toute erreur est logguée mais ne bascule PAS en démo.
             const _tInit = PERF_ON ? performance.now() : 0;
+            let prefetched = null;
             try {
-                await perfA('ensureSchema', () => ensureSchema());
+                prefetched = await perfA('ensureSchema', () => ensureSchema());
             } catch (e) {
                 console.error('ensureSchema error (continuing):', e);
                 showToast('Schéma: ' + (e?.message || e), 'error');
@@ -3109,7 +3114,7 @@
             try { filterDocId = await grist.docApi.getDocName(); } catch (e) {}
             hydrateFilters();
             try {
-                await perfA('loadAllData', () => loadAllData());
+                await perfA('loadAllData', () => loadAllData(prefetched));
                 perfLog('init TOTAL (ensureSchema + load + 1er render)', PERF_ON ? performance.now() - _tInit : 0);
             } catch (e) {
                 console.error('loadAllData error (continuing):', e);
