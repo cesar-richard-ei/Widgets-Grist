@@ -402,10 +402,30 @@ const TF = (function () {
         return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
     }
 
+    /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
+     * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
+     * Entrée : { start:Date, depEnd:Date, tStart:Date, depIdx, tIdx, pxPerDay }
+     * Sortie : { x1, y1, x2, y2, midX, pathD, arrowPoints }
+     */
+    function computeDependencyPath(o) {
+        const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+        const x1 = daysDiff(o.start, o.depEnd) * o.pxPerDay + o.pxPerDay;
+        const y1 = o.depIdx * 44 + 22;
+        const x2 = daysDiff(o.start, o.tStart) * o.pxPerDay;
+        const y2 = o.tIdx * 44 + 22;
+        const midX = (x1 + x2) / 2;
+        return {
+            x1: x1, y1: y1, x2: x2, y2: y2, midX: midX,
+            pathD: 'M' + x1 + ',' + y1 + ' C' + midX + ',' + y1 + ' ' + midX + ',' + y2 + ' ' + x2 + ',' + y2,
+            arrowPoints: x2 + ',' + y2 + ' ' + (x2 - 6) + ',' + (y2 - 4) + ' ' + (x2 - 6) + ',' + (y2 + 4)
+        };
+    }
+
     return {
         DEFAULT_STATUSES: DEFAULT_STATUSES,
         computeTimelineScale: computeTimelineScale,
         computeBarGeometry: computeBarGeometry,
+        computeDependencyPath: computeDependencyPath,
         columnarToRows: columnarToRows,
         fetchSchemaMeta: fetchSchemaMeta,
         loadStatusConfig: loadStatusConfig,

@@ -58,3 +58,17 @@ test('computeBarGeometry : une barre commencant avant la fenetre est clampee a g
     assert.equal(g.barLeft, 0);        // max(0, -50)
     assert.equal(g.barWidth, 12);      // max(40 - 50, 12) = 12 (plancher)
 });
+
+test('computeDependencyPath : chemin bezier et fleche entre deux taches', () => {
+    const d = TF.computeDependencyPath({
+        start: new Date(2026, 0, 1), depEnd: new Date(2026, 0, 5), tStart: new Date(2026, 0, 10),
+        depIdx: 0, tIdx: 1, pxPerDay: 10
+    });
+    assert.equal(d.x1, 50);   // (4 jours * 10) + pxPerDay(10)
+    assert.equal(d.y1, 22);   // 0*44 + 22
+    assert.equal(d.x2, 90);   // 9 jours * 10
+    assert.equal(d.y2, 66);   // 1*44 + 22
+    assert.equal(d.midX, 70);
+    assert.equal(d.pathD, 'M50,22 C70,22 70,66 90,66');
+    assert.equal(d.arrowPoints, '90,66 84,62 84,70');
+});
