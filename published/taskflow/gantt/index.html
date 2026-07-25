@@ -2646,6 +2646,18 @@
             } else {
                 footer.innerHTML = '';
             }
+            if (!panelState.isNew) alignMiniGanttToday();
+        }
+
+        // Cale le défilement du mini Gantt du panneau sur la ligne « aujourd'hui » (près du bord gauche),
+        // comme le Gantt principal. Sans effet si aujourd'hui est hors de la plage du sous-arbre.
+        function alignMiniGanttToday() {
+            const right = document.querySelector('#panelContent .mg-right');
+            if (!right) return;
+            const today = right.querySelector('.mg-today');
+            if (!today) return;
+            const todayLeft = parseInt(today.style.left, 10) || 0;
+            right.scrollLeft = Math.max(0, todayLeft - 16);
         }
 
         // ═══════════════════════════════════════════════════════════════════════
