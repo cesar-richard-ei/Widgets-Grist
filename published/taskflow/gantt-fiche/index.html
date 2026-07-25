@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gantt de fiche - TaskFlow</title>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <style>
+        :root {
+            --primary: #3e5de7; --danger: #ef4444; --warning: #f59e0b; --info: #3b82f6;
+            --text: #1e293b; --text-muted: #64748b; --border: #e2e8f0; --bg: #f8fafc; --card-bg: #ffffff;
+            --row-height: 44px; --cell-width: 34px;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: var(--text); background: var(--bg); height: 100vh; overflow: hidden; }
+        .fiche-gantt { display: flex; flex-direction: column; height: 100vh; }
+        .timeline-scroll { flex: 1; overflow: auto; position: relative; }
+        .timeline-grid { position: relative; min-height: 100%; }
+        .grid-row { height: var(--row-height); border-bottom: 1px solid var(--border); display: flex; }
+        .grid-cell { width: var(--cell-width); min-width: var(--cell-width); border-right: 1px solid #f1f5f9; height: 100%; }
+        .grid-cell.weekend { background: #fef2f2; }
+        .grid-cell.today { background: rgba(79, 70, 229, 0.08); }
+        .grid-cell.month-start { border-left: 1px solid var(--border); }
+        .gantt-bar { position: absolute; height: 24px; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 0.7rem; font-weight: 500; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 10; }
+        .gantt-bar.p1 { background: linear-gradient(135deg, var(--danger), #f87171); }
+        .gantt-bar.p2 { background: linear-gradient(135deg, var(--warning), #fbbf24); }
+        .gantt-bar.p3 { background: linear-gradient(135deg, var(--info), #60a5fa); }
+        .gantt-bar.p4 { background: linear-gradient(135deg, var(--text-muted), #94a3b8); }
+        .gantt-bar.parent { height: 8px !important; margin-top: 8px; }
+        .gantt-bar.parent .gantt-bar-label, .gantt-bar.parent .gantt-bar-external-label { display: none; }
+        .gantt-bar-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(255,255,255,0.25); border-radius: 4px 0 0 4px; pointer-events: none; }
+        .gantt-bar-external-label { position: absolute; left: 100%; margin-left: 6px; font-size: 0.7rem; font-weight: 500; color: var(--text); white-space: nowrap; pointer-events: none; }
+        .gantt-bar.narrow-bar .gantt-bar-label { display: none; }
+        .gantt-bar:not(.narrow-bar) .gantt-bar-external-label { display: none; }
+        .gantt-milestone { position: absolute; z-index: 15; display: flex; align-items: center; gap: 4px; }
+        .milestone-diamond { width: 14px; height: 14px; transform: rotate(45deg); border-radius: 2px; box-shadow: 0 1px 3px rgba(0,0,0,0.25); }
+        .gantt-milestone.p1 .milestone-diamond { background: var(--danger); }
+        .gantt-milestone.p2 .milestone-diamond { background: var(--warning); }
+        .gantt-milestone.p3 .milestone-diamond { background: var(--info); }
+        .gantt-milestone.p4 .milestone-diamond { background: var(--text-muted); }
+        .milestone-label { font-size: 0.68rem; color: var(--text); white-space: nowrap; font-weight: 500; }
+        .dependency-line { fill: none; stroke: var(--text-muted); stroke-width: 1.5; stroke-dasharray: 4 2; }
+        .dependency-arrow { fill: var(--text-muted); }
+        .today-line { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--danger); z-index: 25; }
+        .fiche-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 24px; }
+    </style>
+</head>
+<body>
+    <div class="fiche-gantt">
+        <div class="timeline-scroll" id="timelineScroll">
+            <div class="timeline-grid" id="timelineGrid"></div>
+            <div class="fiche-empty" id="ficheEmpty" style="display:none"></div>
+        </div>
+    </div>
+    <script>
+        // <taskflow-core> -- GENERE par scripts/build-taskflow.js, NE PAS EDITER ICI
+        /* ============================================================================
+         * taskflow-core.js — Module commun aux widgets TaskFlow
+         * ----------------------------------------------------------------------------
+         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-taskflow.js entre
+         * les marqueurs de generation prevus a cet effet.
+         * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
+         *   npm run build:taskflow
+         *
+         * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
+         * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans
+         * Grist sont DEFENSIVES : en cas d'echec elles n'interrompent jamais le widget
+         * (au pire, comportement actuel inchange).
+         * ========================================================================== */
+        const TF = (function () {
+            'use strict';
+
+            /* ----- Statuts ---------------------------------------------------------
+             * Convention : l'ORDRE fait foi. Le DERNIER statut de la liste est l'etat
+             * terminal ("termine") utilise par la logique de completion des widgets.
+             * Les statuts reels proviennent de la colonne Choice `statut` (editable par
+             * l'utilisateur dans Grist). DEFAULT_STATUSES n'est qu'un repli.
+             * --------------------------------------------------------------------- */
+            const DEFAULT_STATUSES = [
+                { value: 'todo',       label: 'À faire',  fillColor: '#94a3b8', textColor: '#ffffff' },
+                { value: 'inprogress', label: 'En cours', fillColor: '#f59e0b', textColor: '#ffffff' },
+                { value: 'review',     label: 'En revue', fillColor: '#3b82f6', textColor: '#ffffff' },
+                { value: 'done',       label: 'Terminé',  fillColor: '#10b981', textColor: '#ffffff' }
+            ];
+            // Repli libelle + couleur pour les CODES par defaut. Permet d'afficher un libelle
+            // FR (et la bonne couleur) meme quand la colonne Choice stocke le code brut
+            // (todo/inprogress/...). Une valeur renommee par l'utilisateur garde SON libelle.
+            const DEFAULTS_BY_VALUE = {};
+            for (var _i = 0; _i < DEFAULT_STATUSES.length; _i++) DEFAULTS_BY_VALUE[DEFAULT_STATUSES[_i].value] = DEFAULT_STATUSES[_i];
+
+            // Convertit un tableau Grist colonnaire en tableau d'objets lignes.
+            function columnarToRows(data) {
+                if (!data || Array.isArray(data)) return data || [];
+                const cols = Object.keys(data);
+                if (!cols.length) return [];
+                const n = (data[cols[0]] && data[cols[0]].length) || 0;
+                const rows = [];
+                for (let i = 0; i < n; i++) {
+                    const rec = {};
+                    for (const k of cols) rec[k] = data[k][i];
+                    rows.push(rec);
+                }
+                return rows;
+            }
+
+            // Resout le rowId d'une table depuis son tableId via _grist_Tables.
+            // `meta` (optionnel) = { tables, cols } deja lus : evite un fetchTable de plus.
+            async function tableRowId(grist, tableId, meta) {
+                const rows = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                const row = rows.find(r => r.tableId === tableId);
+                return row ? row.id : null;
+            }
+
+            // Lit les deux tables de metadonnees en une passe (parallele), a partager entre helpers.
+            async function fetchSchemaMeta(grist) {
+                const [t, c] = await Promise.all([
+                    grist.docApi.fetchTable('_grist_Tables'),
+                    grist.docApi.fetchTable('_grist_Tables_column')
+                ]);
+                return { tables: columnarToRows(t), cols: columnarToRows(c) };
+            }
+
+            // Construit une config de statuts normalisee depuis une liste brute.
+            function buildStatusConfig(list, source) {
+                const clean = (list || []).filter(s => s && s.value != null).map(s => {
+                    const v = String(s.value);
+                    const d = DEFAULTS_BY_VALUE[v];
+                    const hasExplicitLabel = s.label != null && s.label !== '' && String(s.label) !== v;
+                    return {
+                        value: v,
+                        label: hasExplicitLabel ? String(s.label) : (d ? d.label : v),
+                        fillColor: s.fillColor || (d ? d.fillColor : '#94a3b8'),
+                        textColor: s.textColor || (d ? d.textColor : '#ffffff')
+                    };
+                });
+                const final = clean.length ? clean : DEFAULT_STATUSES.slice();
+                const byValue = {};
+                for (const s of final) byValue[s.value] = s;
+                return {
+                    list: final,
+                    byValue,
+                    values: final.map(s => s.value),
+                    terminalValue: final[final.length - 1].value, // convention "dernier = termine"
+                    firstValue: final[0].value,
+                    source: clean.length ? source : 'default'
+                };
+            }
+
+            /* Lit les statuts (libelles + couleurs + ordre) depuis la colonne Choice
+             * indiquee, via les metadonnees Grist. Repli en cascade :
+             *   1. options de la colonne Choice (cas ideal)
+             *   2. valeurs distinctes presentes dans les donnees (colonne Text)
+             *   3. DEFAULT_STATUSES
+             * Ne jette jamais : retourne toujours une config exploitable.
+             */
+            async function loadStatusConfig(grist, table, column, distinctFallback, meta) {
+                try {
+                    const tid = await tableRowId(grist, table, meta);
+                    if (tid != null) {
+                        const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                        const col = cols.find(c => c.parentId === tid && c.colId === column);
+                        if (col && col.widgetOptions) {
+                            let opt = {};
+                            try { opt = JSON.parse(col.widgetOptions) || {}; } catch (e) { opt = {}; }
+                            const choices = Array.isArray(opt.choices) ? opt.choices : [];
+                            const co = opt.choiceOptions || {};
+                            if (choices.length) {
+                                return buildStatusConfig(choices.map(ch => ({
+                                    value: ch,
+                                    label: ch,
+                                    fillColor: co[ch] && co[ch].fillColor,
+                                    textColor: co[ch] && co[ch].textColor
+                                })), 'choice');
+                            }
+                        }
+                    }
+                } catch (e) { /* repli silencieux */ }
+
+                if (Array.isArray(distinctFallback) && distinctFallback.length) {
+                    const seen = [];
+                    for (const v of distinctFallback) { if (v != null && v !== '' && seen.indexOf(v) === -1) seen.push(v); }
+                    if (seen.length) return buildStatusConfig(seen.map(v => ({ value: v, label: v })), 'data');
+                }
+                return buildStatusConfig(DEFAULT_STATUSES.slice(), 'default');
+            }
+
+            function getStatus(cfg, value) {
+                if (cfg && cfg.byValue && cfg.byValue[value]) return cfg.byValue[value];
+                return { value: value, label: value || '', fillColor: '#94a3b8', textColor: '#ffffff' };
+            }
+            function isTerminal(cfg, value) { return !!cfg && value === cfg.terminalValue; }
+
+            /* Seme les options (choix + couleurs) sur une colonne Choice si elle n'en a
+             * pas encore. Defensif. A appeler depuis ensureSchema apres creation.
+             */
+            async function seedStatusChoices(grist, table, column, statuses, meta) {
+                try {
+                    const tid = await tableRowId(grist, table, meta);
+                    if (tid == null) return;
+                    const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const col = cols.find(c => c.parentId === tid && c.colId === column);
+                    if (!col) return;
+                    let opt = {};
+                    try { opt = JSON.parse(col.widgetOptions || '{}') || {}; } catch (e) { opt = {}; }
+                    if (Array.isArray(opt.choices) && opt.choices.length) return; // deja configure : on respecte
+                    const list = statuses && statuses.length ? statuses : DEFAULT_STATUSES;
+                    const choiceOptions = {};
+                    for (const s of list) choiceOptions[s.value] = { fillColor: s.fillColor, textColor: s.textColor };
+                    const widgetOptions = JSON.stringify({ choices: list.map(s => s.value), choiceOptions: choiceOptions });
+                    await grist.docApi.applyUserActions([['ModifyColumn', table, column, { widgetOptions: widgetOptions }]]);
+                } catch (e) { console.warn('TF.seedStatusChoices:', e && e.message); }
+            }
+
+            /* ----- #2 : colonnes d'affichage des Ref (noms au lieu des IDs) ---------
+             * Pose le visibleCol + la display formula sur des colonnes Ref pour que les
+             * VUES NATIVES Grist affichent un libelle plutot que l'ID de ligne.
+             * specs : [{ table:'Tasks', column:'projet', visibleColId:'nom' }, ...]
+             * DEFENSIF : si Grist refuse une action, on log et on continue ; au pire
+             * l'affichage reste en IDs (comportement actuel), jamais de casse.
+             * --------------------------------------------------------------------- */
+            async function setRefDisplayColumns(grist, specs, meta) {
+                if (!Array.isArray(specs) || !specs.length) return;
+                try {
+                    const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                    const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+                    const colOf = (tableRow, colId) => cols.find(c => c.parentId === tableRow && c.colId === colId);
+
+                    const actions = [];
+                    for (const s of specs) {
+                        const srcTid = tidOf(s.table);
+                        if (srcTid == null) continue;
+                        const refCol = colOf(srcTid, s.column);
+                        if (!refCol) continue;
+                        // Table cible deduite du type "Ref:Target" / "RefList:Target".
+                        const m = /^(?:Ref|RefList):(.+)$/.exec(refCol.type || '');
+                        if (!m) continue;
+                        const targetTid = tidOf(m[1]);
+                        if (targetTid == null) continue;
+                        const visCol = colOf(targetTid, s.visibleColId);
+                        if (!visCol) continue;
+                        // Eviter de re-poser si deja correct.
+                        if (refCol.visibleCol === visCol.id) continue;
+                        actions.push(['SetDisplayFormula', s.table, null, refCol.id, '$' + s.column + '.' + s.visibleColId]);
+                        actions.push(['UpdateRecord', '_grist_Tables_column', refCol.id, { visibleCol: visCol.id }]);
+                    }
+                    if (actions.length) await grist.docApi.applyUserActions(actions);
+                } catch (e) { console.warn('TF.setRefDisplayColumns:', e && e.message); }
+            }
+
+            /* ----- #2bis : delier colId <-> label (renommage libre des libelles) ----
+             * Pose untieColIdFromLabel=true sur les colonnes du widget. Sans ca, Grist
+             * regenere le colId a chaque changement de libelle, et le widget (qui lit et
+             * ecrit tout par colId) perd ses colonnes. Idempotent (saute les colonnes
+             * deja deliees) et defensif (jamais de casse), applique aux docs neufs comme
+             * existants a chaque ouverture.
+             * tableColumns : { Tasks:['titre',...], Team:[...], Projects:[...] }
+             * --------------------------------------------------------------------- */
+            async function ensureUntiedLabels(grist, tableColumns, meta) {
+                if (!tableColumns) return;
+                try {
+                    const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                    const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+                    const actions = [];
+                    for (const tableName of Object.keys(tableColumns)) {
+                        const tid = tidOf(tableName);
+                        if (tid == null) continue;
+                        for (const colId of tableColumns[tableName] || []) {
+                            const col = cols.find(c => c.parentId === tid && c.colId === colId);
+                            if (!col) continue;
+                            if (col.untieColIdFromLabel === true) continue;
+                            actions.push(['ModifyColumn', tableName, colId, { untieColIdFromLabel: true }]);
+                        }
+                    }
+                    if (actions.length) await grist.docApi.applyUserActions(actions);
+                } catch (e) { console.warn('TF.ensureUntiedLabels:', e && e.message); }
+            }
+
+            /* ----- #3 : plan de charge (heures par personne) ------------------------
+             * Stockage : colonne Text `charges` sur Tasks, JSON [{teamId, heures}].
+             * Parse defensif identique au pattern subtasks.
+             * --------------------------------------------------------------------- */
+            function parseCharges(v) {
+                try {
+                    const a = JSON.parse(v || '[]');
+                    if (!Array.isArray(a)) return [];
+                    return a.filter(x => x && x.teamId != null)
+                            .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+                            .filter(x => !isNaN(x.teamId));
+                } catch (e) { return []; }
+            }
+            function chargesToJson(arr) {
+                return JSON.stringify((arr || [])
+                    .filter(x => x && x.teamId != null)
+                    .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+                    .filter(x => !isNaN(x.teamId)));
+            }
+            // Heures totales d'une tache (somme des charges par personne).
+            function chargeTotal(charges) { return parseCharges(typeof charges === 'string' ? charges : JSON.stringify(charges || [])).reduce((s, c) => s + c.heures, 0); }
+            // Agrege la charge par membre sur une liste de taches (chaque tache expose .charges).
+            function chargeByMember(tasks) {
+                const by = {};
+                for (const t of (tasks || [])) {
+                    for (const c of parseCharges(t && t.charges)) {
+                        by[c.teamId] = (by[c.teamId] || 0) + c.heures;
+                    }
+                }
+                return by;
+            }
+
+            // Cle de periode : semaine ISO 'YYYY-Www' ou mois 'YYYY-MM'.
+            function periodKey(date, granularity) {
+                if (granularity === 'month') {
+                    return date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0');
+                }
+                const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+                const day = d.getUTCDay() || 7;
+                d.setUTCDate(d.getUTCDate() + 4 - day);
+                const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+                return d.getUTCFullYear() + '-W' + String(week).padStart(2, '0');
+            }
+
+            // #3 plan de charge temporel : etale les charges PROPRES de chaque tache sur sa
+            // duree (jours calendaires), agrege par personne et par periode.
+            // dateDebut/dateEcheance = timestamps Unix SECONDES (Grist). Tache sans dates ou
+            // sans charge = ignoree. Retourne { teamId: { periodKey: heures } }.
+            function chargeByMemberPeriod(tasks, granularity) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                const out = {};
+                for (const t of (tasks || [])) {
+                    const charges = parseCharges(t && t.charges);
+                    if (!charges.length) continue;
+                    const s = t.dateDebut, e = t.dateEcheance;
+                    if (s == null || e == null) continue;
+                    const day0 = Math.floor((s * 1000) / 86400000);
+                    const day1 = Math.floor((e * 1000) / 86400000);
+                    const nDays = Math.max(day1 - day0 + 1, 1);
+                    for (const c of charges) {
+                        const perDay = (Number(c.heures) || 0) / nDays;
+                        if (!perDay) continue;
+                        if (!out[c.teamId]) out[c.teamId] = {};
+                        for (let dd = day0; dd <= day1; dd++) {
+                            const key = periodKey(new Date(dd * 86400000), g);
+                            out[c.teamId][key] = (out[c.teamId][key] || 0) + perDay;
+                        }
+                    }
+                }
+                return out;
+            }
+
+            // Decale une date de n periodes (semaine = 7 jours, mois = 1 mois).
+            function shiftPeriods(date, granularity, n) {
+                const d = new Date(date.getTime());
+                if (granularity === 'month') d.setUTCMonth(d.getUTCMonth() + n);
+                else d.setUTCDate(d.getUTCDate() + n * 7);
+                return d;
+            }
+
+            // Liste contigue de cles de periode (semaine ISO ou mois) a partir d'une date,
+            // alignee sur le debut de periode (lundi / 1er du mois). Inclut les periodes vides.
+            function periodRange(startDate, granularity, count) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                let d = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+                if (g === 'week') { const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); }
+                else { d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+                const out = [];
+                for (let i = 0; i < count; i++) {
+                    out.push(periodKey(d, g));
+                    if (g === 'week') d.setUTCDate(d.getUTCDate() + 7);
+                    else d.setUTCMonth(d.getUTCMonth() + 1);
+                }
+                return out;
+            }
+
+            // chargeMatrix : generalise chargeByMemberPeriod. Etale les charges (via getCharges,
+            // defaut parseCharges) sur la duree, agrege par cle keyFn(t, charge) et periode.
+            function chargeMatrix(tasks, keyFn, granularity, getCharges, workdays) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                const out = {};
+                for (const t of (tasks || [])) {
+                    const charges = getCharges ? getCharges(t) : parseCharges(t && t.charges);
+                    if (!charges.length || t.dateDebut == null || t.dateEcheance == null) continue;
+                    const d0 = Math.floor((t.dateDebut * 1000) / 86400000), d1 = Math.floor((t.dateEcheance * 1000) / 86400000);
+                    const days = [];
+                    for (let dd = d0; dd <= d1; dd++) { if (workdays) { const wd = new Date(dd * 86400000).getUTCDay(); if (wd < 1 || wd > 5) continue; } days.push(dd); }
+                    if (!days.length) days.push(d0);
+                    for (const c of charges) {
+                        const key = keyFn(t, c); if (key == null) continue;
+                        const perDay = c.heures / days.length; if (!perDay) continue;
+                        if (!out[key]) out[key] = {};
+                        for (const dd of days) { const pk = periodKey(new Date(dd * 86400000), g); out[key][pk] = (out[key][pk] || 0) + perDay; }
+                    }
+                }
+                return out;
+            }
+
+            /* ----- Timeline Gantt : calcul pur de l'echelle -------------------------
+             * Extrait de gantt.html (computeEffectiveRange) pour etre partage avec le
+             * Gantt de fiche. Aucun effet de bord (ni etat, ni DOM) : rend les nombres,
+             * l'appelant les applique. Math des dates repliquee a l'identique.
+             * Entree : { tasks:[{start:Date|null,end:Date|null}], unit:'day'|'week'|'month',
+             *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number }
+             * Sortie : { effectiveStart:Date, effectiveDays, numCells, cellWidth, pxPerDay }
+             * --------------------------------------------------------------------- */
+            function computeTimelineScale(opts) {
+                const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const startOfWeek = (d) => { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - day + (day === 0 ? -6 : 1)); r.setHours(0, 0, 0, 0); return r; };
+                const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+                const unit = opts.unit, viewStart = opts.viewStart, viewDays = opts.viewDays;
+                let eStart = new Date(viewStart.getTime());
+                let eEnd = addDays(viewStart, viewDays);
+                const vEnd = new Date(eEnd.getTime());
+                const PADDING = unit === 'day' ? 3 : unit === 'week' ? 7 : 14;
+                for (const t of (opts.tasks || [])) {
+                    const ts = t.start, te = t.end;
+                    if (!ts || !te) continue;
+                    if (te < viewStart || ts > vEnd) continue;
+                    if (ts < eStart) eStart = addDays(ts, -PADDING);
+                    if (te > eEnd) eEnd = addDays(te, PADDING);
+                }
+                if (unit === 'week') eStart = startOfWeek(eStart);
+                else if (unit === 'month') eStart = startOfMonth(eStart);
+                else eStart = new Date(eStart.getFullYear(), eStart.getMonth(), eStart.getDate());
+
+                const effectiveDays = Math.max(daysDiff(eStart, eEnd), viewDays);
+                let numCells;
+                if (unit === 'month') {
+                    const eEnd2 = addDays(eStart, effectiveDays);
+                    numCells = Math.max(1, (eEnd2.getFullYear() - eStart.getFullYear()) * 12 + (eEnd2.getMonth() - eStart.getMonth()));
+                } else if (unit === 'week') {
+                    numCells = Math.ceil(effectiveDays / 7);
+                } else {
+                    numCells = effectiveDays;
+                }
+                const effCellWidth = Math.max(opts.cellWidth, Math.floor(opts.availableWidth / numCells));
+                const pxPerDay = effectiveDays > 0 ? (numCells * effCellWidth) / effectiveDays : opts.cellWidth;
+                return { effectiveStart: eStart, effectiveDays: effectiveDays, numCells: numCells, cellWidth: effCellWidth, pxPerDay: pxPerDay };
+            }
+
+            /* Géométrie d'une barre / d'un jalon sur la timeline (pur). Reprend le clamping
+             * exact de gantt.html : plancher de largeur, décalage du diamant. Partagé avec le lite.
+             * Entrée : { start:Date, tStart:Date, tEnd:Date, pxPerDay:number }
+             * Sortie : { left, width, barLeft, barWidth, isNarrow, diamondLeft } (px)
+             */
+            function computeBarGeometry(o) {
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const startOffset = daysDiff(o.start, o.tStart);
+                const duration = Math.max(daysDiff(o.tStart, o.tEnd) + 1, 1);
+                const left = Math.round(startOffset * o.pxPerDay);
+                const width = Math.round(duration * o.pxPerDay);
+                const barLeft = Math.max(0, left);
+                const barWidth = Math.max(width - (barLeft - left), 12);
+                const diamondLeft = Math.max(0, left + Math.round(o.pxPerDay / 2) - 7);
+                return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
+            }
+
+            /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
+             * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
+             * Entrée : { start:Date, depEnd:Date, tStart:Date, depIdx, tIdx, pxPerDay }
+             * Sortie : { x1, y1, x2, y2, midX, pathD, arrowPoints }
+             */
+            function computeDependencyPath(o) {
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const x1 = daysDiff(o.start, o.depEnd) * o.pxPerDay + o.pxPerDay;
+                const y1 = o.depIdx * 44 + 22;
+                const x2 = daysDiff(o.start, o.tStart) * o.pxPerDay;
+                const y2 = o.tIdx * 44 + 22;
+                const midX = (x1 + x2) / 2;
+                return {
+                    x1: x1, y1: y1, x2: x2, y2: y2, midX: midX,
+                    pathD: 'M' + x1 + ',' + y1 + ' C' + midX + ',' + y1 + ' ' + midX + ',' + y2 + ' ' + x2 + ',' + y2,
+                    arrowPoints: x2 + ',' + y2 + ' ' + (x2 - 6) + ',' + (y2 - 4) + ' ' + (x2 - 6) + ',' + (y2 + 4)
+                };
+            }
+
+            return {
+                DEFAULT_STATUSES: DEFAULT_STATUSES,
+                computeTimelineScale: computeTimelineScale,
+                computeBarGeometry: computeBarGeometry,
+                computeDependencyPath: computeDependencyPath,
+                columnarToRows: columnarToRows,
+                fetchSchemaMeta: fetchSchemaMeta,
+                loadStatusConfig: loadStatusConfig,
+                buildStatusConfig: buildStatusConfig,
+                getStatus: getStatus,
+                isTerminal: isTerminal,
+                seedStatusChoices: seedStatusChoices,
+                setRefDisplayColumns: setRefDisplayColumns,
+                ensureUntiedLabels: ensureUntiedLabels,
+                parseCharges: parseCharges,
+                chargesToJson: chargesToJson,
+                chargeTotal: chargeTotal,
+                chargeByMember: chargeByMember,
+                periodKey: periodKey,
+                chargeByMemberPeriod: chargeByMemberPeriod,
+                shiftPeriods: shiftPeriods,
+                periodRange: periodRange,
+                chargeMatrix: chargeMatrix
+            };
+        })();
+
+        // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
+        if (typeof module !== 'undefined' && module.exports) module.exports = TF;
+        // </taskflow-core>
+
+        // ── État ────────────────────────────────────────────────────────────
+        let tasks = [], team = [], projects = [];
+        let scopeRecord = null;                 // enregistrement lié (projet ou chantier) reçu via onRecord
+        let childrenByParent = new Map();
+
+        // ── Helpers données ─────────────────────────────────────────────────
+        function convert(data) {
+            if (!data) return [];
+            const cols = Object.keys(data); if (!cols.length) return [];
+            const n = data[cols[0]]?.length || 0; const rows = [];
+            for (let i = 0; i < n; i++) { const rec = {}; cols.forEach(c => rec[c] = data[c][i]); rows.push(rec); }
+            return rows;
+        }
+        const gristToDate = (ts) => { if (ts == null || ts === '') return null; const n = Number(ts); return isNaN(n) ? null : new Date(n * 1000); };
+        function getRefListArray(val) { if (!val) return []; if (Array.isArray(val)) return val[0] === 'L' ? val.slice(1).map(Number).filter(n => !isNaN(n)) : val.map(Number).filter(n => !isNaN(n)); return []; }
+        const getDependsOnArray = (t) => getRefListArray(t?.dependDe);
+        const isJalon = (t) => t?.type === 'jalon';
+        const getTaskPriority = (t) => (t?.priorite >= 1 && t?.priorite <= 4) ? parseInt(t.priorite) : 3;
+        const getDaysDiff = (a, b) => Math.round((b - a) / 86400000);
+        function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+
+        // ── WBS ─────────────────────────────────────────────────────────────
+        function rebuildChildrenCache() {
+            childrenByParent = new Map();
+            for (const t of tasks) {
+                const pid = t.parentTask;
+                if (pid != null && pid !== '') { if (!childrenByParent.has(pid)) childrenByParent.set(pid, []); childrenByParent.get(pid).push(t); }
+            }
+        }
+        const getChildren = (id) => childrenByParent.get(id) || [];
+        const hasChildren = (t) => t && getChildren(t.id).length > 0;
+        function getAllDescendants(id, acc = [], visited = new Set()) {
+            if (visited.has(id)) return acc; visited.add(id);
+            for (const k of getChildren(id)) { acc.push(k); getAllDescendants(k.id, acc, visited); }
+            return acc;
+        }
+        function aggregateDates(t, visited = new Set()) {
+            if (visited.has(t.id)) return { start: t.dateDebut, end: t.dateEcheance };
+            visited.add(t.id);
+            const kids = getChildren(t.id);
+            if (!kids.length) return { start: t.dateDebut, end: t.dateEcheance };
+            let minS = t.dateDebut, maxE = t.dateEcheance;
+            for (const k of kids) { const sub = aggregateDates(k, visited); if (sub.start != null && (minS == null || sub.start < minS)) minS = sub.start; if (sub.end != null && (maxE == null || sub.end > maxE)) maxE = sub.end; }
+            return { start: minS, end: maxE };
+        }
+
+        // ── Scoping ─────────────────────────────────────────────────────────
+        // Détermine si l'enregistrement lié est un PROJET (table Projects) ou un CHANTIER (tâche parente).
+        // Détection par les champs propres à Tasks. NOTE : à confirmer sur le vrai Grist (spike linking).
+        function scopeIsTask(rec) { return rec && (('titre' in rec) || ('parentTask' in rec) || ('statut' in rec)); }
+        function getScopedTasks() {
+            const rec = scopeRecord;
+            if (!rec || rec.id == null) return [];
+            if (scopeIsTask(rec)) {
+                const root = tasks.find(t => t.id === rec.id);
+                return root ? [root].concat(getAllDescendants(rec.id)) : [];
+            }
+            return tasks.filter(t => t.projet === rec.id);
+        }
+
+        // ── Vue ─────────────────────────────────────────────────────────────
+        function pickView(days) {
+            if (days <= 60) return { unit: 'day', cellWidth: 34 };
+            if (days <= 200) return { unit: 'week', cellWidth: 32 };
+            return { unit: 'month', cellWidth: 80 };
+        }
+        // Dates effectives d'une tâche (agrégées si parent sans dates propres).
+        function taskDates(t) {
+            let s = gristToDate(t.dateDebut), e = gristToDate(t.dateEcheance);
+            if (hasChildren(t) && (!s || !e)) { const agg = aggregateDates(t); if (!s) s = gristToDate(agg.start); if (!e) e = gristToDate(agg.end); }
+            return { start: s, end: e };
+        }
+
+        // ── Rendu ───────────────────────────────────────────────────────────
+        function render() {
+            const grid = document.getElementById('timelineGrid');
+            const empty = document.getElementById('ficheEmpty');
+            const scoped = getScopedTasks();
+
+            if (!scopeRecord) { grid.innerHTML = ''; empty.textContent = 'Sélectionnez un projet ou un chantier pour afficher son planning.'; empty.style.display = 'flex'; return; }
+            const dated = scoped.map(t => ({ t: t, d: taskDates(t) })).filter(x => x.d.start && x.d.end);
+            if (!dated.length) { grid.innerHTML = ''; empty.textContent = 'Aucune tâche datée dans ce périmètre.'; empty.style.display = 'flex'; return; }
+            empty.style.display = 'none';
+
+            let minS = dated[0].d.start, maxE = dated[0].d.end;
+            for (const x of dated) { if (x.d.start < minS) minS = x.d.start; if (x.d.end > maxE) maxE = x.d.end; }
+            const viewDays = Math.max(getDaysDiff(minS, maxE), 7);
+            const view = pickView(viewDays);
+            const availableWidth = document.getElementById('timelineScroll').clientWidth || 800;
+
+            const scale = TF.computeTimelineScale({
+                tasks: dated.map(x => ({ start: x.d.start, end: x.d.end })),
+                unit: view.unit, cellWidth: view.cellWidth,
+                viewStart: minS, viewDays: viewDays, availableWidth: availableWidth
+            });
+            document.documentElement.style.setProperty('--cell-width', scale.cellWidth + 'px');
+            const start = scale.effectiveStart, totalDays = scale.effectiveDays, pxPerDay = scale.pxPerDay;
+            const today = new Date();
+
+            const ft = scoped;
+            const idxOf = {}; ft.forEach((t, i) => idxOf[t.id] = i);
+
+            // Grille de fond (une ligne par tâche)
+            let gridHtml = '';
+            for (let r = 0; r < ft.length; r++) {
+                gridHtml += '<div class="grid-row">';
+                if (view.unit === 'month') {
+                    let cur = new Date(start.getFullYear(), start.getMonth(), 1); const effEnd = addD(start, totalDays);
+                    while (cur < effEnd) { const isT = (today.getMonth() === cur.getMonth() && today.getFullYear() === cur.getFullYear()); gridHtml += '<div class="grid-cell ' + (isT ? 'today' : '') + '" style="width:' + scale.cellWidth + 'px"></div>'; cur = new Date(cur.getFullYear(), cur.getMonth() + 1, 1); }
+                } else if (view.unit === 'week') {
+                    for (let i = 0; i < totalDays; i += 7) { const d = addD(start, i); const isT = today >= d && today < addD(d, 7); gridHtml += '<div class="grid-cell ' + (isT ? 'today' : '') + '" style="width:' + scale.cellWidth + 'px"></div>'; }
+                } else {
+                    for (let i = 0; i < totalDays; i++) { const d = addD(start, i); const we = (d.getDay() === 0 || d.getDay() === 6); const isT = sameDay(d, today); const ms = d.getDate() === 1; gridHtml += '<div class="grid-cell ' + (we ? 'weekend ' : '') + (isT ? 'today ' : '') + (ms ? 'month-start' : '') + '" style="width:' + scale.cellWidth + 'px"></div>'; }
+                }
+                gridHtml += '</div>';
+            }
+            grid.innerHTML = gridHtml;
+            grid.style.height = (ft.length * 44) + 'px';
+
+            // Barres et jalons
+            ft.forEach((t, idx) => {
+                const d = taskDates(t); if (!d.start || !d.end) return;
+                const p = getTaskPriority(t);
+                const top = idx * 44 + 10;
+                const geo = TF.computeBarGeometry({ start: start, tStart: d.start, tEnd: d.end, pxPerDay: pxPerDay });
+                if (geo.left + geo.width < -50 || geo.left > (totalDays * pxPerDay) + 50) return;
+                if (isJalon(t)) {
+                    const m = document.createElement('div');
+                    m.className = 'gantt-milestone p' + p;
+                    m.style.left = geo.diamondLeft + 'px'; m.style.top = top + 'px';
+                    m.innerHTML = '<div class="milestone-diamond"></div><span class="milestone-label">' + escapeHtml(t.titre) + '</span>';
+                    grid.appendChild(m);
+                } else {
+                    const isParent = hasChildren(t);
+                    const bar = document.createElement('div');
+                    const isNarrow = geo.isNarrow;
+                    bar.className = 'gantt-bar p' + p + (isNarrow ? ' narrow-bar' : '') + (isParent ? ' parent' : '');
+                    bar.style.left = geo.barLeft + 'px'; bar.style.top = top + 'px'; bar.style.width = geo.barWidth + 'px';
+                    bar.innerHTML = '<div class="gantt-bar-progress" style="width:' + (t.progression || 0) + '%"></div>' +
+                        '<span class="gantt-bar-label" style="position:relative;z-index:1;">' + escapeHtml(t.titre) + '</span>' +
+                        '<span class="gantt-bar-external-label">' + escapeHtml(t.titre) + '</span>';
+                    grid.appendChild(bar);
+                }
+            });
+
+            // Dépendances (seulement entre tâches du périmètre)
+            const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+            svg.style.position = 'absolute'; svg.style.top = '0'; svg.style.left = '0'; svg.style.width = '100%'; svg.style.height = '100%'; svg.style.pointerEvents = 'none';
+            ft.forEach(t => {
+                getDependsOnArray(t).forEach(depId => {
+                    if (idxOf[depId] === undefined || idxOf[t.id] === undefined) return;
+                    const depTask = ft.find(x => x.id === depId); if (!depTask) return;
+                    const depEnd = taskDates(depTask).end, tStart = taskDates(t).start; if (!depEnd || !tStart) return;
+                    const dep = TF.computeDependencyPath({ start: start, depEnd: depEnd, tStart: tStart, depIdx: idxOf[depId], tIdx: idxOf[t.id], pxPerDay: pxPerDay });
+                    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    path.setAttribute('d', dep.pathD); path.classList.add('dependency-line'); svg.appendChild(path);
+                    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+                    arrow.setAttribute('points', dep.arrowPoints); arrow.classList.add('dependency-arrow'); svg.appendChild(arrow);
+                });
+            });
+            grid.appendChild(svg);
+
+            // Ligne aujourd'hui
+            const todayOffset = getDaysDiff(start, today);
+            if (todayOffset >= 0 && todayOffset <= totalDays) {
+                const line = document.createElement('div'); line.className = 'today-line';
+                line.style.left = Math.round(todayOffset * pxPerDay) + 'px';
+                grid.appendChild(line);
+            }
+        }
+        const addD = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+        const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+        // ── Données + Grist ─────────────────────────────────────────────────
+        async function loadAllData() {
+            try { tasks = convert(await grist.docApi.fetchTable('Tasks')); } catch (e) { tasks = []; }
+            try { team = convert(await grist.docApi.fetchTable('Team')); } catch (e) { team = []; }
+            try { projects = convert(await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; }
+            rebuildChildrenCache();
+            render();
+        }
+        async function initGrist() {
+            try { await grist.ready({ requiredAccess: 'full' }); }
+            catch (e) { render(); return; }
+            try { await loadAllData(); } catch (e) {}
+            try {
+                grist.onRecords(async () => await loadAllData());
+                grist.onRecord((rec) => { scopeRecord = rec || null; render(); });
+            } catch (e) {}
+        }
+        initGrist();
+    </script>
+</body>
+</html>
