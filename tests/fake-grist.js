@@ -220,7 +220,7 @@ function createFakeGrist(documentInitial, options) {
     let optionsWidget = {};
 
     async function emettreRecords() {
-        if (!doc[tableLiee]) return;
+        if (!doc[tableLiee] || !abonnes.records.length) return;  // sans abonne, rien a emettre (evite un fetchTable fantome)
         const data = await fetchTable(tableLiee);
         for (const cb of abonnes.records) cb(data, {});
     }
