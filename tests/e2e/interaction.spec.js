@@ -28,6 +28,10 @@ test('la barre d outils reste utilisable quand le panneau est ouvert', async ({ 
 
 test('la timeline defile quand le panneau est ouvert', async ({ gantt }) => {
     await ouvrirPremiereTache(gantt);
+    // La vue par defaut tient sans debordement horizontal ; on passe en vue semaine
+    // pour garantir une timeline scrollable et verifier que le panneau ouvert ne
+    // bloque pas le defilement.
+    await gantt.locator('.view-controls .btn[data-view="week"]').click();
     await gantt.locator('#timelineScroll').evaluate((el) => { el.scrollLeft = 200; });
     const position = await gantt.locator('#timelineScroll').evaluate((el) => el.scrollLeft);
     expect(position).toBeGreaterThan(0);
