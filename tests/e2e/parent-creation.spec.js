@@ -22,3 +22,32 @@ test('les parents proposes sont limites au projet courant', async ({ gantt }) =>
     });
     expect(okFiltre).toBe(true);
 });
+
+test('taper filtre la liste des parents', async ({ gantt }) => {
+    await gantt.getByRole('button', { name: '+ Tâche' }).click();
+    await expect(gantt.locator('#panel')).toHaveClass(/open/);
+    await gantt.locator('#parentSearch').fill('zzz_aucune_correspondance');
+    const visibles = await gantt.locator('#parentComboList .parent-opt:visible').count();
+    expect(visibles).toBe(0);
+});
+
+test('choisir un parent le pose et il persiste a la creation', async ({ gantt }) => {
+    await gantt.getByRole('button', { name: '+ Tâche' }).click();
+    await expect(gantt.locator('#panel')).toHaveClass(/open/);
+    await gantt.locator('#taskTitle').fill('Enfant test parent');
+
+    await gantt.locator('#parentSearch').click();
+    const premiere = gantt.locator('#parentComboList .parent-opt').first();
+    const parentId = Number(await premiere.getAttribute('data-id'));
+    await premiere.click();
+
+    await expect(gantt.getByRole('button', { name: 'Détacher' })).toBeVisible();
+
+    await gantt.getByRole('button', { name: 'Créer la tâche' }).click();
+
+    const ok = await gantt.evaluate((pid) => {
+        const t = tasks.find(x => x.titre === 'Enfant test parent');
+        return !!t && t.parentTask === pid;
+    }, parentId);
+    expect(ok).toBe(true);
+});

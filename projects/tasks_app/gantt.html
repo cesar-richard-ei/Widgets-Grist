@@ -276,6 +276,9 @@
         .multi-select-arrow { color: var(--text-muted); font-size: 0.7rem; }
         .multi-select-dropdown { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: var(--card-bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-lg); z-index: 100; display: none; max-height: 180px; overflow-y: auto; }
         .multi-select.open .multi-select-dropdown { display: block; }
+        .parent-combo input.form-select { cursor: text; }
+        .parent-combo .parent-opt { padding: 7px 10px; cursor: pointer; font-size: 0.85rem; }
+        .parent-combo .parent-opt:hover { background: var(--hover-bg, rgba(0,0,0,0.04)); }
         .multi-select-option { padding: 8px 10px; cursor: pointer; display: flex; align-items: center; gap: 8px; font-size: 0.8rem; }
         .multi-select-option:hover { background: var(--bg); }
         .multi-select-option.selected { background: var(--primary-light); }
@@ -2164,6 +2167,14 @@
             );
         }
 
+        function filterParentOptions(q) {
+            const norm = s => (s || '').toLowerCase().normalize('NFD').replace(new RegExp('[\\u0300-\\u036f]', 'g'), '');
+            const nq = norm(q);
+            document.querySelectorAll('#parentComboList .parent-opt').forEach(el => {
+                el.style.display = norm(el.textContent).includes(nq) ? '' : 'none';
+            });
+        }
+
         function cloneTaskData(task) {
             return {
                 titre: task.titre || '', description: task.description || '', type: task.type || 'tache',
@@ -2336,9 +2347,17 @@
                                 '<span class="multi-select-chip" ' + (panelState.isNew ? '' : 'onclick="openTaskPanel(' + data.parentTask + ')"') + ' style="' + (panelState.isNew ? '' : 'cursor:pointer;') + 'background:var(--primary-light);color:var(--primary)">↑ ' + escapeHtml((tasks.find(t => t.id === data.parentTask) || {}).titre || '(inconnu)') + '</span>' +
                                 '<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="detachFromParent()">Détacher</button>' +
                               '</div>'
-                            : '<select class="form-select" onchange="if(this.value)setParent(parseInt(this.value))"><option value="">— Tâche racine —</option>' +
-                                parentCandidates().map(t => '<option value="' + t.id + '">' + escapeHtml(t.titre) + '</option>').join('') +
-                              '</select>') +
+                            : '<div class="multi-select parent-combo" id="parentCombo">' +
+                                '<input type="text" class="form-select" id="parentSearch" placeholder="Rechercher une tâche parent..." autocomplete="off" ' +
+                                    'oninput="filterParentOptions(this.value)" ' +
+                                    'onfocus="document.getElementById(\'parentCombo\').classList.add(\'open\')" ' +
+                                    'onblur="setTimeout(function(){var c=document.getElementById(\'parentCombo\'); if(c) c.classList.remove(\'open\');},150)">' +
+                                '<div class="multi-select-dropdown" id="parentComboList">' +
+                                    (parentCandidates().length
+                                        ? parentCandidates().map(t => '<div class="multi-select-option parent-opt" data-id="' + t.id + '" onmousedown="setParent(' + t.id + ')">' + escapeHtml(t.titre) + '</div>').join('')
+                                        : '<div class="multi-select-empty">Aucune tâche dans ce projet</div>') +
+                                '</div>' +
+                              '</div>') +
                     '</div></div>' +
                     '<div class="prop-row"><span class="prop-label">Couleur</span><div class="prop-value"><div style="display:flex;gap:8px;align-items:center">' +
                         '<input type="color" value="' + (data.couleur || getTaskColor(data)) + '" onchange="updateField(\'couleur\', this.value)" style="width:36px;height:28px;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:2px">' +
