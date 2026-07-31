@@ -529,6 +529,25 @@ Demandes remontées sur le forum Grist community :
 5. **Kanban = widget maître** : c'est lui qui initialise le schéma — toujours le charger en premier dans un nouveau document
 6. **Gantt : `render()` est différé pendant un geste souris** : voir ci-dessous, ne pas retirer la garde
 
+### Repli sur les données d'exemple : absence de Grist, jamais lenteur
+
+Chaque widget pose à l'init un filet qui bascule sur `useDemoMode()` / `loadDemo()` au bout de
+2.8s (2.5s pour le Plan), pour l'aperçu hors Grist. Sa condition est **`!gristPresent`** : le
+handshake `grist.ready()` n'a pas abouti, donc il n'y a pas de Grist en face.
+
+**Ne pas** le rebrancher sur « les données sont vides ». Sur un poste modeste ou un réseau
+lent, les lectures de tables dépassent le délai alors que Grist est bien là : le widget
+remplaçait alors les données réelles par celles de la démo. Sur le Plan, `S.demo` conditionne
+en plus **toutes** les écritures (charges, replanification, capacité, disponibilités) : une
+fois posé, l'utilisateur modifiait sans que rien ne soit enregistré, et sans aucun signal.
+
+`gristPresent` (handshake abouti) est distinct de `gristReady` (chargement terminé, écritures
+autorisées) : le premier est posé juste après `grist.ready()`, le second en fin de
+`loadAllData()`. Les confondre ramène le bug.
+
+Couvert par `tests/e2e/repli-demo.spec.js`, qui exerce les deux cas sur les cinq widgets :
+lectures lentes avec Grist présent (pas de démo) et handshake sans réponse (démo).
+
 ### Gantt : report du rendu pendant un geste souris
 
 `render()` (gantt.html) commence par une garde :

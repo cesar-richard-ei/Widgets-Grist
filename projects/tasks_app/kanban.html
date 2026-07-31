@@ -1114,6 +1114,9 @@
         // STATE
         // ═══════════════════════════════════════════════════════════════════════
         let tasks = [], team = [], projects = [], gristReady = false;
+        // Handshake abouti : Grist est là, même si les tables tardent à revenir. Distinct de
+        // gristReady, posé en fin de chargement, qui autorise les écritures.
+        let gristPresent = false;
         let TASK_COLS = new Set(); // colonnes reelles de la table Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig en mode Grist
         let groupBy = 'statut', searchQuery = '', selectedTaskId = null;
@@ -2136,6 +2139,7 @@
             // Phase 1 : tenter grist.ready — si Grist absent, basculer en démo
             try {
                 await grist.ready({ requiredAccess: 'full' });
+                gristPresent = true;
             } catch (e) {
                 console.log('Grist unavailable, using demo:', e);
                 useDemoMode();
@@ -2283,9 +2287,10 @@
             if(c){ try{ new MutationObserver(deco).observe(c,{childList:true}); }catch(e){} deco(); }
             document.addEventListener('click', function(ev){ document.querySelectorAll('.tfc.tfo').forEach(function(o){ if(!o.contains(ev.target)) o.classList.remove('tfo'); }); });
         })();
-        // Repli auto vers données d'exemple si Grist ne renvoie rien sous 2.8s (aperçu / hors-ligne)
+        // Repli auto vers données d'exemple si Grist n'a pas répondu au handshake sous 2.8s
+        // (aperçu / hors-ligne). Des lectures lentes ne comptent pas : Grist est là, on attend.
         renderSkeleton();  // 06 · squelette pendant le chargement (évite l'écran vide)
-        setTimeout(function(){ try { if ((typeof tasks==='undefined' || !tasks || !tasks.length) && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
+        setTimeout(function(){ try { if (!gristPresent && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
         // Nav inter-vues (barre du bas) : uniquement en mode "suite/racine" (?nav dans l'URL), pas en widget indépendant.
         try { if (new URLSearchParams(location.search).has('nav')) document.body.classList.add('suite-nav'); } catch (e) {}
         initGrist();

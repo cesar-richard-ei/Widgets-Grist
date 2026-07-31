@@ -1417,7 +1417,12 @@ function bindToolbar() {
   document.getElementById('overlay').onclick = closePanel;
 }
 
+// onRecords rappelle loadGrist pendant qu'un chargement est en vol : seule la lecture la
+// plus récente écrit dans S, sinon une réponse tardive réinstalle un état périmé.
+let _chargement = 0;
+
 async function loadGrist() {
+  const seq = ++_chargement;
   let [tasks, team, projects, dispos] = await Promise.all([
     grist.docApi.fetchTable('Tasks').catch(() => null),
     grist.docApi.fetchTable('Team').catch(() => null),
@@ -1425,6 +1430,7 @@ async function loadGrist() {
     grist.docApi.fetchTable('Disponibilites').catch(() => null)
   ]);
   const ensured = await ensurePlanColumns(team, tasks, dispos); team = ensured.team; tasks = ensured.tasks; dispos = ensured.dispos;
+  if (seq !== _chargement) return;
   S.tasks = tasks ? TF.columnarToRows(tasks) : [];
   S.team = team ? TF.columnarToRows(team) : [];
   S.projects = projects ? TF.columnarToRows(projects) : [];
@@ -1433,6 +1439,9 @@ async function loadGrist() {
   try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', S.tasks.map(t => t && t.statut)); } catch (e) {}
   render();
 }
+
+// Handshake abouti : Grist est là, même si les tables tardent à revenir.
+let gristPresent = false;
 
 // Le widget Plan est le CRÉATEUR UNIQUE de ses colonnes (sweet spot opt-in) : Team.capaciteHebdo/indispos
 // + Tasks.charges/dateCloture. Les autres widgets ne créent rien — ils n'activent leurs bouts "charge"
@@ -1492,15 +1501,21 @@ bindToolbar();
 if (window.self === window.top) {
   loadDemo();
 } else {
-  try {
-    grist.ready({ requiredAccess: 'full' });
+  (async () => {
+    try {
+      await grist.ready({ requiredAccess: 'full' });
+      gristPresent = true;
+    } catch (e) {
+      loadDemo();
+      return;
+    }
     grist.onRecords(() => loadGrist());
     try { grist.onOptions((o) => { S.extFilters = (o && o.filters) || null; render(); }); } catch (e) {}
     loadGrist();
-    setTimeout(() => { if (!S.team.length && !S.tasks.length) loadDemo(); }, 2500); // filet
-  } catch (e) {
-    loadDemo();
-  }
+  })();
+  // Filet : Grist n'a pas répondu au handshake (aperçu / hors-ligne). Des lectures lentes
+  // ne comptent pas — les données finiront par arriver, et la démo coupe les écritures.
+  setTimeout(() => { if (!gristPresent) loadDemo(); }, 2500);
 }
 </script>
 </body>
