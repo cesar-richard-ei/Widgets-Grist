@@ -1025,6 +1025,23 @@
                 return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
             }
 
+            /* Défilement horizontal à poser à l'ouverture pour amener la ligne « aujourd'hui »
+             * près du bord gauche (pur). On cale le début de la sur-colonne qui contient
+             * aujourd'hui (le mois, ou l'année en vue Année), sauf si cela laisse la ligne
+             * au-delà du premier tiers de la zone visible : au-delà, on décale juste ce qu'il
+             * faut pour l'y ramener, sinon les vues à grosses sur-colonnes envoient aujourd'hui
+             * hors de l'écran sur les fenêtres étroites.
+             * Entrée : { colPx, todayPx, visibleWidth, ecart? }
+             * Sortie : défilement souhaité en px (>= 0), avant clamp du navigateur
+             */
+            function computeTodayScroll(o) {
+                const ecart = o.ecart == null ? 12 : o.ecart;
+                const seuil = Math.max(ecart, o.visibleWidth / 3);
+                let scroll = o.colPx - ecart;
+                if (o.todayPx - scroll > seuil) scroll = o.todayPx - seuil;
+                return Math.max(0, Math.round(scroll));
+            }
+
             /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
              * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
              * Entrée : { start:Date, depEnd:Date, tStart:Date, depIdx, tIdx, pxPerDay }
@@ -1049,6 +1066,7 @@
                 computeTimelineScale: computeTimelineScale,
                 computeBarGeometry: computeBarGeometry,
                 computeDependencyPath: computeDependencyPath,
+                computeTodayScroll: computeTodayScroll,
                 columnarToRows: columnarToRows,
                 fetchSchemaMeta: fetchSchemaMeta,
                 loadStatusConfig: loadStatusConfig,

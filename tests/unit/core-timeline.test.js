@@ -59,6 +59,36 @@ test('computeBarGeometry : une barre commencant avant la fenetre est clampee a g
     assert.equal(g.barWidth, 12);      // max(40 - 50, 12) = 12 (plancher)
 });
 
+test('computeTodayScroll : le debut de sur-colonne est cale quand la marge reste dans le premier tiers', () => {
+    // Vue semestre : le mois courant commence a 9px, aujourd'hui est 150px plus loin,
+    // pour 520px visibles (seuil 173px). Le calage sur le mois est conserve.
+    const s = TF.computeTodayScroll({ colPx: 9, todayPx: 150, visibleWidth: 520 });
+    assert.equal(s, 0);              // max(0, 9 - 12)
+});
+
+test('computeTodayScroll : au-dela du premier tiers, aujourd hui est ramene sur le seuil', () => {
+    // Vue mois : le 1er du mois est au bord, aujourd'hui a 1020px, 520px visibles.
+    const s = TF.computeTodayScroll({ colPx: 0, todayPx: 1020, visibleWidth: 520 });
+    assert.equal(s, 847);            // 1020 - 520/3
+});
+
+test('computeTodayScroll : le seuil suit la largeur visible', () => {
+    const etroit = TF.computeTodayScroll({ colPx: 0, todayPx: 900, visibleWidth: 600 });
+    const large = TF.computeTodayScroll({ colPx: 0, todayPx: 900, visibleWidth: 1500 });
+    assert.equal(etroit, 700);       // 900 - 200
+    assert.equal(large, 400);        // 900 - 500
+});
+
+test('computeTodayScroll : sur une zone minuscule le seuil ne passe pas sous l ecart', () => {
+    const s = TF.computeTodayScroll({ colPx: 0, todayPx: 300, visibleWidth: 24 });
+    assert.equal(s, 288);            // seuil borne a l'ecart de 12px
+});
+
+test('computeTodayScroll : jamais de defilement negatif', () => {
+    const s = TF.computeTodayScroll({ colPx: 4, todayPx: 4, visibleWidth: 800 });
+    assert.equal(s, 0);
+});
+
 test('computeDependencyPath : chemin bezier et fleche entre deux taches', () => {
     const d = TF.computeDependencyPath({
         start: new Date(2026, 0, 1), depEnd: new Date(2026, 0, 5), tStart: new Date(2026, 0, 10),
