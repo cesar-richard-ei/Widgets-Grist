@@ -623,6 +623,7 @@ const TF = (function () {
         for (const t of (opts.tasks || [])) {
             const ts = t.start, te = t.end;
             if (!ts || !te) continue;
+            if (!isPlausibleDate(ts) || !isPlausibleDate(te)) continue;
             if (te < viewStart || ts > vEnd) continue;
             if (ts < eStart) eStart = addDays(ts, -PADDING);
             if (te > eEnd) eEnd = addDays(te, PADDING);
@@ -661,6 +662,22 @@ const TF = (function () {
         const barWidth = Math.max(width - (barLeft - left), 12);
         const diamondLeft = Math.max(0, left + Math.round(o.pxPerDay / 2) - 7);
         return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
+    }
+
+    /* Une date de tâche hors de ces bornes ne vient pas d'une saisie aboutie : avant 2000
+     * c'est une valeur non renseignée (epoch 0 = 01/01/1970), au-delà de 2200 une frappe en
+     * cours. Un `input type="date"` émet un change à chaque chiffre de l'année, donc saisir
+     * 2027 passe par les années 2, 20 et 202 : laisser filer ces dates étend la plage de la
+     * timeline sur des milliers d'années, soit autant de cellules à construire.
+     */
+    const ANNEE_MIN = 2000;
+    const ANNEE_MAX = 2200;
+
+    function isPlausibleDate(d) {
+        if (!d) return false;
+        const date = d instanceof Date ? d : new Date(d);
+        const annee = date.getFullYear();
+        return !isNaN(annee) && annee >= ANNEE_MIN && annee <= ANNEE_MAX;
     }
 
     /* Défilement horizontal à poser à l'ouverture pour amener la ligne « aujourd'hui »
@@ -705,6 +722,7 @@ const TF = (function () {
         computeBarGeometry: computeBarGeometry,
         computeDependencyPath: computeDependencyPath,
         computeTodayScroll: computeTodayScroll,
+        isPlausibleDate: isPlausibleDate,
         columnarToRows: columnarToRows,
         fetchSchemaMeta: fetchSchemaMeta,
         loadStatusConfig: loadStatusConfig,

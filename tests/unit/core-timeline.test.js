@@ -59,6 +59,31 @@ test('computeBarGeometry : une barre commencant avant la fenetre est clampee a g
     assert.equal(g.barWidth, 12);      // max(40 - 50, 12) = 12 (plancher)
 });
 
+test('isPlausibleDate : accepte une date de projet, refuse les annees aberrantes', () => {
+    assert.equal(TF.isPlausibleDate(new Date(2026, 6, 31)), true);
+    assert.equal(TF.isPlausibleDate(new Date('0002-07-31')), false);   // saisie en cours de l annee
+    assert.equal(TF.isPlausibleDate(new Date(1970, 0, 1)), false);     // epoch 0 = non renseigne
+    assert.equal(TF.isPlausibleDate(new Date('9999-01-01')), false);
+    assert.equal(TF.isPlausibleDate(new Date('pas une date')), false);
+    assert.equal(TF.isPlausibleDate(null), false);
+});
+
+test('computeTimelineScale : une date aberrante n etend pas la plage', () => {
+    // Une annee partiellement saisie (0002) etendait la plage sur ~740 000 jours,
+    // soit autant de cellules a construire : le widget ne repondait plus.
+    const params = {
+        unit: 'week', cellWidth: 32,
+        viewStart: new Date(2026, 6, 1), viewDays: 182, availableWidth: 600
+    };
+    const sain = TF.computeTimelineScale(Object.assign({ tasks: [] }, params));
+    const aberrant = TF.computeTimelineScale(Object.assign({
+        tasks: [{ start: new Date('0002-07-31'), end: new Date(2026, 6, 31) }]
+    }, params));
+
+    assert.equal(aberrant.effectiveDays, sain.effectiveDays);
+    assert.equal(aberrant.numCells, sain.numCells);
+});
+
 test('computeTodayScroll : le debut de sur-colonne est cale quand la marge reste dans le premier tiers', () => {
     // Vue semestre : le mois courant commence a 9px, aujourd'hui est 150px plus loin,
     // pour 520px visibles (seuil 173px). Le calage sur le mois est conserve.
