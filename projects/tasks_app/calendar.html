@@ -1230,6 +1230,9 @@
         // STATE
         // ═══════════════════════════════════════════════════════════════════════
         let tasks = [], team = [], projects = [], gristReady = false;
+        // Handshake abouti : Grist est là, même si les tables tardent à revenir. Distinct de
+        // gristReady, posé en fin de chargement, qui autorise les écritures.
+        let gristPresent = false;
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
@@ -3196,6 +3199,7 @@
             // Phase 1 : tenter grist.ready — si Grist absent, basculer en démo
             try {
                 await grist.ready({ requiredAccess: 'full' });
+                gristPresent = true;
             } catch (e) {
                 console.log('Grist unavailable, using demo:', e);
                 useDemoMode();
@@ -3355,8 +3359,9 @@
             document.addEventListener('click', function(ev){ document.querySelectorAll('.tfc.tfo').forEach(function(o){ if(!o.contains(ev.target)) o.classList.remove('tfo'); }); });
         })();
         renderCalSkeleton();  // 06 · squelette pendant le chargement
-        // Repli auto vers données d'exemple si Grist ne renvoie rien sous 2.8s (aperçu / hors-ligne)
-        setTimeout(function(){ try { if ((typeof tasks==='undefined' || !tasks || !tasks.length) && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
+        // Repli auto vers données d'exemple si Grist n'a pas répondu au handshake sous 2.8s
+        // (aperçu / hors-ligne). Des lectures lentes ne comptent pas : Grist est là, on attend.
+        setTimeout(function(){ try { if (!gristPresent && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
         try { if (new URLSearchParams(location.search).has('nav')) document.body.classList.add('suite-nav'); } catch (e) {}
         initGrist();
     </script>

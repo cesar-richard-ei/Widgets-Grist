@@ -924,6 +924,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 let tasks = [], projects = [], team = [];
 let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
 let gristReady = false;
+// Handshake abouti : Grist est là, même si les tables tardent à revenir.
+let gristPresent = false;
 let isEditMode = false;
 let selectedCompId = null;
 let dashConfig = { layout: DEFAULT_LAYOUT.map(c => ({...c, config:{...c.config}})) };
@@ -1712,17 +1714,25 @@ document.addEventListener('click', e => {
 });
 
 async function init() {
+    // Phase 1 : tenter grist.ready — si Grist absent, basculer en démo
     try {
         await grist.ready({ requiredAccess: 'full' });
+        gristPresent = true;
         gristReady = true;
+    } catch(e) {
+        console.log('Demo mode');
+        useDemoMode();
+        return;
+    }
+    // Phase 2 : ici on est dans Grist. Toute erreur est logguée mais ne bascule PAS en démo.
+    try {
         const opts = await grist.widgetApi.getOptions();
         loadConfig(opts);
         await loadAllData();
         grist.onOptions(opts => { if (_saving) return; loadConfig(opts); render(); });
         grist.onRecords(async () => await loadAllData());
     } catch(e) {
-        console.log('Demo mode');
-        useDemoMode();
+        console.error('Chargement dashboard:', e);
     }
 }
 
@@ -1758,8 +1768,9 @@ function useDemoMode() {
 }
 
 renderDashSkeleton();  // 06 · squelette pendant le chargement
-// Repli auto vers données d'exemple si Grist ne renvoie rien sous 2.8s (aperçu / hors-ligne)
-setTimeout(function(){ try { if ((typeof tasks==='undefined' || !tasks || !tasks.length) && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
+// Repli auto vers données d'exemple si Grist n'a pas répondu au handshake sous 2.8s
+// (aperçu / hors-ligne). Des lectures lentes ne comptent pas : Grist est là, on attend.
+setTimeout(function(){ try { if (!gristPresent && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
 // WBS-04: sync bouton "Feuilles uniquement" au chargement
 { const b = document.getElementById('btnLeavesOnly'); if (b) b.classList.toggle('active', leavesOnly); }
 try { if (new URLSearchParams(location.search).has('nav')) document.body.classList.add('suite-nav'); } catch (e) {}

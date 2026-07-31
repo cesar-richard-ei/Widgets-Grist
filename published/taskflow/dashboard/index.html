@@ -482,10 +482,20 @@ const TF = (function () {
     }
 
     // Resout le rowId d'une table depuis son tableId via _grist_Tables.
-    async function tableRowId(grist, tableId) {
-        const meta = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
-        const row = meta.find(r => r.tableId === tableId);
+    // `meta` (optionnel) = { tables, cols } deja lus : evite un fetchTable de plus.
+    async function tableRowId(grist, tableId, meta) {
+        const rows = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+        const row = rows.find(r => r.tableId === tableId);
         return row ? row.id : null;
+    }
+
+    // Lit les deux tables de metadonnees en une passe (parallele), a partager entre helpers.
+    async function fetchSchemaMeta(grist) {
+        const [t, c] = await Promise.all([
+            grist.docApi.fetchTable('_grist_Tables'),
+            grist.docApi.fetchTable('_grist_Tables_column')
+        ]);
+        return { tables: columnarToRows(t), cols: columnarToRows(c) };
     }
 
     // Construit une config de statuts normalisee depuis une liste brute.
@@ -521,11 +531,11 @@ const TF = (function () {
      *   3. DEFAULT_STATUSES
      * Ne jette jamais : retourne toujours une config exploitable.
      */
-    async function loadStatusConfig(grist, table, column, distinctFallback) {
+    async function loadStatusConfig(grist, table, column, distinctFallback, meta) {
         try {
-            const tid = await tableRowId(grist, table);
+            const tid = await tableRowId(grist, table, meta);
             if (tid != null) {
-                const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
                 const col = cols.find(c => c.parentId === tid && c.colId === column);
                 if (col && col.widgetOptions) {
                     let opt = {};
@@ -561,11 +571,11 @@ const TF = (function () {
     /* Seme les options (choix + couleurs) sur une colonne Choice si elle n'en a
      * pas encore. Defensif. A appeler depuis ensureSchema apres creation.
      */
-    async function seedStatusChoices(grist, table, column, statuses) {
+    async function seedStatusChoices(grist, table, column, statuses, meta) {
         try {
-            const tid = await tableRowId(grist, table);
+            const tid = await tableRowId(grist, table, meta);
             if (tid == null) return;
-            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
             const col = cols.find(c => c.parentId === tid && c.colId === column);
             if (!col) return;
             let opt = {};
@@ -586,11 +596,11 @@ const TF = (function () {
      * DEFENSIF : si Grist refuse une action, on log et on continue ; au pire
      * l'affichage reste en IDs (comportement actuel), jamais de casse.
      * --------------------------------------------------------------------- */
-    async function setRefDisplayColumns(grist, specs) {
+    async function setRefDisplayColumns(grist, specs, meta) {
         if (!Array.isArray(specs) || !specs.length) return;
         try {
-            const tables = columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
-            const cols = columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+            const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
             const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
             const colOf = (tableRow, colId) => cols.find(c => c.parentId === tableRow && c.colId === colId);
 
@@ -614,6 +624,35 @@ const TF = (function () {
             }
             if (actions.length) await grist.docApi.applyUserActions(actions);
         } catch (e) { console.warn('TF.setRefDisplayColumns:', e && e.message); }
+    }
+
+    /* ----- #2bis : delier colId <-> label (renommage libre des libelles) ----
+     * Pose untieColIdFromLabel=true sur les colonnes du widget. Sans ca, Grist
+     * regenere le colId a chaque changement de libelle, et le widget (qui lit et
+     * ecrit tout par colId) perd ses colonnes. Idempotent (saute les colonnes
+     * deja deliees) et defensif (jamais de casse), applique aux docs neufs comme
+     * existants a chaque ouverture.
+     * tableColumns : { Tasks:['titre',...], Team:[...], Projects:[...] }
+     * --------------------------------------------------------------------- */
+    async function ensureUntiedLabels(grist, tableColumns, meta) {
+        if (!tableColumns) return;
+        try {
+            const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+            const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+            const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+            const actions = [];
+            for (const tableName of Object.keys(tableColumns)) {
+                const tid = tidOf(tableName);
+                if (tid == null) continue;
+                for (const colId of tableColumns[tableName] || []) {
+                    const col = cols.find(c => c.parentId === tid && c.colId === colId);
+                    if (!col) continue;
+                    if (col.untieColIdFromLabel === true) continue;
+                    actions.push(['ModifyColumn', tableName, colId, { untieColIdFromLabel: true }]);
+                }
+            }
+            if (actions.length) await grist.docApi.applyUserActions(actions);
+        } catch (e) { console.warn('TF.ensureUntiedLabels:', e && e.message); }
     }
 
     /* ----- #3 : plan de charge (heures par personne) ------------------------
@@ -735,15 +774,137 @@ const TF = (function () {
         return out;
     }
 
+    /* ----- Timeline Gantt : calcul pur de l'echelle -------------------------
+     * Extrait de gantt.html (computeEffectiveRange) pour etre partage avec le
+     * Gantt de fiche. Aucun effet de bord (ni etat, ni DOM) : rend les nombres,
+     * l'appelant les applique. Math des dates repliquee a l'identique.
+     * Entree : { tasks:[{start:Date|null,end:Date|null}], unit:'day'|'week'|'month',
+     *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number }
+     * Sortie : { effectiveStart:Date, effectiveDays, numCells, cellWidth, pxPerDay }
+     * --------------------------------------------------------------------- */
+    function computeTimelineScale(opts) {
+        const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+        const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+        const startOfWeek = (d) => { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - day + (day === 0 ? -6 : 1)); r.setHours(0, 0, 0, 0); return r; };
+        const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+        const unit = opts.unit, viewStart = opts.viewStart, viewDays = opts.viewDays;
+        let eStart = new Date(viewStart.getTime());
+        let eEnd = addDays(viewStart, viewDays);
+        const vEnd = new Date(eEnd.getTime());
+        const PADDING = unit === 'day' ? 3 : unit === 'week' ? 7 : 14;
+        for (const t of (opts.tasks || [])) {
+            const ts = t.start, te = t.end;
+            if (!ts || !te) continue;
+            if (!isPlausibleDate(ts) || !isPlausibleDate(te)) continue;
+            if (te < viewStart || ts > vEnd) continue;
+            if (ts < eStart) eStart = addDays(ts, -PADDING);
+            if (te > eEnd) eEnd = addDays(te, PADDING);
+        }
+        if (unit === 'week') eStart = startOfWeek(eStart);
+        else if (unit === 'month') eStart = startOfMonth(eStart);
+        else eStart = new Date(eStart.getFullYear(), eStart.getMonth(), eStart.getDate());
+
+        const effectiveDays = Math.max(daysDiff(eStart, eEnd), viewDays);
+        let numCells;
+        if (unit === 'month') {
+            const eEnd2 = addDays(eStart, effectiveDays);
+            numCells = Math.max(1, (eEnd2.getFullYear() - eStart.getFullYear()) * 12 + (eEnd2.getMonth() - eStart.getMonth()));
+        } else if (unit === 'week') {
+            numCells = Math.ceil(effectiveDays / 7);
+        } else {
+            numCells = effectiveDays;
+        }
+        const effCellWidth = Math.max(opts.cellWidth, Math.floor(opts.availableWidth / numCells));
+        const pxPerDay = effectiveDays > 0 ? (numCells * effCellWidth) / effectiveDays : opts.cellWidth;
+        return { effectiveStart: eStart, effectiveDays: effectiveDays, numCells: numCells, cellWidth: effCellWidth, pxPerDay: pxPerDay };
+    }
+
+    /* Géométrie d'une barre / d'un jalon sur la timeline (pur). Reprend le clamping
+     * exact de gantt.html : plancher de largeur, décalage du diamant. Partagé avec le lite.
+     * Entrée : { start:Date, tStart:Date, tEnd:Date, pxPerDay:number }
+     * Sortie : { left, width, barLeft, barWidth, isNarrow, diamondLeft } (px)
+     */
+    function computeBarGeometry(o) {
+        const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+        const startOffset = daysDiff(o.start, o.tStart);
+        const duration = Math.max(daysDiff(o.tStart, o.tEnd) + 1, 1);
+        const left = Math.round(startOffset * o.pxPerDay);
+        const width = Math.round(duration * o.pxPerDay);
+        const barLeft = Math.max(0, left);
+        const barWidth = Math.max(width - (barLeft - left), 12);
+        const diamondLeft = Math.max(0, left + Math.round(o.pxPerDay / 2) - 7);
+        return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
+    }
+
+    /* Une date de tâche hors de ces bornes ne vient pas d'une saisie aboutie : avant 2000
+     * c'est une valeur non renseignée (epoch 0 = 01/01/1970), au-delà de 2200 une frappe en
+     * cours. Un `input type="date"` émet un change à chaque chiffre de l'année, donc saisir
+     * 2027 passe par les années 2, 20 et 202 : laisser filer ces dates étend la plage de la
+     * timeline sur des milliers d'années, soit autant de cellules à construire.
+     */
+    const ANNEE_MIN = 2000;
+    const ANNEE_MAX = 2200;
+
+    function isPlausibleDate(d) {
+        if (!d) return false;
+        const date = d instanceof Date ? d : new Date(d);
+        const annee = date.getFullYear();
+        return !isNaN(annee) && annee >= ANNEE_MIN && annee <= ANNEE_MAX;
+    }
+
+    /* Défilement horizontal à poser à l'ouverture pour amener la ligne « aujourd'hui »
+     * près du bord gauche (pur). On cale le début de la sur-colonne qui contient
+     * aujourd'hui (le mois, ou l'année en vue Année), sauf si cela laisse la ligne
+     * au-delà du premier tiers de la zone visible : au-delà, on décale juste ce qu'il
+     * faut pour l'y ramener, sinon les vues à grosses sur-colonnes envoient aujourd'hui
+     * hors de l'écran sur les fenêtres étroites.
+     * Entrée : { colPx, todayPx, visibleWidth, ecart? }
+     * Sortie : défilement souhaité en px (>= 0), avant clamp du navigateur
+     */
+    function computeTodayScroll(o) {
+        const ecart = o.ecart == null ? 12 : o.ecart;
+        const seuil = Math.max(ecart, o.visibleWidth / 3);
+        let scroll = o.colPx - ecart;
+        if (o.todayPx - scroll > seuil) scroll = o.todayPx - seuil;
+        return Math.max(0, Math.round(scroll));
+    }
+
+    /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
+     * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
+     * Entrée : { start:Date, depEnd:Date, tStart:Date, depIdx, tIdx, pxPerDay }
+     * Sortie : { x1, y1, x2, y2, midX, pathD, arrowPoints }
+     */
+    function computeDependencyPath(o) {
+        const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+        const x1 = daysDiff(o.start, o.depEnd) * o.pxPerDay + o.pxPerDay;
+        const y1 = o.depIdx * 44 + 22;
+        const x2 = daysDiff(o.start, o.tStart) * o.pxPerDay;
+        const y2 = o.tIdx * 44 + 22;
+        const midX = (x1 + x2) / 2;
+        return {
+            x1: x1, y1: y1, x2: x2, y2: y2, midX: midX,
+            pathD: 'M' + x1 + ',' + y1 + ' C' + midX + ',' + y1 + ' ' + midX + ',' + y2 + ' ' + x2 + ',' + y2,
+            arrowPoints: x2 + ',' + y2 + ' ' + (x2 - 6) + ',' + (y2 - 4) + ' ' + (x2 - 6) + ',' + (y2 + 4)
+        };
+    }
+
     return {
         DEFAULT_STATUSES: DEFAULT_STATUSES,
+        computeTimelineScale: computeTimelineScale,
+        computeBarGeometry: computeBarGeometry,
+        computeDependencyPath: computeDependencyPath,
+        computeTodayScroll: computeTodayScroll,
+        isPlausibleDate: isPlausibleDate,
         columnarToRows: columnarToRows,
+        fetchSchemaMeta: fetchSchemaMeta,
         loadStatusConfig: loadStatusConfig,
         buildStatusConfig: buildStatusConfig,
         getStatus: getStatus,
         isTerminal: isTerminal,
         seedStatusChoices: seedStatusChoices,
         setRefDisplayColumns: setRefDisplayColumns,
+        ensureUntiedLabels: ensureUntiedLabels,
         parseCharges: parseCharges,
         chargesToJson: chargesToJson,
         chargeTotal: chargeTotal,
@@ -763,6 +924,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 let tasks = [], projects = [], team = [];
 let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
 let gristReady = false;
+// Handshake abouti : Grist est là, même si les tables tardent à revenir.
+let gristPresent = false;
 let isEditMode = false;
 let selectedCompId = null;
 let dashConfig = { layout: DEFAULT_LAYOUT.map(c => ({...c, config:{...c.config}})) };
@@ -1551,17 +1714,25 @@ document.addEventListener('click', e => {
 });
 
 async function init() {
+    // Phase 1 : tenter grist.ready — si Grist absent, basculer en démo
     try {
         await grist.ready({ requiredAccess: 'full' });
+        gristPresent = true;
         gristReady = true;
+    } catch(e) {
+        console.log('Demo mode');
+        useDemoMode();
+        return;
+    }
+    // Phase 2 : ici on est dans Grist. Toute erreur est logguée mais ne bascule PAS en démo.
+    try {
         const opts = await grist.widgetApi.getOptions();
         loadConfig(opts);
         await loadAllData();
         grist.onOptions(opts => { if (_saving) return; loadConfig(opts); render(); });
         grist.onRecords(async () => await loadAllData());
     } catch(e) {
-        console.log('Demo mode');
-        useDemoMode();
+        console.error('Chargement dashboard:', e);
     }
 }
 
@@ -1597,8 +1768,9 @@ function useDemoMode() {
 }
 
 renderDashSkeleton();  // 06 · squelette pendant le chargement
-// Repli auto vers données d'exemple si Grist ne renvoie rien sous 2.8s (aperçu / hors-ligne)
-setTimeout(function(){ try { if ((typeof tasks==='undefined' || !tasks || !tasks.length) && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
+// Repli auto vers données d'exemple si Grist n'a pas répondu au handshake sous 2.8s
+// (aperçu / hors-ligne). Des lectures lentes ne comptent pas : Grist est là, on attend.
+setTimeout(function(){ try { if (!gristPresent && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
 // WBS-04: sync bouton "Feuilles uniquement" au chargement
 { const b = document.getElementById('btnLeavesOnly'); if (b) b.classList.toggle('active', leavesOnly); }
 try { if (new URLSearchParams(location.search).has('nav')) document.body.classList.add('suite-nav'); } catch (e) {}
