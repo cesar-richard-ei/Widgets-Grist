@@ -1040,7 +1040,11 @@ const TF = (function () {
      * Gantt de fiche. Aucun effet de bord (ni etat, ni DOM) : rend les nombres,
      * l'appelant les applique. Math des dates repliquee a l'identique.
      * Entree : { tasks:[{start:Date|null,end:Date|null}], unit:'day'|'week'|'month',
-     *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number }
+     *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number,
+     *   extendLeft?:boolean }
+     * extendLeft a false fige le debut de plage sur viewStart : les vues glissantes s'y
+     * ancrent pour tenir la ligne du jour au bord, les barres anterieures restent tronquees
+     * a gauche par computeBarGeometry.
      * Sortie : { effectiveStart:Date, effectiveDays, numCells, cellWidth, pxPerDay }
      * --------------------------------------------------------------------- */
     function computeTimelineScale(opts) {
@@ -1059,7 +1063,7 @@ const TF = (function () {
             if (!ts || !te) continue;
             if (!isPlausibleDate(ts) || !isPlausibleDate(te)) continue;
             if (te < viewStart || ts > vEnd) continue;
-            if (ts < eStart) eStart = addDays(ts, -PADDING);
+            if (ts < eStart && opts.extendLeft !== false) eStart = addDays(ts, -PADDING);
             if (te > eEnd) eEnd = addDays(te, PADDING);
         }
         if (unit === 'week') eStart = startOfWeek(eStart);

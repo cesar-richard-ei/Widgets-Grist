@@ -26,15 +26,34 @@ async function depassementDuTiers(page) {
     return m ? m.marge - m.visible / 3 : null;
 }
 
-test("l'ouverture cale le debut du mois courant a gauche, pas la colonne du jour", async ({ gantt }) => {
-    const sc = gantt.locator('#timelineScroll');
+// Largeur d'une colonne de l'echelle courante, pour raisonner en colonnes plutot qu'en pixels :
+// elle s'adapte a la largeur de la fenetre.
+const largeurColonne = (page) => page.locator('#timelineHeader .day-cell').first()
+    .evaluate((el) => el.getBoundingClientRect().width);
 
-    // Aujourd'hui est dans le 1er mois du semestre courant : le debut de mois est deja au bord.
-    await expect.poll(() => scrollLeft(sc)).toBe(0);
+const margeEnColonnes = async (page) => {
+    const m = await mesure(page);
+    return m ? m.marge / (await largeurColonne(page)) : null;
+};
 
-    // Du coup la ligne "aujourd'hui" n'est PAS collee au bord (elle est plus loin dans le mois) :
-    // c'est la difference avec l'ancien comportement qui calait la colonne du jour.
-    await expect.poll(async () => (await mesure(gantt)).marge).toBeGreaterThan(30);
+test("a l'ouverture, la ligne du jour est calee pres du bord gauche", async ({ gantt }) => {
+    await expect.poll(() => margeEnColonnes(gantt)).toBeLessThanOrEqual(1.5);
+});
+
+test('vue Mois : le calage vise le debut du mois, pas la colonne du jour', async ({ gantt }) => {
+    await gantt.locator('.view-controls .btn[data-view="month"]').click();
+
+    // Une colonne = un jour : caler le 1er du mois laisse autant de colonnes que de jours
+    // ecoules, la ou caler la colonne du jour collerait la ligne au bord. Borne au premier
+    // tiers visible, sinon la ligne sortirait de l'ecran en fin de mois.
+    // Le calage laisse en plus un léger écart de 12px avant le début de la sur-colonne.
+    const attendu = await gantt.evaluate(() => {
+        const sc = document.getElementById('timelineScroll');
+        const colonne = document.querySelector('#timelineHeader .day-cell').getBoundingClientRect().width;
+        return (Math.min((new Date().getDate() - 1) * colonne, sc.clientWidth / 3) + 12) / colonne;
+    });
+
+    await expect.poll(() => margeEnColonnes(gantt)).toBeCloseTo(attendu, 0);
 });
 
 test("le bouton Aujourd'hui recale la vue", async ({ gantt }) => {
@@ -43,7 +62,7 @@ test("le bouton Aujourd'hui recale la vue", async ({ gantt }) => {
     expect(await scrollLeft(sc)).toBeGreaterThan(0);
 
     await gantt.locator('button:has-text("Aujourd")').click();
-    await expect.poll(() => scrollLeft(sc)).toBe(0);
+    await expect.poll(() => margeEnColonnes(gantt)).toBeLessThanOrEqual(1.5);
 });
 
 test("changer d'echelle de vue recale", async ({ gantt }) => {
@@ -67,6 +86,32 @@ for (const vue of ['month', 'quarter', 'semester', 'year']) {
         expect((await mesure(gantt)).marge).toBeGreaterThanOrEqual(0);
     });
 }
+
+// Trimestre et semestre tiennent entierement dans une fenetre large : aucun defilement n'est
+// disponible, donc seule la plage affichee peut ramener la ligne du jour au bord. Elle demarre
+// au mois courant, et non au debut du trimestre ou du semestre calendaire.
+test.describe('plage glissante', () => {
+    test.use({ viewport: { width: 1680, height: 900 } });
+
+    for (const vue of ['quarter', 'semester']) {
+        test('vue ' + vue + " : la ligne du jour reste a une colonne du bord", async ({ gantt }) => {
+            await gantt.locator('.view-controls .btn[data-view="' + vue + '"]').click();
+            await expect.poll(() => margeEnColonnes(gantt)).toBeLessThanOrEqual(1.5);
+        });
+    }
+
+    test('la navigation avance mois par mois en semestre', async ({ gantt }) => {
+        await gantt.locator('.view-controls .btn[data-view="semester"]').click();
+        const libelle = gantt.locator('#currentPeriod');
+        const avant = await libelle.textContent();
+
+        await gantt.locator('.btn-nav[onclick="navigate(1)"]').click();
+
+        await expect.poll(() => libelle.textContent()).not.toBe(avant);
+        // Le libelle couvre la plage affichee, donc deux mois : « Aou 2026 - Jan 2027 ».
+        expect(await libelle.textContent()).toContain('-');
+    });
+});
 
 test.describe('fenetre large', () => {
     test.use({ viewport: { width: 1680, height: 900 } });
