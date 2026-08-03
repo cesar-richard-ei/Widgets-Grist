@@ -101,6 +101,9 @@
         .tf-grow .lbl { width: var(--task-list-width); min-width: var(--task-list-width); display: flex; flex-direction: column; gap: 5px; padding: 0 16px; }
         .tf-grow .track { flex: 1; padding-right: 16px; }
         .task-row { display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border); height: var(--row-height); gap: 8px; cursor: pointer; transition: background 0.1s; }
+        /* Premiere ligne d'un projet : trait pose en ombre interne, qui ne prend pas de hauteur
+           et garde donc la liste alignee sur la timeline, ligne pour ligne. */
+        .task-row.debut-groupe, .grid-row.debut-groupe { box-shadow: inset 0 1px 0 var(--text-light); }
         .task-row:hover { background: var(--bg); }
         .task-row.selected { background: var(--primary-light); }
         .task-row.sortable-ghost { opacity: 0.4; }
@@ -1491,8 +1494,23 @@
             }
             return arr.slice(); // 'manual' — respecte l'ordre dans tasks[]
         }
+        // Les chantiers d'un même projet restent affichés ensemble : le tri courant s'applique
+        // à l'intérieur de chaque projet, et les projets se suivent dans l'ordre de leur premier
+        // chantier. Sans cela, un tri par date entrelace les projets ligne à ligne.
+        function grouperParProjet(racines) {
+            const groupes = new Map();
+            for (const t of racines) {
+                const cle = t.projet || 0;
+                if (!groupes.has(cle)) groupes.set(cle, []);
+                groupes.get(cle).push(t);
+            }
+            const out = [];
+            for (const groupe of groupes.values()) out.push(...groupe);
+            return out;
+        }
+
         // Construit la liste aplatie des tâches visibles (DFS) avec respect filtres + expand/collapse
-        // Renvoie [{task, depth, dimmed}]
+        // Renvoie [{task, depth, dimmed, debutGroupe}]
         function buildVisibleTasks() {
             const filtered = getFilteredTasks();
             const directMatches = new Set(filtered.map(t => t.id));
@@ -1508,11 +1526,15 @@
             }
             // Racines (tâches sans parent existant)
             const rootsAll = tasks.filter(t => !t.parentTask || !tasks.find(x => x.id === t.parentTask));
-            const roots = sortFratrie(rootsAll.filter(t => branchTasks.has(t.id)));
+            const roots = grouperParProjet(sortFratrie(rootsAll.filter(t => branchTasks.has(t.id))));
             const visible = [];
+            let projetPrecedent = null;
             const walk = (node, depth) => {
                 const dimmed = !directMatches.has(node.id);
-                visible.push({ task: node, depth, dimmed });
+                const projet = node.projet || 0;
+                const debutGroupe = depth === 0 && projet !== projetPrecedent;
+                if (depth === 0) projetPrecedent = projet;
+                visible.push({ task: node, depth, dimmed, debutGroupe });
                 if (hasChildren(node) && expandedTasks.has(node.id)) {
                     const kids = sortFratrie(getChildren(node.id).filter(k => branchTasks.has(k.id)));
                     for (const k of kids) walk(k, depth + 1);
@@ -1961,7 +1983,7 @@
             if (collapseBtn) collapseBtn.style.display = tasks.some(t => hasChildren(t) && expandedTasks.has(t.id)) ? 'inline-flex' : 'none';
 
             let html = '';
-            currentVisible.forEach(({ task: t, depth, dimmed }) => {
+            currentVisible.forEach(({ task: t, depth, dimmed, debutGroupe }) => {
                 const p = getTaskPriority(t);
                 const isParent = hasChildren(t);
                 // Dates affichées : agrégées si parent sans dates propres, sinon dates du parent
@@ -1982,9 +2004,9 @@
                     ? '<span class="tree-chevron' + (expandedTasks.has(t.id) ? ' expanded' : '') + '" onclick="event.stopPropagation();toggleExpand(' + t.id + ')" title="' + (expandedTasks.has(t.id) ? 'Replier' : 'Déplier') + '">▶</span>'
                     : '<span class="tree-chevron-placeholder"></span>';
                 const indent = depth * 18;
-                const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : ''].filter(Boolean).join(' ');
+                const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', debutGroupe ? 'debut-groupe' : ''].filter(Boolean).join(' ');
 
-                html += '<div class="' + classes + '" data-id="' + t.id + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px">' +
+                html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px">' +
                     '<span class="drag-handle">☰</span>' +
                     chevron +
                     '<div class="task-priority-bar p' + p + '"></div>' +
@@ -2055,8 +2077,8 @@
             const pxPerDay = effectivePxPerDay;
 
             let gridHtml = '';
-            ft.forEach(() => {
-                gridHtml += '<div class="grid-row">';
+            ft.forEach((_, iLigne) => {
+                gridHtml += '<div class="grid-row' + (currentVisible[iLigne] && currentVisible[iLigne].debutGroupe ? ' debut-groupe' : '') + '">';
                 if (cfg.unit === 'month') {
                     const effEnd = addDays(start, totalDays);
                     let cur = new Date(start.getFullYear(), start.getMonth(), 1);
