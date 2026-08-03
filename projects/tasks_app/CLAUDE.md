@@ -548,6 +548,11 @@ autorisées) : le premier est posé juste après `grist.ready()`, le second en f
 Couvert par `tests/e2e/repli-demo.spec.js`, qui exerce les deux cas sur les cinq widgets :
 lectures lentes avec Grist présent (pas de démo) et handshake sans réponse (démo).
 
+Le Plan journalise son ouverture en console sous le préfixe `[plan]` : handshake, durée et
+volume de chaque lecture, création de colonnes, repli, puis rendu avec ce qui a été dessiné.
+Une anomalie sort en `warn`, un blocage en `error`, le reste en `log` — de quoi diagnostiquer
+un poste sur une simple capture d'écran. Couvert par `tests/e2e/plan-journal.spec.js`.
+
 ### Gantt : report du rendu pendant un geste souris
 
 `render()` (gantt.html) commence par une garde :
