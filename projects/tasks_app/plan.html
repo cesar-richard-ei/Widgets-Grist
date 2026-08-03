@@ -1421,27 +1421,57 @@ function bindToolbar() {
   document.getElementById('overlay').onclick = closePanel;
 }
 
+// Journal d'ouverture. Le Plan reste parfois vide sans qu'on puisse rejouer le cas : ces
+// traces disent où le chargement s'arrête, et se lisent sur une capture de la console.
+const LOG = '[plan]';
+const depuisOuverture = () => Math.round(performance.now()) + 'ms';
+
+// Lecture tracée : même contrat que fetchTable().catch(() => null), avec durée et volume.
+// optionnelle : table que le Plan crée lui-même, son absence au premier chargement est
+// attendue et ne doit pas ressortir comme une anomalie.
+async function lireTable(nom, optionnelle) {
+  const t0 = performance.now();
+  try {
+    const data = await grist.docApi.fetchTable(nom);
+    const n = data && data.id ? data.id.length : 0;
+    console.log(LOG, nom, ':', n, n > 1 ? 'lignes' : 'ligne', 'en', Math.round(performance.now() - t0) + 'ms');
+    return data;
+  } catch (e) {
+    const detail = nom + ' : lecture impossible apres ' + Math.round(performance.now() - t0) + 'ms — ' + ((e && e.message) || e);
+    if (optionnelle) console.log(LOG, detail, '(table creee par le Plan)');
+    else console.warn(LOG, detail);
+    return null;
+  }
+}
+
 // onRecords rappelle loadGrist pendant qu'un chargement est en vol : seule la lecture la
 // plus récente écrit dans S, sinon une réponse tardive réinstalle un état périmé.
 let _chargement = 0;
 
 async function loadGrist() {
   const seq = ++_chargement;
+  console.log(LOG, 'chargement', seq, 'a', depuisOuverture());
   let [tasks, team, projects, dispos] = await Promise.all([
-    grist.docApi.fetchTable('Tasks').catch(() => null),
-    grist.docApi.fetchTable('Team').catch(() => null),
-    grist.docApi.fetchTable('Projects').catch(() => null),
-    grist.docApi.fetchTable('Disponibilites').catch(() => null)
+    lireTable('Tasks'),
+    lireTable('Team'),
+    lireTable('Projects'),
+    lireTable('Disponibilites', true)
   ]);
   const ensured = await ensurePlanColumns(team, tasks, dispos); team = ensured.team; tasks = ensured.tasks; dispos = ensured.dispos;
-  if (seq !== _chargement) return;
+  if (seq !== _chargement) {
+    console.warn(LOG, 'chargement', seq, 'ignore : le chargement', _chargement, 'a pris la main');
+    return;
+  }
   S.tasks = tasks ? TF.columnarToRows(tasks) : [];
   S.team = team ? TF.columnarToRows(team) : [];
   S.projects = projects ? TF.columnarToRows(projects) : [];
   S.dispos = dispos ? TF.columnarToRows(dispos) : [];
   buildDispoIndex();
-  try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', S.tasks.map(t => t && t.statut)); } catch (e) {}
+  try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', S.tasks.map(t => t && t.statut)); }
+  catch (e) { console.warn(LOG, 'statuts non lus, valeurs par defaut :', (e && e.message) || e); }
   render();
+  console.log(LOG, 'rendu a', depuisOuverture(), '— ressources:', S.team.length, 'taches:', S.tasks.length, 'projets:', S.projects.length);
+  if (!S.team.length || !S.tasks.length) console.warn(LOG, 'rendu sans ressource ou sans tache : la vue apparait vide');
 }
 
 // Handshake abouti : Grist est là, même si les tables tardent à revenir.
@@ -1461,15 +1491,19 @@ async function ensurePlanColumns(team, tasks, dispos) {
   if (dispos == null) add.push(['AddTable', 'Disponibilites', [{ id: 'membre', type: 'Ref:Team' }, { id: 'type', type: 'Text' }, { id: 'dateDebut', type: 'Date' }, { id: 'dateFin', type: 'Date' }, { id: 'dispo', type: 'Numeric' }, { id: 'commentaire', type: 'Text' }]]);
   _colsEnsured = true; // garde anti-ré-entrance (onRecords rappelle loadGrist pendant l'await)
   if (!add.length) return { team, tasks, dispos };
+  console.log(LOG, 'creation des colonnes du plan :', add.map(a => a[0] === 'AddTable' ? 'table ' + a[1] : a[1] + '.' + a[2]).join(', '));
   try {
     await grist.docApi.applyUserActions(add);
     const [t2, tm2, d2] = await Promise.all([
-      grist.docApi.fetchTable('Tasks').catch(() => tasks),
-      grist.docApi.fetchTable('Team').catch(() => team),
-      grist.docApi.fetchTable('Disponibilites').catch(() => dispos)
+      lireTable('Tasks'),
+      lireTable('Team'),
+      lireTable('Disponibilites', true)
     ]);
-    return { team: tm2, tasks: t2, dispos: d2 };
-  } catch (e) { return { team, tasks, dispos }; }
+    return { team: tm2 || team, tasks: t2 || tasks, dispos: d2 || dispos };
+  } catch (e) {
+    console.error(LOG, 'creation des colonnes refusee :', (e && e.message) || e);
+    return { team, tasks, dispos };
+  }
 }
 
 function loadDemo() {
@@ -1503,23 +1537,31 @@ function loadDemo() {
 bindToolbar();
 // Hors Grist (ouverture directe, frame top) -> mode démo. Dans Grist -> iframe.
 if (window.self === window.top) {
+  console.log(LOG, 'ouvert hors Grist : donnees d exemple');
   loadDemo();
 } else {
   (async () => {
+    const t0 = performance.now();
     try {
       await grist.ready({ requiredAccess: 'full' });
       gristPresent = true;
+      console.log(LOG, 'handshake Grist ok en', Math.round(performance.now() - t0) + 'ms');
     } catch (e) {
+      console.error(LOG, 'handshake Grist refuse apres', Math.round(performance.now() - t0) + 'ms —', (e && e.message) || e);
       loadDemo();
       return;
     }
     grist.onRecords(() => loadGrist());
-    try { grist.onOptions((o) => { S.extFilters = (o && o.filters) || null; render(); }); } catch (e) {}
+    try { grist.onOptions((o) => { S.extFilters = (o && o.filters) || null; render(); }); } catch (e) { console.warn(LOG, 'filtres partages indisponibles :', (e && e.message) || e); }
     loadGrist();
   })();
   // Filet : Grist n'a pas répondu au handshake (aperçu / hors-ligne). Des lectures lentes
   // ne comptent pas — les données finiront par arriver, et la démo coupe les écritures.
-  setTimeout(() => { if (!gristPresent) loadDemo(); }, 2500);
+  setTimeout(() => {
+    if (gristPresent) return;
+    console.warn(LOG, 'aucune reponse de Grist en 2.5s : bascule sur les donnees d exemple, les modifications ne seront pas enregistrees');
+    loadDemo();
+  }, 2500);
 }
 </script>
 </body>
