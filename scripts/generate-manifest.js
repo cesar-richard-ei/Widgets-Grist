@@ -13,7 +13,8 @@ const path = require('path');
 // Configuration
 const GITHUB_USER = process.env.GITHUB_USER || 'VOTRE_USER';
 const REPO_NAME = process.env.REPO_NAME || 'Widgets-Grist';
-const BASE_URL = `https://${GITHUB_USER}.github.io/${REPO_NAME}`;
+// BASE_URL permet de publier le même contenu sous un sous-chemin (ex. /dev)
+const BASE_URL = (process.env.BASE_URL || `https://${GITHUB_USER}.github.io/${REPO_NAME}`).replace(/\/+$/, '');
 const PUBLISHED_DIR = path.join(__dirname, '..', 'published');
 const OUTPUT_FILE = path.join(PUBLISHED_DIR, 'manifest.json');
 

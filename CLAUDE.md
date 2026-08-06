@@ -93,7 +93,7 @@ Widgets-Grist/
 │       ├── app_runtime.html
 │       └── templates/
 │
-├── published/                    # ZONE PUBLIÉE (déployée sur gh-pages)
+├── published/                    # ZONE PUBLIÉE (déployée sur GitHub Pages)
 │   ├── manifest.json            # Catalogue des widgets (auto-généré)
 │   │
 │   ├── taskflow/                # Widgets TaskFlow publiés
@@ -195,16 +195,25 @@ git add .
 git commit -m "Publish mon-widget v1.0"
 git push
 
-# GitHub Actions déploie automatiquement sur gh-pages
+# GitHub Actions déploie automatiquement sous /dev/
 ```
+
+Pour mettre à jour la racine (version stable), créer une release GitHub. Voir la section CI/CD.
 
 ## Configuration Grist
 
 ### URL des widgets publiés
 
+Deux versions sont servies en parallèle : la racine est figée sur la dernière release, `/dev/` suit `main`.
+
 ```
+# stable (dernière release)
 https://[USER].github.io/Widgets-Grist/taskflow/kanban/
 https://[USER].github.io/Widgets-Grist/artefactory/runtime/
+
+# nightly (main)
+https://[USER].github.io/Widgets-Grist/dev/taskflow/kanban/
+https://[USER].github.io/Widgets-Grist/dev/artefactory/runtime/
 ```
 
 ### Configurer comme source de widgets
@@ -213,6 +222,8 @@ Pour une instance Grist self-hosted, définir la variable d'environnement :
 
 ```bash
 GRIST_WIDGET_LIST_URL=https://[USER].github.io/Widgets-Grist/manifest.json
+# ou, pour la version nightly
+GRIST_WIDGET_LIST_URL=https://[USER].github.io/Widgets-Grist/dev/manifest.json
 ```
 
 Les widgets apparaîtront dans le sélecteur "Custom Widget" de Grist.
@@ -309,19 +320,28 @@ npm run deploy
 
 ## CI/CD avec GitHub Actions
 
-Le workflow `.github/workflows/publish.yml` :
+Le workflow `.github/workflows/publish.yml` sert deux versions du site sur le même domaine :
 
-1. Se déclenche sur push vers `main` (si `published/` ou `packages/` modifiés)
-2. Installe les dépendances
-3. Build les widgets (packages/)
-4. Génère le manifest.json
-5. Déploie `published/` vers la branche `gh-pages`
+| Chemin | Contenu | Mis à jour par |
+|--------|---------|----------------|
+| `/` | version stable | publication d'une release GitHub |
+| `/dev/` | version nightly | push sur `main` |
+
+Il se déclenche sur push vers `main` (si `published/`, `packages/` ou `scripts/` modifiés), sur publication
+d'une release, et manuellement. À chaque exécution il reconstruit le site entier : la racine depuis le tag
+de la dernière release, `/dev/` depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis
+`main` et le workflow émet un avertissement.
+
+Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets référencent
+bien les URL nightly.
+
+Pour publier une version stable : `git tag vX.Y.Z && git push origin vX.Y.Z`, puis créer la release depuis ce tag
+(`gh release create vX.Y.Z`). Une pre-release ne met pas la racine à jour.
 
 ### Configuration GitHub Pages
 
 1. Settings → Pages
-2. Source : Deploy from a branch
-3. Branch : `gh-pages` / `/ (root)`
+2. Source : GitHub Actions
 
 ## Conventions
 
@@ -427,7 +447,7 @@ git commit -m "feat: publish mon-widget v1.0.0"
 git push
 ```
 
-Le workflow GitHub Actions déploie automatiquement.
+Le workflow GitHub Actions déploie automatiquement sous `/dev/`. La racine attend une release.
 
 ### Widgets multiples dans un package
 
