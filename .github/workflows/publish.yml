@@ -81,6 +81,11 @@ jobs:
           mkdir -p site/dev
           cp -r dev-src/published/. site/dev/
 
+          echo "Arborescence du site :"
+          find site -maxdepth 2 -mindepth 1 | sort
+          echo "URL du premier widget, racine : $(node -e 'process.stdout.write(require("./site/manifest.json")[0].url)')"
+          echo "URL du premier widget, dev    : $(node -e 'process.stdout.write(require("./site/dev/manifest.json")[0].url)')"
+
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
