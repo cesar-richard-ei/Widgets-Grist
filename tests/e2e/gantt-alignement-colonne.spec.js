@@ -26,34 +26,43 @@ async function depassementDuTiers(page) {
     return m ? m.marge - m.visible / 3 : null;
 }
 
-// Largeur d'une colonne de l'echelle courante, pour raisonner en colonnes plutot qu'en pixels :
-// elle s'adapte a la largeur de la fenetre.
-const largeurColonne = (page) => page.locator('#timelineHeader .day-cell').first()
-    .evaluate((el) => el.getBoundingClientRect().width);
+// Ecart entre le calage obtenu et celui vise, en colonnes : le debut de la sur-colonne qui
+// contient la ligne du jour vient au bord gauche avec un ecart de 12px, borne au premier tiers
+// visible et au defilement disponible. Obtenu et vise sont lus dans la meme passe, pour la
+// raison donnee sur mesure(). En colonnes, la largeur de colonne suivant celle de la fenetre.
+// Un seuil fixe ne tiendrait pas : la marge croit avec le jour du mois, la sur-colonne visee
+// etant le mois courant.
+function ecartAuCalage(page) {
+    return page.evaluate(() => {
+        const sc = document.getElementById('timelineScroll');
+        const line = document.querySelector('#timelineGrid .today-line');
+        if (!sc || !line) return null;
 
-const margeEnColonnes = async (page) => {
-    const m = await mesure(page);
-    return m ? m.marge / (await largeurColonne(page)) : null;
-};
+        const ligne = parseInt(line.style.left, 10);
+        const colonne = document.querySelector('#timelineHeader .day-cell').getBoundingClientRect().width;
+
+        let debutSurColonne = 0;
+        for (let x = 0, cellules = document.querySelectorAll('#timelineHeader .month-cell'), i = 0; i < cellules.length; i++) {
+            const largeur = parseFloat(cellules[i].style.width);
+            if (ligne < x + largeur) { debutSurColonne = x; break; }
+            x += largeur;
+        }
+
+        const vise = Math.max(debutSurColonne - 12, ligne - sc.clientWidth / 3);
+        const defilement = Math.min(Math.max(vise, 0), sc.scrollWidth - sc.clientWidth);
+        return (defilement - sc.scrollLeft) / colonne;
+    });
+}
 
 test("a l'ouverture, la ligne du jour est calee pres du bord gauche", async ({ gantt }) => {
-    await expect.poll(() => margeEnColonnes(gantt)).toBeLessThanOrEqual(1.5);
+    await expect.poll(() => ecartAuCalage(gantt)).toBeCloseTo(0, 0);
 });
 
+// Une colonne = un jour : caler le 1er du mois laisse autant de colonnes que de jours ecoules,
+// la ou caler la colonne du jour collerait la ligne au bord.
 test('vue Mois : le calage vise le debut du mois, pas la colonne du jour', async ({ gantt }) => {
     await gantt.locator('.view-controls .btn[data-view="month"]').click();
-
-    // Une colonne = un jour : caler le 1er du mois laisse autant de colonnes que de jours
-    // ecoules, la ou caler la colonne du jour collerait la ligne au bord. Borne au premier
-    // tiers visible, sinon la ligne sortirait de l'ecran en fin de mois.
-    // Le calage laisse en plus un léger écart de 12px avant le début de la sur-colonne.
-    const attendu = await gantt.evaluate(() => {
-        const sc = document.getElementById('timelineScroll');
-        const colonne = document.querySelector('#timelineHeader .day-cell').getBoundingClientRect().width;
-        return (Math.min((new Date().getDate() - 1) * colonne, sc.clientWidth / 3) + 12) / colonne;
-    });
-
-    await expect.poll(() => margeEnColonnes(gantt)).toBeCloseTo(attendu, 0);
+    await expect.poll(() => ecartAuCalage(gantt)).toBeCloseTo(0, 0);
 });
 
 test("le bouton Aujourd'hui recale la vue", async ({ gantt }) => {
@@ -62,7 +71,7 @@ test("le bouton Aujourd'hui recale la vue", async ({ gantt }) => {
     expect(await scrollLeft(sc)).toBeGreaterThan(0);
 
     await gantt.locator('button:has-text("Aujourd")').click();
-    await expect.poll(() => margeEnColonnes(gantt)).toBeLessThanOrEqual(1.5);
+    await expect.poll(() => ecartAuCalage(gantt)).toBeCloseTo(0, 0);
 });
 
 test("changer d'echelle de vue recale", async ({ gantt }) => {
@@ -94,9 +103,9 @@ test.describe('plage glissante', () => {
     test.use({ viewport: { width: 1680, height: 900 } });
 
     for (const vue of ['quarter', 'semester']) {
-        test('vue ' + vue + " : la ligne du jour reste a une colonne du bord", async ({ gantt }) => {
+        test('vue ' + vue + " : la ligne du jour reste pres du bord", async ({ gantt }) => {
             await gantt.locator('.view-controls .btn[data-view="' + vue + '"]').click();
-            await expect.poll(() => margeEnColonnes(gantt)).toBeLessThanOrEqual(1.5);
+            await expect.poll(() => ecartAuCalage(gantt)).toBeCloseTo(0, 0);
         });
     }
 
