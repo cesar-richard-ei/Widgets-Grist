@@ -19,7 +19,10 @@ permissions:
 
 concurrency:
   group: "pages"
-  cancel-in-progress: false
+  # Chaque execution reconstruit le site entier : annuler celle en cours ne perd rien, et deux
+  # deploiements a quelques secondes d'intervalle (merge suivi d'une release) ont deja abouti a
+  # ce que le plus recent soit actif sans etre servi.
+  cancel-in-progress: true
 
 jobs:
   build:
