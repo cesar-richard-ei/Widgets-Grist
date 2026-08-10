@@ -68,3 +68,24 @@ test('changer de tache panneau ouvert persiste la modification en attente', asyn
     const description = await lireChampTache(gantt, premierId, 'description');
     expect(description).toBe('Description modifiee avant bascule');
 });
+
+// Les deux poignees de redimensionnement font 8px chacune : sur une barre courte elles
+// couvrent toute la largeur, et le clic d'ouverture atterrit forcement sur l'une d'elles.
+test('cliquer une poignee sans deplacer ouvre le panneau', async ({ gantt }) => {
+    const barre = gantt.locator('#timelineGrid .gantt-bar:not(.parent)').first();
+    await barre.locator('.resize-handle.left').click();
+    await expect(gantt.locator('#panel')).toHaveClass(/open/);
+});
+
+test('redimensionner par la poignee n ouvre pas le panneau', async ({ gantt }) => {
+    const poignee = gantt.locator('#timelineGrid .gantt-bar:not(.parent)').first().locator('.resize-handle.right');
+    const boite = await poignee.boundingBox();
+    const y = boite.y + boite.height / 2;
+
+    await gantt.mouse.move(boite.x + boite.width / 2, y);
+    await gantt.mouse.down();
+    await gantt.mouse.move(boite.x + boite.width / 2 + 120, y, { steps: 5 });
+    await gantt.mouse.up();
+
+    await expect(gantt.locator('#panel')).not.toHaveClass(/open/);
+});
