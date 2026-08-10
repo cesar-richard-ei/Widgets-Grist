@@ -553,6 +553,23 @@ volume de chaque lecture, création de colonnes, repli, puis rendu avec ce qui a
 Une anomalie sort en `warn`, un blocage en `error`, le reste en `log` — de quoi diagnostiquer
 un poste sur une simple capture d'écran. Couvert par `tests/e2e/plan-journal.spec.js`.
 
+### Lecture qui ne répond jamais
+
+Une lecture qui ne résout ni n'échoue laissait le widget sur « Chargement… » indéfiniment :
+`loadGrist()` attend un `Promise.all` sur les quatre tables, `render()` n'était jamais atteint,
+et le filet du handshake ne s'applique pas — à raison, Grist a répondu. Le journal s'arrêtait
+sur les tables qui avaient répondu, sans jamais nommer celle qui manquait : le symptôme
+« parfois rien ne se charge » n'était donc pas diagnosticable, même avec la console sous les yeux.
+
+`_lecturesEnAttente` tient les lectures en vol par nom de table. Au bout de
+`DELAI_SANS_REPONSE` (10s), `signalerAttente()` les nomme en `warn` et remplace
+« Chargement… » par un message qui les liste. Le délai est large exprès : une lecture lente
+finit par aboutir, et le message est alors remplacé par le rendu.
+
+**Ne pas** basculer sur les données d'exemple dans ce cas : les lectures peuvent encore
+aboutir, et la démo couperait les écritures sans le dire — c'est le bug corrigé juste au-dessus.
+Ne pas raccourcir le délai jusqu'à croiser les lectures lentes légitimes.
+
 ### Gantt : report du rendu pendant un geste souris
 
 `render()` (gantt.html) commence par une garde :
