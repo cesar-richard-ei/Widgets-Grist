@@ -31,10 +31,26 @@ async function ouvrirPlan(page, options) {
     await page.addInitScript((cfg) => {
         window.grist = window.createFakeGrist(cfg.doc);
         if (cfg.muet) window.grist.ready = () => new Promise(() => {});
+        // Lecture qui ne repond jamais : ni resolue ni rejetee, comme une table qui ne
+        // revient pas. Une lecture rejetee suit un tout autre chemin, deja couvert.
+        if (cfg.bloquer) {
+            const vrai = window.grist.docApi.fetchTable;
+            let premiere = true;
+            window.grist.docApi.fetchTable = function (nom) {
+                if (nom !== cfg.bloquer || !premiere) return vrai.call(this, nom);
+                premiere = false;   // seule la lecture d'ouverture traine, pas celles qui suivent
+                if (!cfg.repondApres) return new Promise(() => {});
+                return new Promise((r) => setTimeout(() => r(vrai.call(this, nom)), cfg.repondApres));
+            };
+        }
     }, options);
+
+    // Horloge virtuelle pour les cas qui exercent un delai du widget, plutot que de l'attendre.
+    if (options.bloquer) await page.clock.install();
 
     await page.goto('http://localhost:3001/tasks_app/gantt.html');
     await page.setContent('<iframe id="f" style="width:100%;height:600px;border:0" src="http://localhost:3001/tasks_app/plan.html?shell=1"></iframe>');
+    if (options.bloquer) await page.clock.fastForward(11000);
     return journal;
 }
 
@@ -58,6 +74,39 @@ test('le repli sur les donnees d exemple est signale', async ({ page }) => {
     const journal = await ouvrirPlan(page, { doc: {}, muet: true });
 
     await expect.poll(() => alertes(journal).join('\n')).toContain('donnees d exemple');
+});
+
+// Une lecture qui ne repond jamais laissait le Plan sur « Chargement… » indefiniment : le
+// filet du handshake ne s'applique pas, a raison, et le journal s'arretait sur les tables qui
+// avaient repondu, sans nommer celle qui manquait. C'est le symptome « parfois rien ne se
+// charge », et il etait indiagnosticable sur une capture de console.
+test('une lecture sans reponse est nommee dans le journal', async ({ page }) => {
+    const journal = await ouvrirPlan(page, { doc: DOC, bloquer: 'Tasks' });
+
+    await expect.poll(() => alertes(journal).join('\n'), { timeout: 20000 }).toContain('aucune reponse pour Tasks');
+});
+
+test('une lecture sans reponse remplace le chargement par un message', async ({ page }) => {
+    await ouvrirPlan(page, { doc: DOC, bloquer: 'Tasks' });
+    const ecran = page.frameLocator('#f').locator('#gridwrap');
+
+    await expect(ecran).toContainText('Tasks', { timeout: 20000 });
+    await expect(ecran).not.toContainText('Chargement');
+});
+
+// Le message d'attente n'est pas un cul-de-sac : sur un poste lent la lecture aboutit, et la
+// vue doit prendre sa place. Le repli sur les donnees d'exemple, lui, resterait affiche.
+test('la vue s affiche quand une lecture tardive finit par repondre', async ({ page }) => {
+    const journal = await ouvrirPlan(page, { doc: DOC, bloquer: 'Tasks', repondApres: 16000 });
+    const ecran = page.frameLocator('#f').locator('#gridwrap');
+
+    await expect(ecran).toContainText('En attente de Grist');
+
+    await page.clock.fastForward(6000);
+
+    await expect.poll(() => lignes(journal).join('\n')).toMatch(/rendu a/);
+    await expect(ecran).not.toContainText('En attente de Grist');
+    await expect(page.frameLocator('#f').locator('.demo-badge')).toHaveCount(0);
 });
 
 test('une table absente est signalee sans masquer la suite', async ({ page }) => {

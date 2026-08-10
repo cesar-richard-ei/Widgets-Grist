@@ -1429,8 +1429,15 @@ const depuisOuverture = () => Math.round(performance.now()) + 'ms';
 // Lecture tracée : même contrat que fetchTable().catch(() => null), avec durée et volume.
 // optionnelle : table que le Plan crée lui-même, son absence au premier chargement est
 // attendue et ne doit pas ressortir comme une anomalie.
+// Lectures encore en vol, par nom de table. Une lecture qui ne revient jamais ne résout ni
+// n'échoue : sans ce registre, le journal s'arrête sur les tables qui ont répondu et rien ne
+// désigne celle qui manque.
+const _lecturesEnAttente = new Set();
+const DELAI_SANS_REPONSE = 10000;
+
 async function lireTable(nom, optionnelle) {
   const t0 = performance.now();
+  _lecturesEnAttente.add(nom);
   try {
     const data = await grist.docApi.fetchTable(nom);
     const n = data && data.id ? data.id.length : 0;
@@ -1441,7 +1448,21 @@ async function lireTable(nom, optionnelle) {
     if (optionnelle) console.log(LOG, detail, '(table creee par le Plan)');
     else console.warn(LOG, detail);
     return null;
+  } finally {
+    _lecturesEnAttente.delete(nom);
   }
+}
+
+// Chargement encore en vol au bout du délai : nommer les tables qui n'ont pas répondu, et le
+// dire à l'écran. Sans cela le widget reste sur « Chargement… » indéfiniment. Pas de repli sur
+// les données d'exemple : les lectures peuvent encore aboutir, et la démo couperait les
+// écritures sans le dire.
+function signalerAttente(seq) {
+  if (seq !== _chargement || !_lecturesEnAttente.size) return;
+  const tables = Array.from(_lecturesEnAttente).join(', ');
+  console.warn(LOG, 'aucune reponse pour', tables, 'apres', Math.round(DELAI_SANS_REPONSE / 1000) + 's');
+  const wrap = document.getElementById('gridwrap');
+  if (wrap) wrap.innerHTML = '<div class="empty"><div class="ic">▦</div><div>En attente de Grist</div><div style="font-size:.78rem">Pas de réponse pour ' + tables + '. La vue s\'affichera dès l\'arrivée des données.</div></div>';
 }
 
 // onRecords rappelle loadGrist pendant qu'un chargement est en vol : seule la lecture la
@@ -1451,6 +1472,7 @@ let _chargement = 0;
 async function loadGrist() {
   const seq = ++_chargement;
   console.log(LOG, 'chargement', seq, 'a', depuisOuverture());
+  const attente = setTimeout(() => signalerAttente(seq), DELAI_SANS_REPONSE);
   let [tasks, team, projects, dispos] = await Promise.all([
     lireTable('Tasks'),
     lireTable('Team'),
@@ -1458,6 +1480,7 @@ async function loadGrist() {
     lireTable('Disponibilites', true)
   ]);
   const ensured = await ensurePlanColumns(team, tasks, dispos); team = ensured.team; tasks = ensured.tasks; dispos = ensured.dispos;
+  clearTimeout(attente);
   if (seq !== _chargement) {
     console.warn(LOG, 'chargement', seq, 'ignore : le chargement', _chargement, 'a pris la main');
     return;
