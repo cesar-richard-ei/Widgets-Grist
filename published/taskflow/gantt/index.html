@@ -1265,7 +1265,7 @@
                 priority: filters.priority
             };
         }
-        let dragState = { active: false, type: null, taskId: null, startX: 0, originalLeft: 0, originalWidth: 0, originalStart: null, originalEnd: null };
+        let dragState = { active: false, type: null, taskId: null, startX: 0, originalLeft: 0, originalWidth: 0, originalStart: null, originalEnd: null, deplace: false };
         let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null, dirty: false };
         let effectiveStart = new Date();    // Plage effective calculée à chaque render()
         let effectiveDays = 30;             // = période vue + extension pour tâches qui chevauchent
@@ -2191,7 +2191,9 @@
                         '<span class="gantt-bar-label" style="position:relative;z-index:1;">' + escapeHtml(t.titre) + '</span>' +
                         (isParent ? '' : '<div class="resize-handle right" onmousedown="startDrag(event, this.parentElement, \'resize-right\')"></div>') +
                         '<span class="gantt-bar-external-label">' + escapeHtml(t.titre) + '</span>';
-                    bar.onclick = (e) => { if (!e.target.classList.contains('resize-handle')) openTaskPanel(t.id); };
+                    // Les deux poignees de 8px couvrent toute une barre courte : ignorer le clic
+                    // des qu'il porte sur une poignee rendrait ces barres impossibles a ouvrir.
+                    bar.onclick = (e) => { if (!e.target.classList.contains('resize-handle') || !dragState.deplace) openTaskPanel(t.id); };
                     bar.onmousedown = (e) => { if (!e.target.classList.contains('resize-handle')) startDrag(e, bar, 'move'); };
                     setupTooltip(bar, t);
                     grid.appendChild(bar);
@@ -3145,7 +3147,7 @@
                 active: true, type: type, taskId: id, startX: e.clientX,
                 originalLeft: parseFloat(bar.style.left), originalWidth: parseFloat(bar.style.width),
                 originalStart: gristToDate(task.dateDebut), originalEnd: gristToDate(task.dateEcheance),
-                descendants: descendants
+                descendants: descendants, deplace: false
             };
 
             bar.style.zIndex = '100';
@@ -3194,6 +3196,11 @@
             const pxPerDay = effectivePxPerDay;
             const dx = e.clientX - dragState.startX;
             const daysDelta = Math.round(dx / pxPerDay);
+
+            // Renseigne avant tout await : le 'click' que le navigateur emet juste apres ce
+            // 'mouseup' consulte ce drapeau pour distinguer un geste de redimensionnement
+            // d'un simple clic sur la poignee.
+            dragState.deplace = daysDelta !== 0;
 
             let newStart = dragState.originalStart, newEnd = dragState.originalEnd;
             if (dragState.type === 'move') { newStart = addDays(dragState.originalStart, daysDelta); newEnd = addDays(dragState.originalEnd, daysDelta); }
