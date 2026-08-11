@@ -41,3 +41,5 @@ published/taskflow/HARMONIZATION.md
 /test-results/
 /playwright-report/
 /blob-report/
+
+*.grist
