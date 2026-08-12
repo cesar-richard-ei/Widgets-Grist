@@ -90,9 +90,8 @@ const STATE = {
 };
 
 let map = null;
-let dirty = false;
 
-function markDirty() { dirty = true; $('app-header').classList.add('dirty'); }
+function markDirty() { $('app-header').classList.add('dirty'); }
 
 // ============================================================
 // PALETTES
@@ -1039,7 +1038,7 @@ function updateLighting() {
 }
 
 function updateSunStrip() {
-    const { azimuth, altitude, date } = sunPosition();
+    const { altitude, date } = sunPosition();
     const min = STATE.settings.timeOfDay;
     const h = Math.floor(min / 60), m = min % 60;
     $('sun-time').textContent = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
@@ -1292,7 +1291,7 @@ function availableTablesSection() {
             <button class="layer-act" title="Afficher">👁</button>
         </div>`).join('')}</div></div>`;
 }
-function renderLayersPanel(mode) {
+function renderLayersPanel() {
     $('module-title').textContent = 'Couches';
     const body = $('module-body');
     if (STATE.layers.length === 0) {
@@ -1377,7 +1376,7 @@ function renderModelsPanel() {
         </div>
         <div class="section">
             <div class="section-title">Catalogue · ${nModels} modèles</div>
-            ${Object.entries(MODEL_LIBRARY.categories).map(([k, c]) => `
+            ${Object.entries(MODEL_LIBRARY.categories).map(([, c]) => `
                 <div style="margin:10px 0 4px;font-size:10.5px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em">${c.icon} ${c.name} <span style="color:var(--muted-light)">· ${c.models.length}</span></div>
                 <div class="model-grid">${c.models.map((m) => `<div class="model-card" title="${m.name}" style="cursor:default"><div class="mi">${m.icon}</div><div class="mn">${m.name}</div></div>`).join('')}</div>
             `).join('')}
@@ -1559,7 +1558,7 @@ function paletteList(layer, param, current, type) {
 
 function symColorPanel(layer, sym) {
     const c = sym.color;
-    let inner = '';
+    let inner;
     if (c.mode === 'single') {
         inner = `<div class="section"><div class="section-title">Couleur</div>
             <div style="display:flex;gap:8px;align-items:center">
@@ -1599,7 +1598,7 @@ function symSizePanel(layer, sym) {
     const is3D = isPoint && (layer.style?.mode === 'library' || layer.style?.mode === 'custom');
     const unit = is3D ? '×' : (layer.geometryType === 'Polygon' ? 'm' : 'px');
     const title = is3D ? 'Échelle' : (layer.geometryType === 'Polygon' ? 'Hauteur extrusion' : layer.geometryType === 'Point' ? 'Rayon' : 'Épaisseur');
-    let inner = '';
+    let inner;
     if (s.mode === 'single') {
         inner = `<div class="section"><div class="slider-head"><span class="lbl">${title}</span><span class="val" id="sz-val">${s.value} ${unit}</span></div>
             <input type="range" class="rng acc" min="${is3D ? 0.1 : 1}" max="${is3D ? 5 : layer.geometryType === 'Polygon' ? 150 : 30}" step="${is3D ? 0.1 : 0.5}" value="${s.value}" oninput="A.setSymSizeValue('${layer.id}', this.value)"></div>`;
@@ -1868,7 +1867,7 @@ function setupInteraction() {
         setTimeout(() => { boxing = false; }, 60);
     };
     cc.addEventListener('mouseup', endBox);
-    document.addEventListener('mouseup', (e) => { if (boxing) { map.dragPan.enable(); if (boxEl) { boxEl.remove(); boxEl = null; } boxing = false; } });
+    document.addEventListener('mouseup', () => { if (boxing) { map.dragPan.enable(); if (boxEl) { boxEl.remove(); boxEl = null; } boxing = false; } });
 }
 
 function selectInBox(a, b) {
@@ -2231,7 +2230,7 @@ function tableToGeoJSON(columnar, geomCol) {
 async function scanGeoTables() {
     const out = [];
     if (!CONFIG.grist.ready) return out;
-    let tables = [];
+    let tables;
     try { tables = await grist.docApi.listTables(); } catch (e) { return out; }
     for (const t of tables) {
         if (t === 'Maquette_Layers') continue;

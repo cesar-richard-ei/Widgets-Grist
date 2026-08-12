@@ -28,7 +28,7 @@ jobs:
           persist-credentials: false
 
       - name: actionlint
-        run: docker run --rm --volume "${PWD}:/repo" --workdir /repo rhysd/actionlint:1.7.12 -color
+        run: docker run --rm --volume "${PWD}:/repo" --workdir /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
 
       - name: zizmor
         run: pipx run zizmor==1.29.0 --persona regular .github/workflows
@@ -59,6 +59,27 @@ jobs:
 
       - name: Synchronisation du core inline
         run: npm run check:taskflow
+
+      - name: Lint JavaScript
+        run: npm run lint
+
+  commits:
+    name: Messages de commit
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Convention des messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          TETE: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-commits.js "${BASE}..${TETE}"
 
   e2e:
     name: Tests de bout en bout
@@ -217,7 +238,10 @@ jobs:
           build() {
             (
               cd "$1"
-              npm ci --ignore-scripts || npm install --ignore-scripts
+              npm ci --ignore-scripts || {
+                echo "::warning::Lockfile desynchronise dans $1, repli sur npm install"
+                npm install --ignore-scripts
+              }
               npm run build --if-present
               GITHUB_USER="$owner" REPO_NAME="$repo" BASE_URL="$2" node scripts/generate-manifest.js
             )

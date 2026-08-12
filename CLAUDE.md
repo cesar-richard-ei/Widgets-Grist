@@ -135,6 +135,7 @@ Widgets-Grist/
 │   └── patterns.md              # Modales, filtres, UI patterns
 │
 └── scripts/
+    ├── check-commits.js         # Vérifie la convention des messages de commit
     ├── generate-manifest.js     # Génère manifest.json depuis published/
     ├── next-version.js          # Calcule le prochain tag SemVer
     └── promote.js               # Copie de projects/ vers published/
@@ -308,6 +309,9 @@ packages/mon-widget-react/
 # Installer les dépendances (workspaces)
 npm install
 
+# Lint JavaScript
+npm run lint
+
 # Générer le manifest.json
 npm run manifest
 
@@ -325,8 +329,9 @@ npm run deploy
 
 ### `ci.yml` — contrôles, tag et déploiement
 
-Sur chaque PR et chaque push sur `main` : lint des workflows (actionlint et zizmor), tests unitaires plus
-vérification du core inline, tests Playwright. En cas d'échec e2e, le rapport HTML et les traces sont
+Sur chaque PR et chaque push sur `main` : lint des workflows (actionlint et zizmor), lint JavaScript
+(ESLint), tests unitaires plus vérification du core inline, tests Playwright. Sur les PR uniquement, un job
+vérifie que chaque message de commit suit Conventional Commits, puisque la version en dépend. En cas d'échec e2e, le rapport HTML et les traces sont
 récupérables en artefact du run. Le job `tests` agrège ces trois jobs et fournit le contexte unique exigé
 par le ruleset de `main` : ajouter ou renommer un job ne demande donc pas de toucher aux réglages du dépôt.
 
@@ -361,6 +366,12 @@ pas verts. Chaque exécution reconstruit le site entier, la racine depuis le tag
 Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets référencent
 bien les URL nightly.
 
+### Lint JavaScript
+
+`eslint.config.mjs` couvre les fichiers `.js` : `scripts/`, `tests/`, le core TaskFlow et les projets qui
+ont du JavaScript séparé. Le JavaScript en ligne des widgets HTML n'est pas analysé, les fonctions appelées
+depuis les attributs `onclick` y passeraient toutes pour du code mort.
+
 ### `codeql.yml` — analyse statique
 
 CodeQL passe sur le JavaScript et sur les workflows eux-mêmes, à chaque PR, à chaque push sur `main` et une
@@ -386,6 +397,21 @@ en précédence inférieure à `v1.2.0`. Ce tag est à poser à la main, la CI n
 1. Settings → Pages
 2. Source : GitHub Actions
 
+L'environnement `github-pages` n'accepte les déploiements que depuis `main` et les tags `v*`.
+
+### Réglages du dépôt
+
+Les contrôles suivants sont actifs et valent la peine d'être connus avant de toucher à la CI :
+
+- le jeton `GITHUB_TOKEN` est en lecture seule par défaut, chaque job déclare ce dont il a besoin ;
+- seules les actions publiées par GitHub sont autorisées, plus `github/codeql-action`, et l'épinglage par
+  SHA est imposé côté dépôt : une action référencée par tag est refusée à l'exécution ;
+- analyse de secrets et protection au push actives ;
+- alertes et correctifs Dependabot actifs, signalement privé de vulnérabilité ouvert ;
+- `main` exige une PR, le rebase comme seule méthode de merge, et les checks `tests`, `Messages de commit`,
+  `Analyse actions` et `Analyse javascript-typescript` ;
+- les tags `v*` ne peuvent être ni supprimés ni réécrits.
+
 ## Conventions
 
 ### Nommage
@@ -401,6 +427,10 @@ en précédence inférieure à `v1.2.0`. Ce tag est à poser à la main, la CI n
 - Le manifest inclut `lastUpdatedAt` automatiquement
 
 ### Commits
+
+Conventional Commits, vérifié en CI sur les PR par `scripts/check-commits.js`. Types acceptés : `build`,
+`chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. En-tête limitée à
+100 caractères.
 
 ```
 feat(taskflow): add drag-drop to kanban
