@@ -654,6 +654,7 @@
                     <div class="filter-option" onclick="exportPNG()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Image PNG</div>
                 </div>
             </div>
+            <button class="btn" id="btnAjouterChantier" style="display:none" onclick="openCreateChantierPanel()">+ Chantier</button>
             <button class="btn primary" onclick="openCreatePanel()">+ Tâche</button>
         </div>
     </div>
@@ -1231,10 +1232,10 @@
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         function pruneTaskRecord(rec) {
             if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; }
-            // Quand les chantiers viennent de leur table, le parent affiché est recalculé à la lecture :
-            // le réécrire remettrait en base l'identifiant décalé d'un chantier. Le changement de parent
-            // passera par le volet chantier.
-            if (colonneChantier()) delete rec.parentTask;
+            // Le parent affiché est recalculé à la lecture : l'identifiant décalé d'un chantier ne désigne
+            // aucun enregistrement et ne doit jamais partir en base. Un parent qui désigne une tâche réelle
+            // reste légitime, sans quoi on ne pourrait plus créer de sous-tâche.
+            if (rec.parentTask >= ID_CHANTIER) delete rec.parentTask;
             return rec;
         }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
@@ -1910,6 +1911,9 @@
             // Un rendu demande pendant un clic ou un glisser en cours est reporte au
             // relachement (voir les ecouteurs mousedown/mouseup plus bas).
             if (gesteSourisEnCours) { renduEnAttente = true; return; }
+            // Créer un chantier n'a de sens que sur un document qui a leur table.
+            const btnChantier = document.getElementById('btnAjouterChantier');
+            if (btnChantier) btnChantier.style.display = colonneChantier() ? '' : 'none';
             updatePeriodLabel();
             computeEffectiveRange();
             renderTimelineHeader();
@@ -2504,10 +2508,54 @@
         }
 
         function openCreatePanel() { openCreateTaskWithParent(null); }
+
+        // Création d'un chantier : même volet, en mode chantier, avec les champs que le cadrage laisse.
+        function openCreateChantierPanel() {
+            const today = new Date();
+            if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
+            panelState = {
+                open: true, isNew: true, estChantier: true, taskId: null, taskIndex: -1,
+                taskList: panelState.taskList, dirty: false,
+                editData: {
+                    titre: '', description: '', type: 'chantier', statut: '', progression: 0, priorite: null,
+                    dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 30)),
+                    projet: projects.length > 0 ? projects[0].id : null,
+                    assignees: [], dependDe: [], tags: [], subtasks: [], charges: [],
+                    estimationH: null, tempsPasse: null, couleur: null, parentTask: null
+                }
+            };
+            renderPanel();
+            openPanel();
+        }
+
+        async function createChantier() {
+            const data = panelState.editData;
+            if (!data || !data.titre || !data.titre.trim()) { showToast('Titre requis', 'error'); return; }
+            if (data.dateDebut && data.dateEcheance && data.dateDebut > data.dateEcheance) {
+                showToast('La date de début ne peut pas dépasser la date de fin', 'error');
+                return;
+            }
+            const record = {
+                Nom_du_chantier: data.titre, Description: data.description || '',
+                Date_debut: data.dateDebut || null, Date_fin: data.dateEcheance || null,
+                Projets: toGristRefList(data.projet ? [data.projet] : [])
+            };
+            try {
+                await grist.docApi.applyUserActions([['AddRecord', 'Chantiers', null, record]]);
+                closePanel();
+                await loadAllData();
+            } catch (e) {
+                console.error(e);
+                showToast('Erreur création du chantier', 'error');
+            }
+        }
         // WBS-02: création d'une sous-tâche (ou tâche racine si parentId === null)
         function openCreateTaskWithParent(parentId) {
             const today = new Date();
             const parent = parentId ? tasks.find(t => t.id === parentId) : null;
+            // Une tache est toujours rattachee a un chantier : si le parent en est un, c'est le
+            // rattachement, pas une sous-tache.
+            const chantierParent = estChantier(parent) ? parent.idChantier : (parent ? parent.chantier || null : null);
             // Ecrit la saisie en cours avant de passer en creation, meme condition que closePanel et openTaskPanel.
             if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
             panelState = {
@@ -2517,7 +2565,8 @@
                     dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)),
                     projet: parent?.projet || (projects.length > 0 ? projects[0].id : null),
                     assignees: [], dependDe: [], tags: [], estimationH: null, tempsPasse: null, subtasks: [],
-                    couleur: null, parentTask: parentId || null, charges: []
+                    couleur: null, parentTask: estChantier(parent) ? null : (parentId || null),
+                    chantier: chantierParent, charges: []
                 }
             };
             renderPanel();
@@ -2857,7 +2906,7 @@
 
             if (panelState.isNew) {
                 const canCreate = data.titre && data.titre.trim().length > 0;
-                footer.innerHTML = '<div style="display:flex;gap:8px;width:100%"><button class="panel-btn" style="flex:0 0 auto;width:auto;padding:10px 16px;background:transparent;color:var(--text-muted);border:1px solid var(--border)" onclick="closePanel()">Annuler</button><button class="panel-btn success" onclick="createTask()" ' + (!canCreate ? 'disabled' : '') + ' style="flex:1;width:auto">Créer la ' + (chantier ? 'chantier' : 'tâche') + '</button></div>';
+                footer.innerHTML = '<div style="display:flex;gap:8px;width:100%"><button class="panel-btn" style="flex:0 0 auto;width:auto;padding:10px 16px;background:transparent;color:var(--text-muted);border:1px solid var(--border)" onclick="closePanel()">Annuler</button><button class="panel-btn success" onclick="' + (chantier ? 'createChantier()' : 'createTask()') + '" ' + (!canCreate ? 'disabled' : '') + ' style="flex:1;width:auto">Créer ' + (chantier ? 'le chantier' : 'la tâche') + '</button></div>';
             } else {
                 footer.innerHTML = '';
             }
@@ -3205,7 +3254,7 @@
                 assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe),
                 tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse,
                 subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null,
-                parentTask: data.parentTask || null,
+                parentTask: data.parentTask || null, chantier: data.chantier || null,
                 charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))), dateCloture: data.dateCloture || null
             };
 

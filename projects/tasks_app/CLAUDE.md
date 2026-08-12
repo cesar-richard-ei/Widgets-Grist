@@ -607,6 +607,37 @@ ligne chantier : son identifiant décalé ne correspond à aucun enregistrement.
 Couvert par `tests/e2e/gantt-chantiers.spec.js`, qui exerce les trois états du document : modèle cible,
 copie de travail où `parentTask` a été repointé, et ancien modèle sans table `Chantiers`.
 
+#### Volet chantier
+
+Le volet est **le même** pour une tâche et pour un chantier : `panelState.estChantier` porte la
+distinction, et `adapterVoletChantier()` retire après rendu ce que le cadrage masque (priorité,
+progression, parent, couleur, planning, checklist), renomme les sous-tâches en « Tâches » et le bouton
+en « Ajouter une tâche ». Adapter après rendu évite de dupliquer la construction du volet, qui fait
+plusieurs centaines de lignes ; en contrepartie ce retrait s'appuie sur les libellés affichés.
+
+Les prérequis sont retirés aussi : le cadrage ne les mentionne pas et `Chantiers.Depend_de` n'est pas
+typé, donc les laisser ouvrirait une écriture sans destination.
+
+`donneesChantier()` prépare les données du volet : les dates absentes sont préremplies depuis les
+tâches tout en restant modifiables, les assignés et les charges sont des **remontées** des tâches.
+`saveChantierToGrist()` écrit dans `Chantiers` (`Nom_du_chantier`, `Description`, `Date_debut`,
+`Date_fin`, `Contributeurs`), en retranchant `ID_CHANTIER` de l'identifiant affiché.
+
+> `Chantiers.Contributeurs` est une colonne **stockée** alors que le cadrage la décrit comme une
+> remontée. Elle n'est donc écrite qu'à l'enregistrement du volet, jamais au chargement, sinon toute
+> ouverture d'un chantier écraserait la saisie faite dans Grist. La passer en formule côté document
+> rendrait cette écriture inutile.
+
+#### Création
+
+Le bouton « + Chantier » n'apparaît que si le document a la table (`colonneChantier()`), et
+`createChantier()` fait l'`AddRecord`. Deux boutons distincts plutôt qu'un menu : c'est ce que montre
+la maquette, là où le texte du cadrage parle d'un bouton « Ajouter » générique.
+
+Une tâche créée depuis un chantier reçoit `chantier`, pas `parentTask` : le niveau 0 est réservé aux
+chantiers. `pruneTaskRecord()` ne retire `parentTask` que lorsqu'il vaut un identifiant décalé, sans
+quoi il deviendrait impossible de créer une sous-tâche.
+
 ### Gantt : report du rendu pendant un geste souris
 
 `render()` (gantt.html) commence par une garde :

@@ -215,6 +215,41 @@ test('modifier une tache ne reecrit pas son parent', async ({ page }) => {
     expect(enBase).toEqual({ chantier: 1, parentTask: 0 });
 });
 
+test('le bouton Chantier cree un chantier dans sa table', async ({ page }) => {
+    await ouvrirGantt(page, DOC_CIBLE);
+
+    await page.locator('#btnAjouterChantier').click();
+    await page.locator('#taskTitle').fill('Recette metier');
+    await page.locator('#panel .panel-btn.success').click();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Nom_du_chantier;
+    })).toContain('Recette metier');
+    await expect(ligne(page, 'Recette metier')).toHaveAttribute('data-depth', '0');
+});
+
+test('une tache creee depuis un chantier lui est rattachee', async ({ page }) => {
+    await ouvrirGantt(page, DOC_CIBLE);
+
+    await ligne(page, 'Socle technique').click();
+    await page.locator('#panel button', { hasText: 'Ajouter une tâche' }).click();
+    await page.locator('#taskTitle').fill('Recette technique');
+    await page.locator('#panel .panel-btn.success').click();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        const i = t.titre.indexOf('Recette technique');
+        return i === -1 ? null : { chantier: t.chantier[i], parentTask: t.parentTask[i] || 0 };
+    })).toEqual({ chantier: 1, parentTask: 0 });
+});
+
+test('sans table Chantiers, le bouton Chantier reste absent', async ({ page }) => {
+    await ouvrirGantt(page, DOC_ANCIEN);
+
+    await expect(page.locator('#btnAjouterChantier')).toBeHidden();
+});
+
 test('sans table Chantiers, la hierarchie des taches est inchangee', async ({ page }) => {
     await ouvrirGantt(page, DOC_ANCIEN);
 
