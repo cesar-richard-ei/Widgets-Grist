@@ -725,14 +725,14 @@
         // ═══════════════════════════════════════════════════════════════════════
         // MODULE COMMUN TASKFLOW (genere — voir projects/tasks_app/core/taskflow-core.js)
         // ═══════════════════════════════════════════════════════════════════════
-        // <taskflow-core> -- GENERE par scripts/build-taskflow.js, NE PAS EDITER ICI
+        // <inline:core/taskflow-core.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
         /* ============================================================================
          * taskflow-core.js — Module commun aux widgets TaskFlow
          * ----------------------------------------------------------------------------
-         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-taskflow.js entre
+         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-inline.js entre
          * les marqueurs de generation prevus a cet effet.
          * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
-         *   npm run build:taskflow
+         *   npm run build:inline
          *
          * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
          * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans
@@ -1217,7 +1217,8 @@
 
         // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
         if (typeof module !== 'undefined' && module.exports) module.exports = TF;
-        // </taskflow-core>
+        // </inline>
+        // <inline:gantt.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
 
         // ═══════════════════════════════════════════════════════════════════════
         // STATE
@@ -1228,7 +1229,14 @@
         let gristPresent = false;
         let tasks = [], team = [], projects = [];
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
-        function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
+        function pruneTaskRecord(rec) {
+            if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; }
+            // Quand les chantiers viennent de leur table, le parent affiché est recalculé à la lecture :
+            // le réécrire remettrait en base l'identifiant décalé d'un chantier. Le changement de parent
+            // passera par le volet chantier.
+            if (colonneChantier()) delete rec.parentTask;
+            return rec;
+        }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
         let schemaMeta = null; // métadonnées Grist (_grist_Tables[_column]) lues une fois par ouverture, partagées entre helpers
         let currentView = 'semester';
@@ -1297,7 +1305,7 @@
         const isJalon = (t) => t?.type === 'jalon';
 
         function showToast(msg, type = 'info') { const c = document.getElementById('toastContainer'); const t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg; c.appendChild(t); setTimeout(() => t.remove(), 3000); }
-        
+
         // GEN-03: Export functions
         // WBS-02: déplie toute la hiérarchie temporairement pour l'export, retourne l'état précédent
         function _expandAllForExport() {
@@ -1395,21 +1403,21 @@
             return c ? c.type : null;
         }
 
-        // Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents
-        // où parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est
-        // parentTask qui le porte : on se fie au type déclaré, jamais à la valeur.
+        // Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents où
+        // parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est parentTask qui
+        // le porte : on se fie au type déclaré, jamais à la valeur.
         function colonneChantier() {
             if (typeColonne('Tasks', 'chantier') === 'Ref:Chantiers') return 'chantier';
             if (typeColonne('Tasks', 'parentTask') === 'Ref:Chantiers') return 'parentTask';
             return null;
         }
-        // parentTask ne désigne une sous-tâche que lorsqu'il pointe Tasks. Sans ce garde-fou, un
-        // parentTask qui désigne un chantier rattache les tâches entre elles, les identifiants des
-        // deux tables se recouvrant.
+        // parentTask ne désigne une sous-tâche que lorsqu'il pointe Tasks. Sans ce garde-fou, un parentTask
+        // qui désigne un chantier rattache les tâches entre elles, les identifiants des deux tables se
+        // recouvrant.
         const parentTaskEstHierarchie = () => typeColonne('Tasks', 'parentTask') === 'Ref:Tasks';
 
-        // Les identifiants de Chantiers et de Tasks se recouvrent : décalage pour cohabiter dans
-        // un même tableau, tout le rendu de l'arbre ne manipulant que des identifiants numériques.
+        // Les identifiants de Chantiers et de Tasks se recouvrent : décalage pour cohabiter dans un même
+        // tableau, tout le rendu de l'arbre ne manipulant que des identifiants numériques.
         const ID_CHANTIER = 1000000;
         const estChantier = (t) => !!t && t.estChantier === true;
 
@@ -1425,12 +1433,12 @@
             };
         }
 
-        // Insère les chantiers comme lignes de niveau 0 et réécrit le parent de chaque tâche :
-        // sa tâche parente si elle en a une, sinon son chantier.
+        // Insère les chantiers comme lignes de niveau 0 et réécrit le parent de chaque tâche : sa tâche
+        // parente si elle en a une, sinon son chantier.
         async function fusionnerChantiers() {
             const colonne = colonneChantier();
             if (!colonne) return;
-            let brut = null;
+            let brut;
             try { brut = await grist.docApi.fetchTable('Chantiers'); } catch (e) { return; }
             const chantiers = convert(brut).map(chantierEnLigne);
             const parProjet = new Map(chantiers.map(c => [c.idChantier, c.projet]));
@@ -1613,51 +1621,51 @@
         }
         function getAvailableDependencies(taskId) { return tasks.filter(t => t.id !== taskId && !wouldCreateCycle(taskId, t.id)); }
         function getBlockedTasks(taskId) { return tasks.filter(t => getDependsOnArray(t).includes(taskId)); }
-        
+
         // GANTT-06: Propagation des dates aux tâches dépendantes
         function propagateDependencyDates(changedTaskId, visited = new Set()) {
             if (visited.has(changedTaskId)) return []; // Protection contre les cycles
             visited.add(changedTaskId);
-            
+
             const changedTask = tasks.find(t => t.id === changedTaskId);
             if (!changedTask) return [];
-            
+
             const changedEnd = gristToDate(changedTask.dateEcheance);
             if (!changedEnd) return [];
-            
+
             const updates = [];
             const blockedTasks = getBlockedTasks(changedTaskId);
-            
+
             blockedTasks.forEach(depTask => {
                 const depStart = gristToDate(depTask.dateDebut);
                 const depEnd = gristToDate(depTask.dateEcheance);
-                
+
                 if (!depStart || !depEnd) return;
-                
+
                 // Si la tâche dépendante commence avant la fin de la tâche modifiée, la décaler
                 const requiredStart = addDays(changedEnd, 1); // Commence le jour suivant
-                
+
                 if (depStart < requiredStart) {
                     const duration = getDaysDiff(depStart, depEnd);
                     const newStart = requiredStart;
                     const newEnd = addDays(newStart, duration);
-                    
+
                     // Mettre à jour en mémoire
                     depTask.dateDebut = dateToGrist(newStart);
                     depTask.dateEcheance = dateToGrist(newEnd);
-                    
+
                     updates.push({
                         id: depTask.id,
                         dateDebut: depTask.dateDebut,
                         dateEcheance: depTask.dateEcheance
                     });
-                    
+
                     // Propager récursivement
                     const cascadeUpdates = propagateDependencyDates(depTask.id, visited);
                     updates.push(...cascadeUpdates);
                 }
             });
-            
+
             return updates;
         }
 
@@ -2129,7 +2137,7 @@
                 totalWidth = numCells * effectiveCellWidth;
             } else {
                 numCells = totalDays;
-                totalWidth = totalDays * effectiveCellWidth;
+                totalWidth = numCells * effectiveCellWidth;
             }
             // pxPerDay = effectivePxPerDay (déjà calculé depuis effectiveCellWidth)
             const pxPerDay = effectivePxPerDay;
@@ -2450,8 +2458,8 @@
         function openTaskPanel(taskId) {
             const task = tasks.find(t => t.id === taskId);
             if (!task) return;
-            // Le volet chantier n'existe pas encore : ouvrir le volet tâche sur un chantier ferait
-            // écrire son identifiant décalé dans Tasks.
+            // Le volet chantier n'existe pas encore : ouvrir le volet tâche sur un chantier ferait écrire
+            // son identifiant décalé dans Tasks.
             if (estChantier(task)) { selectedTaskId = taskId; render(); return; }
 
             // Ecrit la saisie en cours avant de basculer sur une autre tache, meme condition que closePanel.
@@ -3327,7 +3335,7 @@
             const prefetched = {};  // données lues ici pour la vérif, réutilisables par loadAllData si le schéma n'a pas bougé
 
             for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) {
-                let raw = null, tableExists = false;
+                let raw, tableExists;
                 try { raw = await grist.docApi.fetchTable(tableName); tableExists = true; }
                 catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } }
                 if (tableExists) { prefetched[tableName] = raw; const existingCols = Object.keys(raw).filter(c => c !== 'id' && c !== 'manualSort'); const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); added++; } catch (e) {} } }
@@ -3341,8 +3349,8 @@
                 { table: 'Tasks', column: 'projet', visibleColId: 'nom' },
                 { table: 'Tasks', column: 'assignees', visibleColId: 'nom' },
                 { table: 'Tasks', column: 'dependDe', visibleColId: 'titre' },
-                // parentTask ne prend 'titre' que s'il désigne bien une tâche : sur un document où il
-                // pointe Chantiers, ce serait une colonne d'affichage inexistante.
+                // parentTask ne prend 'titre' que s'il désigne bien une tâche : sur un document où il pointe
+                // Chantiers, ce serait une colonne d'affichage inexistante.
                 ...(parentTaskEstHierarchie() ? [{ table: 'Tasks', column: 'parentTask', visibleColId: 'titre' }] : []),
                 { table: 'Projects', column: 'responsable', visibleColId: 'nom' }
             ], schemaMeta);
@@ -3627,6 +3635,7 @@
         setTimeout(function(){ try { if (!gristPresent && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
         try { if (new URLSearchParams(location.search).has('nav')) document.body.classList.add('suite-nav'); } catch (e) {}
         initGrist();
+        // </inline>
     </script>
 <style>
 /* 12 · Barre d'onglets mobile commune + bouton central */

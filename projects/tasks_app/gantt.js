@@ -8,7 +8,14 @@ let gristReady = false;
 let gristPresent = false;
 let tasks = [], team = [], projects = [];
 let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
-function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
+function pruneTaskRecord(rec) {
+    if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; }
+    // Quand les chantiers viennent de leur table, le parent affiché est recalculé à la lecture :
+    // le réécrire remettrait en base l'identifiant décalé d'un chantier. Le changement de parent
+    // passera par le volet chantier.
+    if (colonneChantier()) delete rec.parentTask;
+    return rec;
+}
 let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
 let schemaMeta = null; // métadonnées Grist (_grist_Tables[_column]) lues une fois par ouverture, partagées entre helpers
 let currentView = 'semester';
@@ -166,6 +173,64 @@ function getTaskBarGradient(t) {
 // WBS (hiérarchie sous-tâches) — API commune
 // ═══════════════════════════════════════════════════════════════════════
 let childrenByParent = new Map();  // reconstruit à chaque loadAllData
+// Type d'une colonne d'après les métadonnées Grist, null si la table ou la colonne manque.
+function typeColonne(tableId, colId) {
+    if (!schemaMeta) return null;
+    const t = (schemaMeta.tables || []).find(x => x.tableId === tableId);
+    if (!t) return null;
+    const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.colId === colId);
+    return c ? c.type : null;
+}
+
+// Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents où
+// parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est parentTask qui
+// le porte : on se fie au type déclaré, jamais à la valeur.
+function colonneChantier() {
+    if (typeColonne('Tasks', 'chantier') === 'Ref:Chantiers') return 'chantier';
+    if (typeColonne('Tasks', 'parentTask') === 'Ref:Chantiers') return 'parentTask';
+    return null;
+}
+// parentTask ne désigne une sous-tâche que lorsqu'il pointe Tasks. Sans ce garde-fou, un parentTask
+// qui désigne un chantier rattache les tâches entre elles, les identifiants des deux tables se
+// recouvrant.
+const parentTaskEstHierarchie = () => typeColonne('Tasks', 'parentTask') === 'Ref:Tasks';
+
+// Les identifiants de Chantiers et de Tasks se recouvrent : décalage pour cohabiter dans un même
+// tableau, tout le rendu de l'arbre ne manipulant que des identifiants numériques.
+const ID_CHANTIER = 1000000;
+const estChantier = (t) => !!t && t.estChantier === true;
+
+function chantierEnLigne(c) {
+    const projets = getRefListArray(c.Projets);
+    return {
+        id: ID_CHANTIER + c.id, idChantier: c.id, estChantier: true,
+        titre: c.Nom_du_chantier || '', description: c.Description || '',
+        dateDebut: c.Date_debut || null, dateEcheance: c.Date_fin || null,
+        projet: projets.length ? projets[0] : 0,
+        assignees: c.Contributeurs || null, Responsable: c.Responsable || null,
+        type: 'tache', statut: '', priorite: null, parentTask: null
+    };
+}
+
+// Insère les chantiers comme lignes de niveau 0 et réécrit le parent de chaque tâche : sa tâche
+// parente si elle en a une, sinon son chantier.
+async function fusionnerChantiers() {
+    const colonne = colonneChantier();
+    if (!colonne) return;
+    let brut;
+    try { brut = await grist.docApi.fetchTable('Chantiers'); } catch (e) { return; }
+    const chantiers = convert(brut).map(chantierEnLigne);
+    const parProjet = new Map(chantiers.map(c => [c.idChantier, c.projet]));
+    const hierarchie = parentTaskEstHierarchie();
+    for (const t of tasks) {
+        const idChantier = t[colonne];
+        const sousTacheDe = hierarchie ? t.parentTask : null;
+        t.parentTask = sousTacheDe || (idChantier ? ID_CHANTIER + idChantier : null);
+        if (!t.projet && idChantier && parProjet.has(idChantier)) t.projet = parProjet.get(idChantier);
+    }
+    tasks = chantiers.concat(tasks);
+}
+
 function rebuildChildrenCache() {
     childrenByParent = new Map();
     // WBS-FIX: ignorer les parentTask qui formeraient un cycle (self-ref ou chaîne circulaire)
@@ -1172,6 +1237,9 @@ function confirmClosePanel() {
 function openTaskPanel(taskId) {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
+    // Le volet chantier n'existe pas encore : ouvrir le volet tâche sur un chantier ferait écrire
+    // son identifiant décalé dans Tasks.
+    if (estChantier(task)) { selectedTaskId = taskId; render(); return; }
 
     // Ecrit la saisie en cours avant de basculer sur une autre tache, meme condition que closePanel.
     if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
@@ -1907,7 +1975,7 @@ async function confirmDelete() {
 function startDrag(e, bar, type) {
     const id = parseInt(bar.dataset.id);
     const task = tasks.find(t => t.id === id);
-    if (!task || isJalon(task)) return;
+    if (!task || isJalon(task) || estChantier(task)) return;
 
     // WBS-02: parent autorisé uniquement pour 'move' (resize bloqué car ajusté auto)
     const isParent = hasChildren(task);
@@ -2060,7 +2128,9 @@ async function ensureSchema() {
         { table: 'Tasks', column: 'projet', visibleColId: 'nom' },
         { table: 'Tasks', column: 'assignees', visibleColId: 'nom' },
         { table: 'Tasks', column: 'dependDe', visibleColId: 'titre' },
-        { table: 'Tasks', column: 'parentTask', visibleColId: 'titre' },
+        // parentTask ne prend 'titre' que s'il désigne bien une tâche : sur un document où il pointe
+        // Chantiers, ce serait une colonne d'affichage inexistante.
+        ...(parentTaskEstHierarchie() ? [{ table: 'Tasks', column: 'parentTask', visibleColId: 'titre' }] : []),
         { table: 'Projects', column: 'responsable', visibleColId: 'nom' }
     ], schemaMeta);
     if (created > 0 || added > 0) showToast('Schema initialisé (' + created + ' tables, ' + added + ' colonnes)', 'success');
@@ -2106,6 +2176,7 @@ async function loadAllData(prefetched) {
     try { team = convert((prefetched && prefetched.Team) || await grist.docApi.fetchTable('Team')); } catch (e) { team = []; }
     try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; }
     gristReady = true;
+    await fusionnerChantiers();
     rebuildChildrenCache();
     sortTasks();
     try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', tasks.map(t => t && t.statut), schemaMeta); } catch (e) {}
