@@ -20,10 +20,11 @@ Chaque widget est un **fichier HTML autonome** avec CSS et JS inline. Pas de fra
 
 ### Code partagé (core inliné)
 
-Le code commun (conversions, dates, statuts dynamiques, calcul de charge, `chargeMatrix`…) vit dans **`core/taskflow-core.js`** (objet global `TF`) et est **inliné** dans chaque widget par `scripts/build-taskflow.js` entre les marqueurs `// <taskflow-core>` / `// </taskflow-core>`.
+Le code commun (conversions, dates, statuts dynamiques, calcul de charge, `chargeMatrix`…) vit dans **`core/taskflow-core.js`** (objet global `TF`) et est **inliné** dans chaque widget par `scripts/build-inline.js` entre les marqueurs `// <inline:core/taskflow-core.js>` / `// </inline>`.
 
-- Modifier le core → `node scripts/build-taskflow.js` régénère les 6 cibles (kanban/gantt/calendar/dashboard/plan + whiteboard).
-- `node scripts/build-taskflow.js --check` vérifie que tout est en phase (utilisé en validation/CI).
+- Modifier le core → `npm run build:inline` régénère les cibles (kanban/gantt/calendar/dashboard/plan + whiteboard).
+- Le script du Gantt vit dans `gantt.js` et suit le même chemin : éditer le `.js`, jamais le bloc généré dans le HTML.
+- `npm run check:inline` vérifie que tout est en phase (utilisé en validation/CI).
 - **Ne jamais éditer la zone entre les marqueurs à la main** — éditer `core/taskflow-core.js` puis rebuild.
 
 ### Statuts dynamiques (`statusCfg`)
@@ -628,6 +629,6 @@ projects/tasks_app/dashboard.html  →  published/taskflow/dashboard/index.html
 projects/tasks_app/plan.html       →  published/taskflow/plan/index.html
 ```
 
-Avant copie : `node scripts/build-taskflow.js` (inline le core) puis `--check`. Après copie : `npm run manifest` pour régénérer `published/manifest.json`.
+Avant copie : `npm run build:inline` puis `npm run check:inline`. Après copie : `npm run manifest` pour régénérer `published/manifest.json`.
 
 URLs publiées : `https://nic01asfr.github.io/Widgets-Grist/taskflow/{widget}/`

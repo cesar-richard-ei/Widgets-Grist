@@ -135,6 +135,7 @@ Widgets-Grist/
 │   └── patterns.md              # Modales, filtres, UI patterns
 │
 └── scripts/
+    ├── build-inline.js          # Inline les sources .js dans les widgets HTML
     ├── check-commits.js         # Vérifie la convention des messages de commit
     ├── generate-manifest.js     # Génère manifest.json depuis published/
     ├── next-version.js          # Calcule le prochain tag SemVer

@@ -57,8 +57,8 @@ jobs:
       - name: Tests unitaires
         run: npm test
 
-      - name: Synchronisation du core inline
-        run: npm run check:taskflow
+      - name: Synchronisation des sources inlinees
+        run: npm run check:inline
 
       - name: Lint JavaScript
         run: npm run lint
