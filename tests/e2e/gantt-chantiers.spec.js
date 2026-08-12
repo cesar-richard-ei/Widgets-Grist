@@ -141,6 +141,31 @@ test('cliquer une ligne chantier n ouvre pas le volet tache', async ({ page }) =
     await expect(page.locator('#panel')).not.toHaveClass(/open/);
 });
 
+// Le parent affiche est recalcule a la lecture : le reecrire remettrait en base l'identifiant
+// decale d'un chantier, qui ne designe aucun enregistrement.
+test('modifier une tache ne reecrit pas son parent', async ({ page }) => {
+    await ouvrirGantt(page, DOC_CIBLE);
+
+    await lignes(page).first().locator('.tree-chevron').click();
+    await ligne(page, 'Cadrage').click();
+    await expect(page.locator('#panel')).toHaveClass(/open/);
+
+    await page.locator('#taskTitle').fill('Cadrage revu');
+    await page.locator('#taskTitle').blur();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        return t.titre[t.id.indexOf(1)];
+    })).toBe('Cadrage revu');
+
+    const enBase = await page.evaluate(async () => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        const i = t.id.indexOf(1);
+        return { chantier: t.chantier[i], parentTask: t.parentTask[i] || 0 };
+    });
+    expect(enBase).toEqual({ chantier: 1, parentTask: 0 });
+});
+
 test('sans table Chantiers, la hierarchie des taches est inchangee', async ({ page }) => {
     await ouvrirGantt(page, DOC_ANCIEN);
 

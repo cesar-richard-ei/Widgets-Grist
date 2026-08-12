@@ -1229,7 +1229,14 @@
         let gristPresent = false;
         let tasks = [], team = [], projects = [];
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
-        function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
+        function pruneTaskRecord(rec) {
+            if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; }
+            // Quand les chantiers viennent de leur table, le parent affiché est recalculé à la lecture :
+            // le réécrire remettrait en base l'identifiant décalé d'un chantier. Le changement de parent
+            // passera par le volet chantier.
+            if (colonneChantier()) delete rec.parentTask;
+            return rec;
+        }
         let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques, alimente par TF.loadStatusConfig
         let schemaMeta = null; // métadonnées Grist (_grist_Tables[_column]) lues une fois par ouverture, partagées entre helpers
         let currentView = 'semester';
@@ -1396,21 +1403,21 @@
             return c ? c.type : null;
         }
 
-        // Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents
-        // où parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est
-        // parentTask qui le porte : on se fie au type déclaré, jamais à la valeur.
+        // Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents où
+        // parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est parentTask qui
+        // le porte : on se fie au type déclaré, jamais à la valeur.
         function colonneChantier() {
             if (typeColonne('Tasks', 'chantier') === 'Ref:Chantiers') return 'chantier';
             if (typeColonne('Tasks', 'parentTask') === 'Ref:Chantiers') return 'parentTask';
             return null;
         }
-        // parentTask ne désigne une sous-tâche que lorsqu'il pointe Tasks. Sans ce garde-fou, un
-        // parentTask qui désigne un chantier rattache les tâches entre elles, les identifiants des
-        // deux tables se recouvrant.
+        // parentTask ne désigne une sous-tâche que lorsqu'il pointe Tasks. Sans ce garde-fou, un parentTask
+        // qui désigne un chantier rattache les tâches entre elles, les identifiants des deux tables se
+        // recouvrant.
         const parentTaskEstHierarchie = () => typeColonne('Tasks', 'parentTask') === 'Ref:Tasks';
 
-        // Les identifiants de Chantiers et de Tasks se recouvrent : décalage pour cohabiter dans
-        // un même tableau, tout le rendu de l'arbre ne manipulant que des identifiants numériques.
+        // Les identifiants de Chantiers et de Tasks se recouvrent : décalage pour cohabiter dans un même
+        // tableau, tout le rendu de l'arbre ne manipulant que des identifiants numériques.
         const ID_CHANTIER = 1000000;
         const estChantier = (t) => !!t && t.estChantier === true;
 
@@ -1426,12 +1433,12 @@
             };
         }
 
-        // Insère les chantiers comme lignes de niveau 0 et réécrit le parent de chaque tâche :
-        // sa tâche parente si elle en a une, sinon son chantier.
+        // Insère les chantiers comme lignes de niveau 0 et réécrit le parent de chaque tâche : sa tâche
+        // parente si elle en a une, sinon son chantier.
         async function fusionnerChantiers() {
             const colonne = colonneChantier();
             if (!colonne) return;
-            let brut = null;
+            let brut;
             try { brut = await grist.docApi.fetchTable('Chantiers'); } catch (e) { return; }
             const chantiers = convert(brut).map(chantierEnLigne);
             const parProjet = new Map(chantiers.map(c => [c.idChantier, c.projet]));
@@ -2451,8 +2458,8 @@
         function openTaskPanel(taskId) {
             const task = tasks.find(t => t.id === taskId);
             if (!task) return;
-            // Le volet chantier n'existe pas encore : ouvrir le volet tâche sur un chantier ferait
-            // écrire son identifiant décalé dans Tasks.
+            // Le volet chantier n'existe pas encore : ouvrir le volet tâche sur un chantier ferait écrire
+            // son identifiant décalé dans Tasks.
             if (estChantier(task)) { selectedTaskId = taskId; render(); return; }
 
             // Ecrit la saisie en cours avant de basculer sur une autre tache, meme condition que closePanel.
@@ -3342,8 +3349,8 @@
                 { table: 'Tasks', column: 'projet', visibleColId: 'nom' },
                 { table: 'Tasks', column: 'assignees', visibleColId: 'nom' },
                 { table: 'Tasks', column: 'dependDe', visibleColId: 'titre' },
-                // parentTask ne prend 'titre' que s'il désigne bien une tâche : sur un document où il
-                // pointe Chantiers, ce serait une colonne d'affichage inexistante.
+                // parentTask ne prend 'titre' que s'il désigne bien une tâche : sur un document où il pointe
+                // Chantiers, ce serait une colonne d'affichage inexistante.
                 ...(parentTaskEstHierarchie() ? [{ table: 'Tasks', column: 'parentTask', visibleColId: 'titre' }] : []),
                 { table: 'Projects', column: 'responsable', visibleColId: 'nom' }
             ], schemaMeta);
