@@ -570,6 +570,42 @@ finit par aboutir, et le message est alors remplacé par le rendu.
 aboutir, et la démo couperait les écritures sans le dire — c'est le bug corrigé juste au-dessus.
 Ne pas raccourcir le délai jusqu'à croiser les lectures lentes légitimes.
 
+### Chantiers dans leur propre table (Gantt)
+
+Les chantiers quittent `Tasks` pour une table `Chantiers`. Cible arrêtée avec le métier :
+
+```
+Projet / Produit / Offre de service  >  Chantier  >  Tache  >  Sous-tache
+```
+
+Un chantier peut être rattaché à plusieurs projets (`Chantiers.Projets` en RefList), une tâche à un
+seul chantier, et une tâche n'a qu'un seul parent.
+
+Le Gantt lit les deux modèles, en se fiant au **type déclaré** des colonnes (`typeColonne()`, sur les
+métadonnées déjà chargées dans `schemaMeta`) et jamais aux valeurs :
+
+| Lien | Colonne |
+|------|---------|
+| tâche vers son chantier | `Tasks.chantier`, sinon `Tasks.parentTask` si son type désigne `Chantiers` |
+| tâche vers sa tâche parente | `Tasks.parentTask`, **uniquement** si son type désigne `Tasks` |
+
+**Pourquoi le type et pas la valeur.** Les identifiants de `Chantiers` et de `Tasks` se recouvrent : sur
+la copie de travail du métier, résoudre `parentTask` dans `Tasks` rattachait 41 tâches sur 79 à une
+autre tâche sans rapport, et créait 15 chaînes cycliques. Sans plantage, grâce aux gardes anti-cycle,
+mais avec une hiérarchie fausse.
+
+`fusionnerChantiers()` insère les chantiers comme lignes de niveau 0, décalés de `ID_CHANTIER` pour
+cohabiter avec les tâches dans un même tableau, et fait hériter le projet du chantier aux tâches qui
+n'en portent pas. Les lignes chantier sont marquées `estChantier` : le volet tâche ne s'ouvre pas
+dessus et elles ne sont ni déplaçables ni redimensionnables, tant que le volet chantier n'existe pas.
+L'écriture de la colonne d'affichage de `parentTask` est également conditionnée à son type.
+
+**Ne pas** rattacher une ligne chantier par son identifiant brut, ni écrire dans `Tasks` depuis une
+ligne chantier : son identifiant décalé ne correspond à aucun enregistrement.
+
+Couvert par `tests/e2e/gantt-chantiers.spec.js`, qui exerce les trois états du document : modèle cible,
+copie de travail où `parentTask` a été repointé, et ancien modèle sans table `Chantiers`.
+
 ### Gantt : report du rendu pendant un geste souris
 
 `render()` (gantt.html) commence par une garde :
