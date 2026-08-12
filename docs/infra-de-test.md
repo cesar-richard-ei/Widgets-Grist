@@ -7,7 +7,7 @@ Les widgets sont des fichiers HTML autonomes de 100 à 230 Ko, tout inline, sans
 et un panneau latéral reconstruit par concaténation de chaînes.
 
 Le seul code déjà factorisé est `projects/tasks_app/core/taskflow-core.js` (323 lignes,
-17 fonctions exportées), inliné dans 6 widgets par `scripts/build-taskflow.js` entre les
+17 fonctions exportées), inliné dans 6 widgets par `scripts/build-inline.js` entre les
 marqueurs `// <taskflow-core>` et `// </taskflow-core>`.
 
 Les widgets sont intégrés par « Custom URL » sur une instance Grist SecNumCloud
@@ -174,9 +174,10 @@ projects/tasks_app/
   gantt.html      gabarit a marqueurs
 ```
 
-`build-taskflow.js` ne connaît aujourd'hui qu'un marqueur. Il est étendu pour accepter des
-marqueurs nommés, de sorte que n'importe quel module soit inlinable. Le mécanisme est déjà
-idempotent et dispose d'un mode `--check`. Aucun bundler n'est introduit.
+`build-inline.js` accepte des marqueurs nommés, `// <inline:chemin.js>`, de sorte que n'importe
+quel module soit inlinable. Le mécanisme est idempotent et dispose d'un mode `--check`. Aucun
+bundler n'est introduit. Le script du Gantt est extrait dans `gantt.js` ; sa découpe en modules
+par préoccupation reste à faire.
 
 Le livrable reste un fichier HTML autonome : sur une instance non administrée, un widget sans
 chemin relatif à résoudre ni ressource externe à charger ne peut pas être cassé par
@@ -185,8 +186,7 @@ l'hébergement ou par une politique de sécurité.
 ## Intégration continue
 
 Le workflow existant est étendu d'un job de test exécutant les deux niveaux, ainsi que
-`build:taskflow --check`, qui existe déjà mais que rien ne déclenche aujourd'hui. Une
-désynchronisation entre le core et les widgets inlinés passerait actuellement inaperçue.
+`check:inline`. Une désynchronisation entre une source et les widgets inlinés est donc bloquante.
 
 ## Trajectoire
 

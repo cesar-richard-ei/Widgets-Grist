@@ -1,10 +1,10 @@
 /* ============================================================================
  * taskflow-core.js — Module commun aux widgets TaskFlow
  * ----------------------------------------------------------------------------
- * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-taskflow.js entre
+ * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-inline.js entre
  * les marqueurs de generation prevus a cet effet.
  * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
- *   npm run build:taskflow
+ *   npm run build:inline
  *
  * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
  * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans

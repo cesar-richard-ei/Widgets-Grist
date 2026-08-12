@@ -45,6 +45,18 @@ export default [
     },
 
     {
+        // Scripts de widget extraits, inlines dans le HTML par build-inline.js :
+        // memes contraintes que le code en ligne, dont les fonctions appelees
+        // depuis un attribut onclick et les globales apportees par le core.
+        files: ['projects/tasks_app/*.js'],
+        languageOptions: { globals: { ...globals.browser, grist: 'readonly' } },
+        rules: {
+            'no-undef': 'off',
+            'no-unused-vars': 'off'
+        }
+    },
+
+    {
         files: ['projects/Atlas/**/*.js'],
         languageOptions: {
             sourceType: 'module',
