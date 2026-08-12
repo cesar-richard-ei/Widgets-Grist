@@ -2071,7 +2071,7 @@
                 totalWidth = numCells * effectiveCellWidth;
             } else {
                 numCells = totalDays;
-                totalWidth = totalDays * effectiveCellWidth;
+                totalWidth = numCells * effectiveCellWidth;
             }
             // pxPerDay = effectivePxPerDay (déjà calculé depuis effectiveCellWidth)
             const pxPerDay = effectivePxPerDay;
@@ -3266,7 +3266,7 @@
             const prefetched = {};  // données lues ici pour la vérif, réutilisables par loadAllData si le schéma n'a pas bougé
 
             for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) {
-                let raw = null, tableExists = false;
+                let raw, tableExists;
                 try { raw = await grist.docApi.fetchTable(tableName); tableExists = true; }
                 catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } }
                 if (tableExists) { prefetched[tableName] = raw; const existingCols = Object.keys(raw).filter(c => c !== 'id' && c !== 'manualSort'); const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); added++; } catch (e) {} } }

@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { execFileSync } = require('node:child_process');
 
 // Configuration
 const GITHUB_USER = process.env.GITHUB_USER || 'VOTRE_USER';
@@ -23,6 +24,21 @@ console.log(`Base URL: ${BASE_URL}`);
 console.log(`Scanning: ${PUBLISHED_DIR}`);
 
 const widgets = [];
+
+// Date du dernier commit touchant le widget : le manifest reste identique d'une
+// generation a l'autre, et le champ dit ce qu'il annonce plutot que l'heure du build.
+function lastUpdatedAt(widgetDir) {
+    try {
+        const iso = execFileSync('git', ['log', '-1', '--format=%cI', '--', widgetDir], {
+            encoding: 'utf8',
+            cwd: path.join(__dirname, '..'),
+            stdio: ['ignore', 'pipe', 'ignore']
+        }).trim();
+        return iso || null;
+    } catch (err) {
+        return null;
+    }
+}
 
 // Vérifier que le dossier published existe
 if (!fs.existsSync(PUBLISHED_DIR)) {
@@ -54,6 +70,7 @@ for (const entry of entries) {
 
         // Supporter à la fois un objet unique ou un tableau de widgets
         const gristConfigs = Array.isArray(pkg.grist) ? pkg.grist : [pkg.grist];
+        const majLe = lastUpdatedAt(widgetDir);
 
         for (const config of gristConfigs) {
             // Construire l'URL complète
@@ -75,7 +92,7 @@ for (const entry of entries) {
                 accessLevel: config.accessLevel || 'none',
                 renderAfterReady: config.renderAfterReady !== false,
                 description: config.description || pkg.description || '',
-                lastUpdatedAt: new Date().toISOString(),
+                ...(majLe && { lastUpdatedAt: majLe }),
                 ...(config.authors && { authors: config.authors }),
                 ...(pkg.authors && !config.authors && { authors: pkg.authors }),
             };

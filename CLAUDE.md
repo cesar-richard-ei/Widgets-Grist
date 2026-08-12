@@ -96,7 +96,7 @@ Widgets-Grist/
 │       └── templates/
 │
 ├── published/                    # ZONE PUBLIÉE (déployée sur GitHub Pages)
-│   ├── manifest.json            # Catalogue des widgets (auto-généré)
+│   ├── manifest.json            # Catalogue (généré, non versionné)
 │   │
 │   ├── taskflow/                # Widgets TaskFlow publiés
 │   │   ├── package.json
@@ -157,7 +157,8 @@ Zone des widgets stables publiés. **Déployée sur GitHub Pages** via CI/CD.
 
 - Chaque widget a un `package.json` avec la section `grist` (métadonnées)
 - Structure requise : `widget-name/index.html` (ou `widget-name.html`)
-- Le `manifest.json` est auto-généré par le script
+- Le `manifest.json` est généré par le script, pas versionné : ses URL dépendent de `BASE_URL`
+- `lastUpdatedAt` vient du dernier commit touchant le dossier du widget, la génération est donc reproductible
 
 ### `packages/` — Widgets avec build
 
@@ -368,9 +369,11 @@ bien les URL nightly.
 
 ### Lint JavaScript
 
-`eslint.config.mjs` couvre les fichiers `.js` : `scripts/`, `tests/`, le core TaskFlow et les projets qui
-ont du JavaScript séparé. Le JavaScript en ligne des widgets HTML n'est pas analysé, les fonctions appelées
-depuis les attributs `onclick` y passeraient toutes pour du code mort.
+`eslint.config.mjs` couvre les fichiers `.js` et, via `eslint-plugin-html`, le JavaScript en ligne des
+widgets. Trois règles sont neutralisées sur le HTML, chacune pour une raison structurelle : `no-unused-vars`
+parce que les fonctions appelées depuis un attribut `onclick` passeraient pour du code mort,
+`no-useless-escape` parce que `<\/script>` doit rester échappé dans un script en ligne, et `no-undef` parce
+que les bibliothèques arrivent par balise `script`.
 
 ### `codeql.yml` — analyse statique
 
@@ -424,7 +427,7 @@ Les contrôles suivants sont actifs et valent la peine d'être connus avant de t
 
 - Utiliser semver dans les `package.json`
 - Le tag `vX.Y.Z` du dépôt est posé automatiquement à chaque push sur `main`, voir la section CI/CD
-- Le manifest inclut `lastUpdatedAt` automatiquement
+- Le manifest date chaque widget depuis l'historique git
 
 ### Commits
 

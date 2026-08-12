@@ -202,6 +202,8 @@ jobs:
         with:
           ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
           path: dev-src
+          # Historique complet : le manifest date chaque widget depuis les commits.
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Résoudre la dernière release
@@ -218,6 +220,7 @@ jobs:
         with:
           ref: ${{ steps.release.outputs.tag }}
           path: prod-src
+          fetch-depth: 0
           persist-credentials: false
 
       - name: Setup Node.js
