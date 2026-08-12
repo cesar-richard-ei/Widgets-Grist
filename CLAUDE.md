@@ -70,7 +70,9 @@ Ce repository contient des widgets personnalisés pour [Grist](https://www.getgr
 ```
 Widgets-Grist/
 ├── .github/
+│   ├── dependabot.yml            # Mises à jour actions et npm
 │   └── workflows/
+│       ├── ci.yml                # Lint, tests, tag SemVer automatique
 │       └── publish.yml           # CI/CD : build + deploy sur GitHub Pages
 │
 ├── .nojekyll                     # Désactive Jekyll sur GitHub Pages
@@ -134,6 +136,7 @@ Widgets-Grist/
 │
 └── scripts/
     ├── generate-manifest.js     # Génère manifest.json depuis published/
+    ├── next-version.js          # Calcule le prochain tag SemVer
     └── promote.js               # Copie de projects/ vers published/
 ```
 
@@ -320,7 +323,28 @@ npm run deploy
 
 ## CI/CD avec GitHub Actions
 
-Le workflow `.github/workflows/publish.yml` sert deux versions du site sur le même domaine :
+### `ci.yml` — contrôles et tag automatique
+
+Sur chaque PR et chaque push sur `main` : lint des workflows (actionlint et zizmor), tests unitaires plus
+vérification du core inline, tests Playwright. En cas d'échec e2e, le rapport HTML et les traces sont
+récupérables en artefact du run.
+
+Quand ces trois jobs passent sur un push vers `main`, le job `tag` crée un tag annoté `vX.Y.Z`. La version
+est calculée par `scripts/next-version.js` à partir des commits accumulés depuis le dernier tag stable :
+
+| Commit | Incrément |
+|--------|-----------|
+| `type!: ...` ou footer `BREAKING CHANGE:` | MAJOR, minor et patch remis à 0 |
+| `feat: ...` | MINOR, patch remis à 0 |
+| tout le reste, y compris hors convention | PATCH |
+
+Le bump le plus fort du lot l'emporte. Les tags de pre-release et les tags préfixés par widget
+(`taskflow-v1.1.2`) sont ignorés dans le calcul de la base. Un tag posé par le workflow ne redéclenche
+aucun autre workflow : rien n'est déployé ni publié à ce moment-là.
+
+### `publish.yml` — GitHub Pages
+
+Le workflow sert deux versions du site sur le même domaine :
 
 | Chemin | Contenu | Mis à jour par |
 |--------|---------|----------------|
@@ -335,8 +359,19 @@ de la dernière release, `/dev/` depuis `main`. Tant qu'aucune release n'existe,
 Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets référencent
 bien les URL nightly.
 
-Pour publier une version stable : `git tag vX.Y.Z && git push origin vX.Y.Z`, puis créer la release depuis ce tag
-(`gh release create vX.Y.Z`). Une pre-release ne met pas la racine à jour.
+### Publier une version stable
+
+Les tags sont posés par la CI, la release reste manuelle. Choisir le tag à figer et créer la release
+depuis ce tag :
+
+```bash
+gh release create v1.2.0 --generate-notes
+```
+
+Une release marquée pre-release (`--prerelease`) n'est jamais renvoyée par `releases/latest` et ne met donc
+pas la racine à jour : c'est le canal pour faire tester une version candidate sans l'imposer aux
+utilisateurs. Le tag correspondant porte alors un suffixe, par exemple `v1.2.0-rc.1`, que SemVer classe
+en précédence inférieure à `v1.2.0`. Ce tag est à poser à la main, la CI ne produit que des versions stables.
 
 ### Configuration GitHub Pages
 
@@ -354,7 +389,7 @@ Pour publier une version stable : `git tag vX.Y.Z && git push origin vX.Y.Z`, pu
 ### Versioning
 
 - Utiliser semver dans les `package.json`
-- Tag git pour les releases : `v1.0.0`
+- Le tag `vX.Y.Z` du dépôt est posé automatiquement à chaque push sur `main`, voir la section CI/CD
 - Le manifest inclut `lastUpdatedAt` automatiquement
 
 ### Commits
