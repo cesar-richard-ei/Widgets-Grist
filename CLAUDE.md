@@ -72,8 +72,8 @@ Widgets-Grist/
 ├── .github/
 │   ├── dependabot.yml            # Mises à jour actions et npm
 │   └── workflows/
-│       ├── ci.yml                # Lint, tests, tag SemVer automatique
-│       └── publish.yml           # CI/CD : build + deploy sur GitHub Pages
+│       ├── ci.yml                # Lint, tests, tag SemVer, deploy GitHub Pages
+│       └── codeql.yml            # Analyse statique
 │
 ├── .nojekyll                     # Désactive Jekyll sur GitHub Pages
 ├── .gitignore
@@ -323,11 +323,12 @@ npm run deploy
 
 ## CI/CD avec GitHub Actions
 
-### `ci.yml` — contrôles et tag automatique
+### `ci.yml` — contrôles, tag et déploiement
 
 Sur chaque PR et chaque push sur `main` : lint des workflows (actionlint et zizmor), tests unitaires plus
 vérification du core inline, tests Playwright. En cas d'échec e2e, le rapport HTML et les traces sont
-récupérables en artefact du run.
+récupérables en artefact du run. Le job `tests` agrège ces trois jobs et fournit le contexte unique exigé
+par le ruleset de `main` : ajouter ou renommer un job ne demande donc pas de toucher aux réglages du dépôt.
 
 Quand ces trois jobs passent sur un push vers `main`, le job `tag` crée un tag annoté `vX.Y.Z`. La version
 est calculée par `scripts/next-version.js` à partir des commits accumulés depuis le dernier tag stable :
@@ -342,22 +343,29 @@ Le bump le plus fort du lot l'emporte. Les tags de pre-release et les tags préf
 (`taskflow-v1.1.2`) sont ignorés dans le calcul de la base. Un tag posé par le workflow ne redéclenche
 aucun autre workflow : rien n'est déployé ni publié à ce moment-là.
 
-### `publish.yml` — GitHub Pages
+### GitHub Pages
 
-Le workflow sert deux versions du site sur le même domaine :
+Les jobs `pages-build` et `pages-deploy`, en fin de `ci.yml`, servent deux versions du site sur le même
+domaine :
 
 | Chemin | Contenu | Mis à jour par |
 |--------|---------|----------------|
 | `/` | version stable | publication d'une release GitHub |
 | `/dev/` | version nightly | push sur `main` |
 
-Il se déclenche sur push vers `main` (si `published/`, `packages/` ou `scripts/` modifiés), sur publication
-d'une release, et manuellement. À chaque exécution il reconstruit le site entier : la racine depuis le tag
-de la dernière release, `/dev/` depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis
-`main` et le workflow émet un avertissement.
+Ils dépendent de `tests` et ne tournent jamais sur une PR : rien n'est servi tant que les contrôles ne sont
+pas verts. Chaque exécution reconstruit le site entier, la racine depuis le tag de la dernière release,
+`/dev/` depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis `main` et le workflow
+émet un avertissement.
 
 Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets référencent
 bien les URL nightly.
+
+### `codeql.yml` — analyse statique
+
+CodeQL passe sur le JavaScript et sur les workflows eux-mêmes, à chaque PR, à chaque push sur `main` et une
+fois par semaine. `published/` est exclu par `.github/codeql/config.yml` puisque c'est une copie de
+`projects/`. Les alertes remontent dans l'onglet Security, elles ne bloquent pas le merge.
 
 ### Publier une version stable
 
