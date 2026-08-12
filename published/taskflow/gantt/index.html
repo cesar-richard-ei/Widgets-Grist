@@ -623,6 +623,7 @@
                 <select id="colorSelect" onchange="changeColorMode(this.value)" title="Couleur des barres">
                     <option value="priority">Couleur: Priorité</option>
                     <option value="project">Couleur: Projet</option>
+                    <option value="responsable">Couleur: Responsable</option>
                     <option value="assignee">Couleur: Assigné</option>
                     <option value="status">Couleur: Statut</option>
                 </select>
@@ -1380,6 +1381,7 @@
             if (t?.couleur && /^#[0-9a-f]{3,8}$/i.test(t.couleur)) return t.couleur;
             switch (colorMode) {
                 case 'project': return t?.projet ? getProjectColor(t.projet) : '#94a3b8';
+                case 'responsable': return t?.Responsable ? getTeamMemberColor(t.Responsable) : '#94a3b8';
                 case 'assignee': { const a = getAssigneesArray(t); return a.length ? getTeamMemberColor(a[0]) : '#94a3b8'; }
                 case 'status': return TF.getStatus(statusCfg, t?.statut || statusCfg.firstValue).fillColor;
                 case 'priority':
@@ -1819,6 +1821,23 @@
             colorMode = mode;
             render();
         }
+
+        // Demande métier : une ligne peut prendre la couleur de son responsable, lue sur son enregistrement
+        // dans les effectifs. Le mode n'a rien à colorer sur un document sans cette colonne, il n'y est donc
+        // pas proposé.
+        // Le défaut reste le projet : sur le document du métier, le responsable n'est renseigné que sur une
+        // poignée de lignes, et colorer par responsable rendrait le Gantt presque entièrement gris. Basculer
+        // le défaut quand la colonne sera remplie.
+        function entretenirOptionResponsable() {
+            const disponible = TASK_COLS.has('Responsable');
+            const select = document.getElementById('colorSelect');
+            const option = select && select.querySelector('option[value="responsable"]');
+            if (!disponible) {
+                if (option) option.remove();
+                if (colorMode === 'responsable') colorMode = 'project';
+                if (select) select.value = colorMode;
+            }
+        }
         // Édite la couleur d'un projet (lue par tous les widgets TaskFlow via getProjectColor)
         async function setProjectColor(projectId, color) {
             const p = projects.find(x => x.id === projectId);
@@ -1962,7 +1981,7 @@
             } else if (colorMode === 'project') {
                 const visible = projects.filter(p => p.actif !== false).slice(0, 8);
                 html = visible.map(p => item(p.couleur || '#64748b', escapeHtml(p.nom))).join('');
-            } else if (colorMode === 'assignee') {
+            } else if (colorMode === 'assignee' || colorMode === 'responsable') {
                 const visible = team.filter(m => m.actif !== false).slice(0, 8);
                 html = visible.map(m => item(getTeamMemberColor(m.id), escapeHtml(m.nom))).join('');
             }
@@ -3529,6 +3548,7 @@
             try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; }
             gristReady = true;
             await fusionnerChantiers();
+            entretenirOptionResponsable();
             rebuildChildrenCache();
             sortTasks();
             try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', tasks.map(t => t && t.statut), schemaMeta); } catch (e) {}

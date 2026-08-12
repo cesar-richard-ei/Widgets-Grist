@@ -400,6 +400,18 @@ Utilisée par les pickers Project/Team. Tasks.couleur utilise un `<input type="c
 3. fallback '#94a3b8' (gris neutre)
 ```
 
+### Mode « Responsable » (Gantt)
+
+`Tasks.Responsable` et `Chantiers.Responsable` désignent un membre des effectifs, dont la couleur
+habille la ligne. Le mode n'est proposé que si `TASK_COLS.has('Responsable')`, sinon
+`entretenirOptionResponsable()` retire l'option du sélecteur : sans la colonne il n'y a rien à
+colorer. À distinguer du mode « Assigné », qui prend le **premier** assigné, là où le responsable est
+une donnée unique portée par la ligne.
+
+**Le défaut reste `project`.** Sur le document du métier, `Responsable` n'est renseigné que sur 2
+tâches sur 79 et sur aucun chantier : basculer le défaut rendrait le Gantt presque entièrement gris,
+alors que le mode projet colore 26 barres sur 27. À rebasculer quand la colonne sera remplie.
+
 ### Mode "Colorer par" / tri — persistance locale (sauf Gantt)
 
 Pour **Kanban et Calendar**, `colorMode` et `sortMode` sont stockés en `localStorage` par widget (clés `taskflow_<widget>_colormode`, `taskflow_<widget>_sort`), sans `grist.setOption` (Grist marque sinon le document comme modifié à chaque changement de préférence UI).
