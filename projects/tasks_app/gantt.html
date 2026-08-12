@@ -3696,6 +3696,24 @@
         document.addEventListener('dragend', terminerGesteSouris, true);
         document.addEventListener('drop', terminerGesteSouris, true);
 
+        // Grist ne notifie que la table du widget : une modification dans les effectifs, les projets ou les
+        // chantiers passe inaperçue, et la vue garde des couleurs ou des libellés périmés. On relit quand le
+        // widget reprend la main, ce qui couvre le geste réel : aller modifier la table, puis revenir.
+        // Le drapeau évite une seconde lecture à l'ouverture, où un 'focus' arrive sans qu'on ait rien perdu.
+        let mainPerdue = false;
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'hidden') mainPerdue = true;
+            else relireSiLaMainRevient();
+        });
+        window.addEventListener('blur', () => { mainPerdue = true; });
+        window.addEventListener('focus', relireSiLaMainRevient);
+
+        function relireSiLaMainRevient() {
+            if (!mainPerdue || !gristReady || gesteSourisEnCours) return;
+            mainPerdue = false;
+            loadAllData();
+        }
+
         document.addEventListener('click', (e) => {
             // Fermer les menus dropdown
             if (!e.target.closest('.filter-dropdown')) {

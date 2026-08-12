@@ -123,6 +123,24 @@ test('la legende liste les membres en mode Responsable', async ({ page }) => {
     await expect(page.locator('#ganttLegend')).toContainText('Bob');
 });
 
+// Grist ne notifie que la table du widget : modifier les effectifs, les projets ou les chantiers
+// passe inapercu. Le widget relit quand il reprend la main, ce qui couvre le geste reel, aller
+// changer une couleur dans la table puis revenir sur le Gantt.
+test('changer la couleur d un membre est repris au retour sur le widget', async ({ page }) => {
+    await ouvrirGantt(page, DOC_AVEC_RESPONSABLE);
+    await page.locator('#colorSelect').selectOption('responsable');
+    expect(await fondDeLaBarre(page, 'Socle technique')).toContain(enRgb(VERT));
+
+    await page.evaluate(() => window.grist.docApi.applyUserActions([['UpdateRecord', 'Team', 2, { couleur: '#ff0000' }]]));
+
+    // Rien ne bouge tant que le widget n'a pas reperdu puis reprit la main.
+    expect(await fondDeLaBarre(page, 'Socle technique')).toContain(enRgb(VERT));
+
+    await page.evaluate(() => { window.dispatchEvent(new Event('blur')); window.dispatchEvent(new Event('focus')); });
+
+    await expect.poll(() => fondDeLaBarre(page, 'Socle technique')).toContain('rgb(255, 0, 0)');
+});
+
 test('sans colonne Responsable, le mode n est pas propose', async ({ page }) => {
     await ouvrirGantt(page, DOC_SANS_RESPONSABLE);
 

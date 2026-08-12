@@ -412,6 +412,21 @@ une donnée unique portée par la ligne.
 tâches sur 79 et sur aucun chantier : basculer le défaut rendrait le Gantt presque entièrement gris,
 alors que le mode projet colore 26 barres sur 27. À rebasculer quand la colonne sera remplie.
 
+### Relecture au retour sur le widget (Gantt)
+
+`grist.onRecords` ne notifie que la table du widget, `Tasks`. Une modification dans `Team`, `Projects`
+ou `Chantiers` passe donc inaperçue : couleurs et libellés restent périmés jusqu'à un rechargement de
+la page. Cas concret rencontré : changer la couleur d'un membre ne changeait pas les barres colorées
+par responsable.
+
+Le Gantt relit donc l'ensemble quand il **reprend la main** (`focus`, ou `visibilitychange` qui
+redevient visible), ce qui couvre le geste réel : aller modifier la table, puis revenir. Le drapeau
+`mainPerdue` évite une seconde lecture à l'ouverture, où un `focus` arrive sans qu'on ait rien perdu,
+et la relecture est sautée pendant un geste souris.
+
+**Limite connue** : si Grist ne redonne pas le focus à l'iframe au retour sur la page, il faut un clic
+dans le widget. Un changement d'onglet du navigateur, lui, est couvert par `visibilitychange`.
+
 ### Mode "Colorer par" / tri — persistance locale (sauf Gantt)
 
 Pour **Kanban et Calendar**, `colorMode` et `sortMode` sont stockés en `localStorage` par widget (clés `taskflow_<widget>_colormode`, `taskflow_<widget>_sort`), sans `grist.setOption` (Grist marque sinon le document comme modifié à chaque changement de préférence UI).
