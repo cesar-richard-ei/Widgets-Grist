@@ -50,10 +50,6 @@ function readCore() {
     return fs.readFileSync(CORE_PATH, 'utf8').replace(/\r\n/g, '\n').replace(/\s+$/, '');
 }
 
-function indentBlock(block, indent) {
-    return block.split('\n').map(line => (line.length ? indent + line : line)).join('\n');
-}
-
 function buildFile(filePath, core, check) {
     const name = path.relative(ROOT, filePath);
     if (!fs.existsSync(filePath)) {

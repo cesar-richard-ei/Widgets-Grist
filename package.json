@@ -14,7 +14,11 @@
     "serve:dev": "node scripts/serve-dev.js",
     "serve": "npx serve published -p 3000 --cors",
     "test": "node --test tests/unit/*.test.js",
+    "lint": "eslint .",
     "test:e2e": "playwright test"
+  },
+  "engines": {
+    "node": ">=24"
   },
   "repository": {
     "type": "git",
@@ -31,6 +35,9 @@
   "author": "nicO1asFr",
   "license": "MIT",
   "devDependencies": {
-    "@playwright/test": "^1.61.1"
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.61.1",
+    "eslint": "^10.8.1",
+    "globals": "^17.10.0"
   }
 }

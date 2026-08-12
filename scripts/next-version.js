@@ -53,17 +53,27 @@ function latestStable(tags) {
     return meilleur ? formatVersion(meilleur) : null;
 }
 
+/**
+ * @returns {{type: string, scope: string|null, rupture: boolean}|null}
+ */
+function parseHeader(message) {
+    const entete = String(message).trim().split('\n', 1)[0];
+    const trouve = ENTETE_CONVENTIONNELLE.exec(entete);
+    if (!trouve) return null;
+    return { type: trouve[1].toLowerCase(), scope: trouve[2] || null, rupture: Boolean(trouve[3]) };
+}
+
 function bumpFor(message) {
     const texte = String(message).trim();
     if (!texte) return 'patch';
 
     const entete = texte.split('\n', 1)[0];
     const corps = texte.slice(entete.length);
-    const trouve = ENTETE_CONVENTIONNELLE.exec(entete);
+    const trouve = parseHeader(entete);
 
-    if (trouve && trouve[3]) return 'major';
+    if (trouve && trouve.rupture) return 'major';
     if (FOOTER_RUPTURE.test(corps)) return 'major';
-    if (trouve && trouve[1].toLowerCase() === 'feat') return 'minor';
+    if (trouve && trouve.type === 'feat') return 'minor';
     return 'patch';
 }
 
@@ -128,4 +138,4 @@ function main() {
 
 if (require.main === module) main();
 
-module.exports = { parseVersion, compareVersions, latestStable, bumpFor, highestBump, nextVersion };
+module.exports = { parseVersion, compareVersions, latestStable, parseHeader, bumpFor, highestBump, nextVersion };
