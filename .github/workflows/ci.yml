@@ -102,10 +102,28 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  # Contexte unique exige par le ruleset de main : il agrege les jobs au-dessus,
+  # qui peuvent donc bouger sans toucher aux reglages du depot.
+  tests:
+    name: tests
+    if: always()
+    needs: [workflows, unit, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verdict
+        env:
+          RESULTATS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Jobs : ${RESULTATS}"
+          case "${RESULTATS}" in
+            *failure*|*cancelled*|*skipped*) exit 1 ;;
+          esac
+
   tag:
     name: Tag SemVer
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [workflows, unit, e2e]
+    needs: [tests]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
