@@ -231,6 +231,30 @@ async function fusionnerChantiers() {
     tasks = chantiers.concat(tasks);
 }
 
+// Données du volet pour un chantier. Les dates absentes sont préremplies depuis ses tâches, tout en
+// restant modifiables ; les assignés et les charges sont des remontées de ses tâches, pas des
+// valeurs propres au chantier.
+function donneesChantier(c) {
+    const taches = getAllDescendants(c.id).filter(t => !estChantier(t));
+    const bornes = aggregateDates(c);
+    const assignes = [];
+    for (const t of taches) for (const id of getAssigneesArray(t)) if (!assignes.includes(id)) assignes.push(id);
+    const cumul = new Map();
+    for (const t of taches) {
+        for (const ch of TF.parseCharges(t.charges)) cumul.set(ch.teamId, (cumul.get(ch.teamId) || 0) + (Number(ch.heures) || 0));
+    }
+    return {
+        titre: c.titre, description: c.description || '', type: 'chantier',
+        dateDebut: c.dateDebut || bornes.start || null,
+        dateEcheance: c.dateEcheance || bornes.end || null,
+        projet: c.projet || null,
+        assignees: assignes,
+        charges: Array.from(cumul, ([teamId, heures]) => ({ teamId: teamId, heures: heures })),
+        dependDe: [], tags: [], subtasks: [], progression: 0, priorite: null,
+        estimationH: null, tempsPasse: null, couleur: null, parentTask: null
+    };
+}
+
 function rebuildChildrenCache() {
     childrenByParent = new Map();
     // WBS-FIX: ignorer les parentTask qui formeraient un cycle (self-ref ou chaîne circulaire)
@@ -1237,9 +1261,6 @@ function confirmClosePanel() {
 function openTaskPanel(taskId) {
     const task = tasks.find(t => t.id === taskId);
     if (!task) return;
-    // Le volet chantier n'existe pas encore : ouvrir le volet tâche sur un chantier ferait écrire
-    // son identifiant décalé dans Tasks.
-    if (estChantier(task)) { selectedTaskId = taskId; render(); return; }
 
     // Ecrit la saisie en cours avant de basculer sur une autre tache, meme condition que closePanel.
     if (panelState.dirty && !panelState.isNew && gristReady) saveTaskToGrist();
@@ -1250,9 +1271,10 @@ function openTaskPanel(taskId) {
     const idx = panelState.taskList.findIndex(t => t.id === taskId);
 
     panelState.isNew = false;
+    panelState.estChantier = estChantier(task);
     panelState.taskId = taskId;
     panelState.taskIndex = idx >= 0 ? idx : 0;
-    panelState.editData = cloneTaskData(task);
+    panelState.editData = panelState.estChantier ? donneesChantier(task) : cloneTaskData(task);
 
     renderPanel();
     openPanel();
@@ -1357,12 +1379,46 @@ function navigatePanelTask(dir) {
     if (t) openTaskPanel(t.id);
 }
 
+// Le cadrage masque plusieurs champs sur un chantier, remplace les sous-tâches par un bouton
+// d'ajout, et fait remonter assignés et charges depuis les tâches. Adapter le volet après rendu
+// évite de dupliquer sa construction, commune aux tâches et aux chantiers.
+// Les prérequis sont retirés faute de dépendances exploitables côté Chantiers : le cadrage ne les
+// mentionne pas, et les laisser ouvrirait une écriture sans destination.
+function adapterVoletChantier(racine) {
+    const champsMasques = ['Priorité', 'Progression', 'Parent', 'Couleur'];
+    for (const row of racine.querySelectorAll('.prop-row')) {
+        const label = row.querySelector('.prop-label');
+        if (label && champsMasques.includes(label.textContent.trim())) row.remove();
+    }
+
+    const sectionsMasquees = ['Planning', 'Checklist', 'Prérequis'];
+    for (const section of racine.querySelectorAll('.panel-section')) {
+        const titre = section.querySelector('.panel-section-title');
+        if (!titre) continue;
+        const nom = titre.textContent.trim();
+        if (sectionsMasquees.includes(nom)) { section.remove(); continue; }
+        if (nom.startsWith('Sous-tâches')) titre.textContent = 'Tâches';
+    }
+
+    for (const bouton of racine.querySelectorAll('button')) {
+        if (bouton.textContent.trim() === '+ Sous-tâche') bouton.textContent = '+ Ajouter une tâche';
+    }
+
+    // Assignés et charges sont des remontées des tâches : rien ne s'édite ici.
+    const selecteur = racine.querySelector('#assigneesSelect');
+    if (selecteur) selecteur.remove();
+    racine.querySelectorAll('.asg-x').forEach(x => x.remove());
+    racine.querySelectorAll('.charge-row input').forEach(i => { i.disabled = true; });
+}
+
 function renderPanel() {
     const header = document.getElementById('panelHeader');
     const content = document.getElementById('panelContent');
     const footer = document.getElementById('panelFooter');
     const data = panelState.editData;
     if (!data) { closePanel(); return; }
+    // Volet chantier : type non modifiable, et les champs que le cadrage masque restent absents.
+    const chantier = !!panelState.estChantier;
 
     const canNavigate = panelState.taskList.length > 1 && !panelState.isNew;
     const navLabel = !panelState.isNew && panelState.taskList.length > 1 ? (panelState.taskIndex + 1) + '/' + panelState.taskList.length : '';
@@ -1453,9 +1509,10 @@ function renderPanel() {
     content.innerHTML =
         '<div class="panel-accent-bar" style="background:' + priorityColor + '"></div>' +
         '<div class="panel-type-row">' +
+            (chantier ? '<span class="type-pill selected">Chantier</span>' :
             '<span class="type-pill ' + (data.type === 'tache' ? 'selected' : '') + '" onclick="updateField(\'type\',\'tache\')">Tâche</span>' +
             '<span class="type-pill ' + (data.type === 'jalon' ? 'selected' : '') + '" onclick="updateField(\'type\',\'jalon\')">◆ Jalon</span>' +
-            '<span class="type-pill ' + (data.type === 'reunion' ? 'selected' : '') + '" onclick="updateField(\'type\',\'reunion\')"> Réunion</span>' +
+            '<span class="type-pill ' + (data.type === 'reunion' ? 'selected' : '') + '" onclick="updateField(\'type\',\'reunion\')"> Réunion</span>') +
         '</div>' +
         (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
         '<input type="text" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" value="' + escapeHtml(data.titre) + '" oninput="updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' +
@@ -1464,7 +1521,7 @@ function renderPanel() {
             '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
                 (data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => '<div class="status-pill ' + (data.statut === s.value ? 'selected' : '') + '" data-status="' + escapeHtml(s.value) + '" onclick="updateField(\'statut\', this.dataset.status)"><span class="panel-pill-dot" style="background:' + s.fillColor + '"></span>' + escapeHtml(s.label) + '</div>').join('') +
             '</div></div></div>' +
-            (data.type !== 'reunion' ?
+            (data.type !== 'reunion' && !chantier ?
                 '<div class="prop-row"><span class="prop-label">Priorité</span><div class="prop-value"><div class="priority-selector">' +
                     '<div class="priority-pill p1 ' + (data.priorite == '1' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'1\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[1] + '"></span>Critique</div>' +
                     '<div class="priority-pill p2 ' + (data.priorite == '2' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'2\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[2] + '"></span>Haute</div>' +
@@ -1575,9 +1632,11 @@ function renderPanel() {
         (!panelState.isNew ?
             '<div class="panel-footer-left"><button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 14px">Suppr.</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
 
+    if (chantier) adapterVoletChantier(content);
+
     if (panelState.isNew) {
         const canCreate = data.titre && data.titre.trim().length > 0;
-        footer.innerHTML = '<div style="display:flex;gap:8px;width:100%"><button class="panel-btn" style="flex:0 0 auto;width:auto;padding:10px 16px;background:transparent;color:var(--text-muted);border:1px solid var(--border)" onclick="closePanel()">Annuler</button><button class="panel-btn success" onclick="createTask()" ' + (!canCreate ? 'disabled' : '') + ' style="flex:1;width:auto">Créer la tâche</button></div>';
+        footer.innerHTML = '<div style="display:flex;gap:8px;width:100%"><button class="panel-btn" style="flex:0 0 auto;width:auto;padding:10px 16px;background:transparent;color:var(--text-muted);border:1px solid var(--border)" onclick="closePanel()">Annuler</button><button class="panel-btn success" onclick="createTask()" ' + (!canCreate ? 'disabled' : '') + ' style="flex:1;width:auto">Créer la ' + (chantier ? 'chantier' : 'tâche') + '</button></div>';
     } else {
         footer.innerHTML = '';
     }
@@ -1862,6 +1921,7 @@ async function saveTaskToGrist() {
         showToast('La date de début ne peut pas dépasser la date de fin', 'error');
         return;
     }
+    if (panelState.estChantier) { await saveChantierToGrist(data); return; }
 
     const record = {
         titre: data.titre, description: data.description, type: data.type, priorite: data.priorite,
@@ -1878,6 +1938,28 @@ async function saveTaskToGrist() {
         showSaveIndicator();
         const idx = tasks.findIndex(t => t.id === panelState.taskId);
         if (idx !== -1) tasks[idx] = { ...tasks[idx], ...record };
+    } catch (e) {
+        console.error(e);
+        showToast('Erreur sauvegarde', 'error');
+    }
+}
+
+// Enregistre un chantier dans sa propre table. L'identifiant affiché est décalé de ID_CHANTIER :
+// seul l'identifiant réel part dans l'écriture. Les contributeurs remontent des tâches, ils ne sont
+// écrits qu'ici, à l'enregistrement, et jamais au chargement du volet.
+async function saveChantierToGrist(data) {
+    const idChantier = panelState.taskId - ID_CHANTIER;
+    if (idChantier <= 0) return;
+    const record = {
+        Nom_du_chantier: data.titre, Description: data.description,
+        Date_debut: data.dateDebut || null, Date_fin: data.dateEcheance || null,
+        Contributeurs: toGristRefList(data.assignees)
+    };
+    try {
+        await grist.docApi.applyUserActions([['UpdateRecord', 'Chantiers', idChantier, record]]);
+        showSaveIndicator();
+        const idx = tasks.findIndex(t => t.id === panelState.taskId);
+        if (idx !== -1) tasks[idx] = Object.assign({}, tasks[idx], { titre: data.titre, description: data.description, dateDebut: record.Date_debut, dateEcheance: record.Date_fin });
     } catch (e) {
         console.error(e);
         showToast('Erreur sauvegarde', 'error');
