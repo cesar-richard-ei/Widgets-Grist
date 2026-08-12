@@ -1,0 +1,300 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  # On n'annule que les runs de PR : un run de main doit aller jusqu'au tag.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  workflows:
+    name: Lint des workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        run: docker run --rm --volume "${PWD}:/repo" --workdir /repo rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 -color
+
+      - name: zizmor
+        run: pipx run zizmor==1.29.0 --persona regular .github/workflows
+
+  unit:
+    name: Tests unitaires
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        # zizmor: ignore[cache-poisoning] les caches ne servent qu'aux tests, le
+        # site publie est construit sans cache
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Installation des dependances
+        run: npm ci
+
+      - name: Tests unitaires
+        run: npm test
+
+      - name: Synchronisation des sources inlinees
+        run: npm run check:inline
+
+      - name: Lint JavaScript
+        run: npm run lint
+
+  commits:
+    name: Messages de commit
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Convention des messages
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          TETE: ${{ github.event.pull_request.head.sha }}
+        run: node scripts/check-commits.js "${BASE}..${TETE}"
+
+  e2e:
+    name: Tests de bout en bout
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        # zizmor: ignore[cache-poisoning] les caches ne servent qu'aux tests, le
+        # site publie est construit sans cache
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Installation des dependances
+        run: npm ci
+
+      - name: Version de Playwright
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Cache des navigateurs
+        # zizmor: ignore[cache-poisoning]
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Installation du navigateur
+        run: npx playwright install --with-deps chromium
+
+      - name: Tests de bout en bout
+        run: npm run test:e2e
+
+      - name: Rapport d'echec
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: rapport-playwright
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  # Contexte unique exige par le ruleset de main : il agrege les jobs au-dessus,
+  # qui peuvent donc bouger sans toucher aux reglages du depot.
+  tests:
+    name: tests
+    if: always()
+    needs: [workflows, unit, e2e]
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Verdict
+        env:
+          RESULTATS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          echo "Jobs : ${RESULTATS}"
+          case "${RESULTATS}" in
+            *failure*|*cancelled*|*skipped*) exit 1 ;;
+          esac
+
+  tag:
+    name: Tag SemVer
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Calcul de la version
+        id: version
+        run: node scripts/next-version.js >> "$GITHUB_OUTPUT"
+
+      - name: Creation du tag
+        if: steps.version.outputs.bump != 'none'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+          BUMP: ${{ steps.version.outputs.bump }}
+        run: |
+          set -euo pipefail
+          objet=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags" \
+            --raw-field "tag=v${VERSION}" \
+            --raw-field "message=v${VERSION}" \
+            --raw-field "object=${GITHUB_SHA}" \
+            --raw-field type=commit \
+            --jq .sha)
+          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
+            --raw-field "ref=refs/tags/v${VERSION}" \
+            --raw-field "sha=${objet}" > /dev/null
+          echo "Tag \`v${VERSION}\` (bump ${BUMP})" >> "${GITHUB_STEP_SUMMARY}"
+
+  pages-build:
+    name: Construction du site
+    if: github.event_name != 'pull_request'
+    needs: [tests]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout main
+        # On construit le commit valide par les jobs precedents et pas la tete
+        # de main, qui peut avoir avance entre-temps.
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
+          path: dev-src
+          # Historique complet : le manifest date chaque widget depuis les commits.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Résoudre la dernière release
+        id: release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name || true)
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout de la release
+        if: steps.release.outputs.tag != ''
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+          path: prod-src
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: dev-src/.nvmrc
+          # Pas de cache npm sur le chemin de deploiement : le contenu servi ne
+          # doit dependre que du depot.
+          package-manager-cache: false
+
+      - name: Construire le site
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY%/*}"
+          repo="${GITHUB_REPOSITORY#*/}"
+          base="https://${owner}.github.io/${repo}"
+
+          build() {
+            (
+              cd "$1"
+              npm ci --ignore-scripts || {
+                echo "::warning::Lockfile desynchronise dans $1, repli sur npm install"
+                npm install --ignore-scripts
+              }
+              npm run build --if-present
+              GITHUB_USER="$owner" REPO_NAME="$repo" BASE_URL="$2" node scripts/generate-manifest.js
+            )
+          }
+
+          prod_src=prod-src
+          if [ ! -d "$prod_src" ]; then
+            echo "::warning::Aucune release publiée : la racine est servie depuis main"
+            prod_src=dev-src
+          fi
+
+          build "$prod_src" "$base"
+          mkdir -p site
+          cp -r "$prod_src/published/." site/
+
+          build dev-src "${base}/dev"
+          mkdir -p site/dev
+          cp -r dev-src/published/. site/dev/
+
+          echo "Arborescence du site :"
+          find site -maxdepth 2 -mindepth 1 | sort
+          echo "URL du premier widget, racine : $(node -e 'process.stdout.write(require("./site/manifest.json")[0].url)')"
+          echo "URL du premier widget, dev    : $(node -e 'process.stdout.write(require("./site/dev/manifest.json")[0].url)')"
+
+      - name: Setup Pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: './site'
+
+  pages-deploy:
+    name: Déploiement GitHub Pages
+    needs: [pages-build]
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      pages: write
+      id-token: write
+    concurrency:
+      # Un deploiement en cours n'est pas interrompu : deux publications a
+      # quelques secondes d'intervalle s'enchainent, la plus recente reste active.
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

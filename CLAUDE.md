@@ -70,8 +70,10 @@ Ce repository contient des widgets personnalisés pour [Grist](https://www.getgr
 ```
 Widgets-Grist/
 ├── .github/
+│   ├── dependabot.yml            # Mises à jour actions et npm
 │   └── workflows/
-│       └── publish.yml           # CI/CD : build + deploy sur GitHub Pages
+│       ├── ci.yml                # Lint, tests, tag SemVer, deploy GitHub Pages
+│       └── codeql.yml            # Analyse statique
 │
 ├── .nojekyll                     # Désactive Jekyll sur GitHub Pages
 ├── .gitignore
@@ -94,7 +96,7 @@ Widgets-Grist/
 │       └── templates/
 │
 ├── published/                    # ZONE PUBLIÉE (déployée sur GitHub Pages)
-│   ├── manifest.json            # Catalogue des widgets (auto-généré)
+│   ├── manifest.json            # Catalogue (généré, non versionné)
 │   │
 │   ├── taskflow/                # Widgets TaskFlow publiés
 │   │   ├── package.json
@@ -133,7 +135,10 @@ Widgets-Grist/
 │   └── patterns.md              # Modales, filtres, UI patterns
 │
 └── scripts/
+    ├── build-inline.js          # Inline les sources .js dans les widgets HTML
+    ├── check-commits.js         # Vérifie la convention des messages de commit
     ├── generate-manifest.js     # Génère manifest.json depuis published/
+    ├── next-version.js          # Calcule le prochain tag SemVer
     └── promote.js               # Copie de projects/ vers published/
 ```
 
@@ -153,7 +158,8 @@ Zone des widgets stables publiés. **Déployée sur GitHub Pages** via CI/CD.
 
 - Chaque widget a un `package.json` avec la section `grist` (métadonnées)
 - Structure requise : `widget-name/index.html` (ou `widget-name.html`)
-- Le `manifest.json` est auto-généré par le script
+- Le `manifest.json` est généré par le script, pas versionné : ses URL dépendent de `BASE_URL`
+- `lastUpdatedAt` vient du dernier commit touchant le dossier du widget, la génération est donc reproductible
 
 ### `packages/` — Widgets avec build
 
@@ -305,6 +311,9 @@ packages/mon-widget-react/
 # Installer les dépendances (workspaces)
 npm install
 
+# Lint JavaScript
+npm run lint
+
 # Générer le manifest.json
 npm run manifest
 
@@ -320,28 +329,92 @@ npm run deploy
 
 ## CI/CD avec GitHub Actions
 
-Le workflow `.github/workflows/publish.yml` sert deux versions du site sur le même domaine :
+### `ci.yml` — contrôles, tag et déploiement
+
+Sur chaque PR et chaque push sur `main` : lint des workflows (actionlint et zizmor), lint JavaScript
+(ESLint), tests unitaires plus vérification du core inline, tests Playwright. Sur les PR uniquement, un job
+vérifie que chaque message de commit suit Conventional Commits, puisque la version en dépend. En cas d'échec e2e, le rapport HTML et les traces sont
+récupérables en artefact du run. Le job `tests` agrège ces trois jobs et fournit le contexte unique exigé
+par le ruleset de `main` : ajouter ou renommer un job ne demande donc pas de toucher aux réglages du dépôt.
+
+Quand ces trois jobs passent sur un push vers `main`, le job `tag` crée un tag annoté `vX.Y.Z`. La version
+est calculée par `scripts/next-version.js` à partir des commits accumulés depuis le dernier tag stable :
+
+| Commit | Incrément |
+|--------|-----------|
+| `type!: ...` ou footer `BREAKING CHANGE:` | MAJOR, minor et patch remis à 0 |
+| `feat: ...` | MINOR, patch remis à 0 |
+| tout le reste, y compris hors convention | PATCH |
+
+Le bump le plus fort du lot l'emporte. Les tags de pre-release et les tags préfixés par widget
+(`taskflow-v1.1.2`) sont ignorés dans le calcul de la base. Un tag posé par le workflow ne redéclenche
+aucun autre workflow : rien n'est déployé ni publié à ce moment-là.
+
+### GitHub Pages
+
+Les jobs `pages-build` et `pages-deploy`, en fin de `ci.yml`, servent deux versions du site sur le même
+domaine :
 
 | Chemin | Contenu | Mis à jour par |
 |--------|---------|----------------|
 | `/` | version stable | publication d'une release GitHub |
 | `/dev/` | version nightly | push sur `main` |
 
-Il se déclenche sur push vers `main` (si `published/`, `packages/` ou `scripts/` modifiés), sur publication
-d'une release, et manuellement. À chaque exécution il reconstruit le site entier : la racine depuis le tag
-de la dernière release, `/dev/` depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis
-`main` et le workflow émet un avertissement.
+Ils dépendent de `tests` et ne tournent jamais sur une PR : rien n'est servi tant que les contrôles ne sont
+pas verts. Chaque exécution reconstruit le site entier, la racine depuis le tag de la dernière release,
+`/dev/` depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis `main` et le workflow
+émet un avertissement.
 
 Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets référencent
 bien les URL nightly.
 
-Pour publier une version stable : `git tag vX.Y.Z && git push origin vX.Y.Z`, puis créer la release depuis ce tag
-(`gh release create vX.Y.Z`). Une pre-release ne met pas la racine à jour.
+### Lint JavaScript
+
+`eslint.config.mjs` couvre les fichiers `.js` et, via `eslint-plugin-html`, le JavaScript en ligne des
+widgets. Trois règles sont neutralisées sur le HTML, chacune pour une raison structurelle : `no-unused-vars`
+parce que les fonctions appelées depuis un attribut `onclick` passeraient pour du code mort,
+`no-useless-escape` parce que `<\/script>` doit rester échappé dans un script en ligne, et `no-undef` parce
+que les bibliothèques arrivent par balise `script`.
+
+### `codeql.yml` — analyse statique
+
+CodeQL passe sur le JavaScript et sur les workflows eux-mêmes, à chaque PR, à chaque push sur `main` et une
+fois par semaine. `published/` est exclu par `.github/codeql/config.yml` puisque c'est une copie de
+`projects/`. Les alertes remontent dans l'onglet Security, elles ne bloquent pas le merge.
+
+### Publier une version stable
+
+Les tags sont posés par la CI, la release reste manuelle. Choisir le tag à figer et créer la release
+depuis ce tag :
+
+```bash
+gh release create v1.2.0 --generate-notes
+```
+
+Une release marquée pre-release (`--prerelease`) n'est jamais renvoyée par `releases/latest` et ne met donc
+pas la racine à jour : c'est le canal pour faire tester une version candidate sans l'imposer aux
+utilisateurs. Le tag correspondant porte alors un suffixe, par exemple `v1.2.0-rc.1`, que SemVer classe
+en précédence inférieure à `v1.2.0`. Ce tag est à poser à la main, la CI ne produit que des versions stables.
 
 ### Configuration GitHub Pages
 
 1. Settings → Pages
 2. Source : GitHub Actions
+
+L'environnement `github-pages` n'accepte les déploiements que depuis `main` et les tags `v*`.
+
+### Réglages du dépôt
+
+Les contrôles suivants sont actifs et valent la peine d'être connus avant de toucher à la CI :
+
+- le jeton `GITHUB_TOKEN` est en lecture seule par défaut, chaque job déclare ce dont il a besoin ;
+- seules les actions publiées par GitHub sont autorisées, plus `github/codeql-action`, et l'épinglage par
+  SHA est imposé côté dépôt : une action référencée par tag est refusée à l'exécution ;
+- analyse de secrets et protection au push actives ;
+- alertes et correctifs Dependabot actifs, signalement privé de vulnérabilité ouvert ;
+- `main` exige une PR, le rebase comme seule méthode de merge, et les checks `tests`, `Messages de commit`,
+  `Analyse actions` et `Analyse javascript-typescript` ;
+- les tags `v*` ne peuvent être ni supprimés ni réécrits.
 
 ## Conventions
 
@@ -354,10 +427,14 @@ Pour publier une version stable : `git tag vX.Y.Z && git push origin vX.Y.Z`, pu
 ### Versioning
 
 - Utiliser semver dans les `package.json`
-- Tag git pour les releases : `v1.0.0`
-- Le manifest inclut `lastUpdatedAt` automatiquement
+- Le tag `vX.Y.Z` du dépôt est posé automatiquement à chaque push sur `main`, voir la section CI/CD
+- Le manifest date chaque widget depuis l'historique git
 
 ### Commits
+
+Conventional Commits, vérifié en CI sur les PR par `scripts/check-commits.js`. Types acceptés : `build`,
+`chore`, `ci`, `docs`, `feat`, `fix`, `perf`, `refactor`, `revert`, `style`, `test`. En-tête limitée à
+100 caractères.
 
 ```
 feat(taskflow): add drag-drop to kanban

@@ -725,14 +725,14 @@
         // ═══════════════════════════════════════════════════════════════════════
         // MODULE COMMUN TASKFLOW (genere — voir projects/tasks_app/core/taskflow-core.js)
         // ═══════════════════════════════════════════════════════════════════════
-        // <taskflow-core> -- GENERE par scripts/build-taskflow.js, NE PAS EDITER ICI
+        // <inline:core/taskflow-core.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
         /* ============================================================================
          * taskflow-core.js — Module commun aux widgets TaskFlow
          * ----------------------------------------------------------------------------
-         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-taskflow.js entre
+         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-inline.js entre
          * les marqueurs de generation prevus a cet effet.
          * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
-         *   npm run build:taskflow
+         *   npm run build:inline
          *
          * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
          * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans
@@ -1217,7 +1217,8 @@
 
         // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
         if (typeof module !== 'undefined' && module.exports) module.exports = TF;
-        // </taskflow-core>
+        // </inline>
+        // <inline:gantt.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
 
         // ═══════════════════════════════════════════════════════════════════════
         // STATE
@@ -1297,7 +1298,7 @@
         const isJalon = (t) => t?.type === 'jalon';
 
         function showToast(msg, type = 'info') { const c = document.getElementById('toastContainer'); const t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg; c.appendChild(t); setTimeout(() => t.remove(), 3000); }
-        
+
         // GEN-03: Export functions
         // WBS-02: déplie toute la hiérarchie temporairement pour l'export, retourne l'état précédent
         function _expandAllForExport() {
@@ -1613,51 +1614,51 @@
         }
         function getAvailableDependencies(taskId) { return tasks.filter(t => t.id !== taskId && !wouldCreateCycle(taskId, t.id)); }
         function getBlockedTasks(taskId) { return tasks.filter(t => getDependsOnArray(t).includes(taskId)); }
-        
+
         // GANTT-06: Propagation des dates aux tâches dépendantes
         function propagateDependencyDates(changedTaskId, visited = new Set()) {
             if (visited.has(changedTaskId)) return []; // Protection contre les cycles
             visited.add(changedTaskId);
-            
+
             const changedTask = tasks.find(t => t.id === changedTaskId);
             if (!changedTask) return [];
-            
+
             const changedEnd = gristToDate(changedTask.dateEcheance);
             if (!changedEnd) return [];
-            
+
             const updates = [];
             const blockedTasks = getBlockedTasks(changedTaskId);
-            
+
             blockedTasks.forEach(depTask => {
                 const depStart = gristToDate(depTask.dateDebut);
                 const depEnd = gristToDate(depTask.dateEcheance);
-                
+
                 if (!depStart || !depEnd) return;
-                
+
                 // Si la tâche dépendante commence avant la fin de la tâche modifiée, la décaler
                 const requiredStart = addDays(changedEnd, 1); // Commence le jour suivant
-                
+
                 if (depStart < requiredStart) {
                     const duration = getDaysDiff(depStart, depEnd);
                     const newStart = requiredStart;
                     const newEnd = addDays(newStart, duration);
-                    
+
                     // Mettre à jour en mémoire
                     depTask.dateDebut = dateToGrist(newStart);
                     depTask.dateEcheance = dateToGrist(newEnd);
-                    
+
                     updates.push({
                         id: depTask.id,
                         dateDebut: depTask.dateDebut,
                         dateEcheance: depTask.dateEcheance
                     });
-                    
+
                     // Propager récursivement
                     const cascadeUpdates = propagateDependencyDates(depTask.id, visited);
                     updates.push(...cascadeUpdates);
                 }
             });
-            
+
             return updates;
         }
 
@@ -2129,7 +2130,7 @@
                 totalWidth = numCells * effectiveCellWidth;
             } else {
                 numCells = totalDays;
-                totalWidth = totalDays * effectiveCellWidth;
+                totalWidth = numCells * effectiveCellWidth;
             }
             // pxPerDay = effectivePxPerDay (déjà calculé depuis effectiveCellWidth)
             const pxPerDay = effectivePxPerDay;
@@ -3327,7 +3328,7 @@
             const prefetched = {};  // données lues ici pour la vérif, réutilisables par loadAllData si le schéma n'a pas bougé
 
             for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) {
-                let raw = null, tableExists = false;
+                let raw, tableExists;
                 try { raw = await grist.docApi.fetchTable(tableName); tableExists = true; }
                 catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } }
                 if (tableExists) { prefetched[tableName] = raw; const existingCols = Object.keys(raw).filter(c => c !== 'id' && c !== 'manualSort'); const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); added++; } catch (e) {} } }
@@ -3627,6 +3628,7 @@
         setTimeout(function(){ try { if (!gristPresent && typeof useDemoMode==='function') useDemoMode(); } catch(e){ console.log(e); } }, 2800);
         try { if (new URLSearchParams(location.search).has('nav')) document.body.classList.add('suite-nav'); } catch (e) {}
         initGrist();
+        // </inline>
     </script>
 <style>
 /* 12 · Barre d'onglets mobile commune + bouton central */

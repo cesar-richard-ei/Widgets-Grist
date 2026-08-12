@@ -32,6 +32,9 @@ tmp/
 temp/
 *.tmp
 
+# Artefact de build : regenere a chaque deploiement et dependant de BASE_URL
+published/manifest.json
+
 # Test coverage
 coverage/
 .nyc_output/

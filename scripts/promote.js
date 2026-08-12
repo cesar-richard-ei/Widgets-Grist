@@ -52,7 +52,6 @@ if (dryRun) {
 
 if (sourceStats.isFile()) {
     // Promouvoir un fichier unique
-    const targetDir = path.dirname(targetPath);
     const finalPath = targetPath.endsWith('.html') ? targetPath : path.join(targetPath, 'index.html');
     const finalDir = path.dirname(finalPath);
 

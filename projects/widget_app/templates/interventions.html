@@ -345,7 +345,7 @@
         const byStatut = {};
         STATUTS.forEach(s => byStatut[s.id] = 0);
         state.interventions.forEach(i => {
-            if (byStatut.hasOwnProperty(i.Statut)) byStatut[i.Statut]++;
+            if (Object.hasOwn(byStatut, i.Statut)) byStatut[i.Statut]++;
         });
         
         const ctx1 = document.getElementById('chartStatuts')?.getContext('2d');
@@ -371,7 +371,7 @@
         const byUrgence = {};
         Object.keys(URGENCES).forEach(u => byUrgence[u] = 0);
         state.interventions.forEach(i => {
-            if (byUrgence.hasOwnProperty(i.Urgence)) byUrgence[i.Urgence]++;
+            if (Object.hasOwn(byUrgence, i.Urgence)) byUrgence[i.Urgence]++;
         });
         
         const ctx2 = document.getElementById('chartUrgences')?.getContext('2d');
