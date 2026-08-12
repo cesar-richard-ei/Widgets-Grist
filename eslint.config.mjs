@@ -1,8 +1,7 @@
 import js from '@eslint/js';
 import globals from 'globals';
+import html from 'eslint-plugin-html';
 
-// Les widgets sont du HTML autonome avec leur JavaScript en ligne : seuls les
-// fichiers .js sont analyses ici.
 export default [
     {
         ignores: [
@@ -26,7 +25,10 @@ export default [
             'no-unused-vars': ['error', { caughtErrors: 'none' }],
             // Les replis silencieux sont un parti pris du depot : un widget sans
             // Grist doit continuer a s'afficher.
-            'no-empty': ['error', { allowEmptyCatch: true }]
+            'no-empty': ['error', { allowEmptyCatch: true }],
+            // Les gabarits portent du texte affiche a l'utilisateur, ou l'espace
+            // insecable des guillemets francais est voulu.
+            'no-irregular-whitespace': ['error', { skipTemplates: true }]
         }
     },
 
@@ -48,6 +50,26 @@ export default [
             sourceType: 'module',
             // maplibregl et SunCalc arrivent par balise script dans le widget.
             globals: { ...globals.browser, grist: 'readonly', maplibregl: 'readonly', SunCalc: 'readonly' }
+        }
+    },
+
+    {
+        // Le JavaScript en ligne des widgets. Les fonctions y sont appelees depuis
+        // des attributs onclick que le plugin ne voit pas, d'ou l'abandon de
+        // no-unused-vars : le reste des regles garde tout son interet.
+        files: ['**/*.html'],
+        plugins: { html },
+        languageOptions: {
+            ecmaVersion: 2024,
+            sourceType: 'script',
+            globals: { ...globals.browser, grist: 'readonly' }
+        },
+        rules: {
+            'no-undef': 'off',
+            'no-unused-vars': 'off',
+            // `<\/script>` est obligatoire dans un script en ligne : sans
+            // l'echappement, la balise se ferme au milieu du code.
+            'no-useless-escape': 'off'
         }
     },
 

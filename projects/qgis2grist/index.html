@@ -2788,9 +2788,9 @@ function flattenGeoJsonFeatures(features, fields, geomType) {
     // par un alias QGIS (sinon l'accès props[label] échouerait).
     for (const f of fields) {
       const k = f._rawKey || f.label;
-      if (k && props.hasOwnProperty(k)) {
+      if (k && Object.hasOwn(props, k)) {
         row[f.name] = props[k];
-      } else if (props.hasOwnProperty(f.name)) {
+      } else if (Object.hasOwn(props, f.name)) {
         row[f.name] = props[f.name];
       } else {
         row[f.name] = null;
@@ -3179,7 +3179,7 @@ async function startImport() {
             }
             if (f.gType === 'Int') return Number.isFinite(parseInt(v)) ? parseInt(v) : null;
             if (f.gType === 'Numeric') return Number.isFinite(parseFloat(v)) ? parseFloat(v) : null;
-            if (f.gType === 'Bool') return !!v ? 1 : 0;
+            if (f.gType === 'Bool') return v ? 1 : 0;
             // Choice (ValueMap) : convertir la valeur stockée en label affiché.
             // Le label est l'unique source de vérité côté Grist Choice.
             if (f.gType === 'Choice' && f._valueMap) {
@@ -3384,7 +3384,7 @@ function makeMarkerColorFn(layer, fallbackColor) {
 
 // ── Ajoute une feature Grist sur la carte, retourne le layer Leaflet ──
 function addFeatureToLayer(row, layer, color, getMarkerColor, lyrGroup, rowMap) {
-  let ll = null;
+  let ll;
   try {
     // Toujours recalculer depuis le style de la couche pour refléter le style QGIS original.
     // row.fill_color (stocké en import) peut être obsolète si le style était null au moment de l'import.

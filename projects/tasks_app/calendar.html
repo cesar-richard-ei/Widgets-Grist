@@ -1481,7 +1481,7 @@
             let created = 0, added = 0;
             const tablesCreated = [];
             for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) {
-                let existingCols = [], tableExists = false;
+                let existingCols = [], tableExists;
                 try { const data = await grist.docApi.fetchTable(tableName); existingCols = Object.keys(data).filter(c => c !== 'id' && c !== 'manualSort'); tableExists = true; }
                 catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } }
                 if (tableExists) { const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); added++; } catch (e) {} } }

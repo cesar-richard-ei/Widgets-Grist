@@ -12,7 +12,7 @@
     "build:taskflow": "node scripts/build-taskflow.js",
     "check:taskflow": "node scripts/build-taskflow.js --check",
     "serve:dev": "node scripts/serve-dev.js",
-    "serve": "npx serve published -p 3000 --cors",
+    "serve": "npm run manifest && npx serve published -p 3000 --cors",
     "test": "node --test tests/unit/*.test.js",
     "lint": "eslint .",
     "test:e2e": "playwright test"
@@ -38,6 +38,7 @@
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.61.1",
     "eslint": "^10.8.1",
+    "eslint-plugin-html": "^8.1.4",
     "globals": "^17.10.0"
   }
 }
