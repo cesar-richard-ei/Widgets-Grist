@@ -948,6 +948,14 @@ function renderTaskList() {
     });
     document.getElementById('taskList').innerHTML = html;
 
+    // Même bulle de survol que sur les barres : la colonne de gauche tronque les libellés, et
+    // c'est souvent là que l'on cherche le détail. Les bandeaux de projet n'en portent pas.
+    for (const entree of currentVisible) {
+        if (!entree.task) continue;
+        const ligne = document.querySelector('#taskList .task-row[data-id="' + entree.task.id + '"]');
+        if (ligne) setupTooltip(ligne, entree.task);
+    }
+
     // Sortable en mode manuel : autorisé uniquement au sein d'une fratrie (limite via check dans onEnd)
     if (sortMode === 'manual') {
         if (sortableInstance) sortableInstance.destroy();
