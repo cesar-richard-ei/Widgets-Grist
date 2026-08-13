@@ -226,6 +226,9 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 - Sous-tâches dans panel — **FUT-01**
 - Bouton discret « replier toutes les tâches » dans l'en-tête de la colonne (fermeture seule, visible seulement quand une branche est dépliée)
 - Duplication depuis le volet : reprend les champs et le rattachement, la copie s'ouvre pour être renommée. Les sous-tâches ne suivent pas, dupliquer une branche entière n'a pas été demandé. Absent sur un chantier
+- Un seul bouton de création, « + Ajouter », qui ouvre un menu Tâche / Chantier. Sans table `Chantiers` il n'y a rien à choisir : le clic crée directement une tâche
+- Une seule tête par ligne, celle du responsable (à défaut le premier assigné), le reste de l'équipe dans un compteur « +X »
+- Barre d'outils sur une seule ligne sous 560px, logo et nom de la vue masqués, défilement horizontal pour le reste
 - Jalon déplaçable à la souris dans le graphique. Seul le déplacement est ouvert : un jalon n'a qu'une date, il n'y a rien à redimensionner
 - Couleurs avatars membres depuis `couleur` Team — **TEAM-01**
 - Export Print/PDF + PNG — **GEN-03**
@@ -410,9 +413,10 @@ habille la ligne. Le mode n'est proposé que si `TASK_COLS.has('Responsable')`, 
 colorer. À distinguer du mode « Assigné », qui prend le **premier** assigné, là où le responsable est
 une donnée unique portée par la ligne.
 
-**Le défaut reste `project`.** Sur le document du métier, `Responsable` n'est renseigné que sur 2
-tâches sur 79 et sur aucun chantier : basculer le défaut rendrait le Gantt presque entièrement gris,
-alors que le mode projet colore 26 barres sur 27. À rebasculer quand la colonne sera remplie.
+**C'est le mode par défaut**, en tête du sélecteur, décision du 13/08/2026. À la même date,
+`Responsable` n'était renseigné que sur 2 tâches sur 79 et sur aucun chantier : tant que la colonne
+n'est pas remplie, la plupart des barres sortent grises. Le garde-fou `entretenirOptionResponsable()`
+rend la main au mode projet sur un document qui n'a pas la colonne du tout.
 
 ### Relecture au retour sur le widget (Gantt)
 
@@ -455,6 +459,17 @@ async function setProjectColor(projectId, color) { /* UpdateRecord Projects.coul
 async function setMemberColor(memberId, color) { /* UpdateRecord Team.couleur */ }
 function changeColorMode(mode) { /* met à jour colorMode + re-render (Gantt : en mémoire) */ }
 ```
+
+### Bandeau de projet (Gantt)
+
+Le bandeau qui ouvre chaque groupe de projet porte la couleur de son **responsable**
+(`Projects.responsable` → sa couleur d'équipe), en fond translucide à 20 %. Sans responsable, ou
+lorsque celui-ci n'a pas de couleur, la couleur du projet reprend la main : sans ce second test,
+`getTeamMemberColor()` renverrait son bleu par défaut et tous les bandeaux se ressembleraient.
+
+Il se prolonge sur la timeline (`.grid-row.piste-groupe`), même teinte et même hauteur, collé en
+haut comme son pendant de gauche puisque les deux colonnes défilent de concert. Le trait qui
+séparait le bandeau de sa première ligne a été retiré, la teinte suffit à marquer la rupture.
 
 ### Légende (Gantt uniquement)
 

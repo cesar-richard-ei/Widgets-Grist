@@ -3,7 +3,9 @@
 const { test, expect } = require('./harness.js');
 
 async function ouvrirCreation(page) {
-    await page.getByRole('button', { name: '+ Tâche' }).click();
+    await page.locator('#btnAjouter').click();
+    const menu = page.locator('#menuAjout');
+    if (await menu.isVisible()) await menu.locator('button', { hasText: 'Tâche' }).click();
     await expect(page.locator('#panel')).toHaveClass(/open/);
 }
 

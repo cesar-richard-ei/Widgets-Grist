@@ -79,7 +79,7 @@ test2('le tri reste applique a l interieur de chaque projet', async ({ gantt }) 
 });
 
 test2('un changement de projet est marque dans la liste et dans la timeline', async ({ gantt }) => {
-    const debuts = await gantt.locator('#taskList .task-row.debut-groupe').count();
-    expect(debuts).toBe(3);   // Portail, Mobile, sans projet
-    expect(await gantt.locator('#timelineGrid .grid-row.debut-groupe').count()).toBe(3);
+    const bandeaux = await gantt.locator('#taskList .groupe-projet').count();
+    expect(bandeaux).toBe(3);   // Portail, Mobile, sans projet
+    expect(await gantt.locator('#timelineGrid .grid-row.piste-groupe').count()).toBe(3);
 });

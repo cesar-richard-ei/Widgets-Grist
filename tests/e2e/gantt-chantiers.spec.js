@@ -218,7 +218,8 @@ test('modifier une tache ne reecrit pas son parent', async ({ page }) => {
 test('le bouton Chantier cree un chantier dans sa table', async ({ page }) => {
     await ouvrirGantt(page, DOC_CIBLE);
 
-    await page.locator('#btnAjouterChantier').click();
+    await page.locator('#btnAjouter').click();
+    await page.locator('#menuAjout button', { hasText: 'Chantier' }).click();
     await page.locator('#taskTitle').fill('Recette metier');
     await page.locator('#panel .panel-btn.success').click();
 
