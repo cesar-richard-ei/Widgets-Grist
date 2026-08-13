@@ -1513,6 +1513,14 @@ function adapterVoletChantier(racine) {
     racine.querySelectorAll('.charge-row input').forEach(i => { i.disabled = true; });
 }
 
+// Le titre s'écrit sur autant de lignes qu'il en faut : un long libellé se relit mal quand il
+// file en longueur. La hauteur est remise à zéro avant mesure, sinon elle ne fait que croître.
+function ajusterHauteurTitre(champ) {
+    if (!champ) return;
+    champ.style.height = 'auto';
+    champ.style.height = champ.scrollHeight + 'px';
+}
+
 function renderPanel() {
     const header = document.getElementById('panelHeader');
     const content = document.getElementById('panelContent');
@@ -1617,7 +1625,7 @@ function renderPanel() {
             '<span class="type-pill ' + (data.type === 'reunion' ? 'selected' : '') + '" onclick="updateField(\'type\',\'reunion\')"> Réunion</span>') +
         '</div>' +
         (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
-        '<input type="text" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" value="' + escapeHtml(data.titre) + '" oninput="updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' +
+        '<textarea rows="1" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" oninput="ajusterHauteurTitre(this);updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' + escapeHtml(data.titre) + '</textarea>' +
 
         '<div class="props-list">' +
             '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
@@ -1735,6 +1743,7 @@ function renderPanel() {
             '<div class="panel-footer-left"><button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 14px">Suppr.</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
 
     if (chantier) adapterVoletChantier(content);
+    ajusterHauteurTitre(document.getElementById('taskTitle'));
 
     if (panelState.isNew) {
         const canCreate = data.titre && data.titre.trim().length > 0;
