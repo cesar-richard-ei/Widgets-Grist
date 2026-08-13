@@ -454,6 +454,14 @@ function fondTranslucide(couleur, part) {
     return 'rgba(' + parseInt(m[1], 16) + ', ' + parseInt(m[2], 16) + ', ' + parseInt(m[3], 16) + ', ' + part + ')';
 }
 
+// La teinte est posée en aplat par-dessus le fond opaque de la ligne, et non en fond translucide :
+// deux bandeaux collés en haut se recouvrent au défilement, et on lirait sinon les deux titres
+// superposés.
+function aplatDeTeinte(couleur, part) {
+    const teinte = fondTranslucide(couleur, part);
+    return 'linear-gradient(' + teinte + ', ' + teinte + ')';
+}
+
 function avecBandeauxDeProjet(visible) {
     const out = [];
     let projetPrecedent = null;
@@ -929,7 +937,7 @@ function renderTaskList() {
     currentVisible.forEach(({ task: t, depth, dimmed, groupe }) => {
         if (groupe) {
             html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '"' +
-                ' style="background:' + fondTranslucide(groupe.couleur, 0.2) + '">' +
+                ' style="background-image:' + aplatDeTeinte(groupe.couleur, 0.2) + '">' +
                 '<span class="groupe-chevron" onclick="event.stopPropagation();toggleGroupeProjet(' + groupe.id + ')" title="' + (groupe.replie ? 'Déplier' : 'Replier') + '">▼</span>' +
                 (groupe.categorie ? '<span class="groupe-badge">' + escapeHtml(groupe.categorie) + '</span>' : '') +
                 '<span class="groupe-nom">' + escapeHtml(groupe.nom) + '</span>' +
@@ -1038,8 +1046,8 @@ function renderTimeline() {
     ft.forEach((_, iLigne) => {
         const groupe = currentVisible[iLigne] && currentVisible[iLigne].groupe;
         if (groupe) {
-            gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background:' +
-                fondTranslucide(groupe.couleur, 0.2) + '"></div>';
+            gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background-image:' +
+                aplatDeTeinte(groupe.couleur, 0.2) + '"></div>';
             return;
         }
         gridHtml += '<div class="grid-row">';

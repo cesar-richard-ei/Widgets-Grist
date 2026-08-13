@@ -51,7 +51,8 @@ async function ouvrirGantt(page) {
     await page.waitForSelector('#taskList .groupe-projet');
 }
 
-const fondDuBandeau = (page, nom) => page.locator('#taskList .groupe-projet', { hasText: nom }).evaluate((el) => getComputedStyle(el).backgroundColor);
+const fondDuBandeau = (page, nom) => page.locator('#taskList .groupe-projet', { hasText: nom }).evaluate((el) => getComputedStyle(el).backgroundImage);
+const opaciteDuBandeau = (page, nom) => page.locator('#taskList .groupe-projet', { hasText: nom }).evaluate((el) => getComputedStyle(el).backgroundColor);
 
 test('le bandeau prend la couleur du responsable du projet', async ({ page }) => {
     await ouvrirGantt(page);
@@ -82,7 +83,7 @@ test('un responsable sans couleur laisse la main a celle du projet', async ({ pa
     expect(fond).toContain('62, 93, 231');
 });
 
-test('le bandeau est translucide, pas plein', async ({ page }) => {
+test('la teinte reste legere', async ({ page }) => {
     await ouvrirGantt(page);
 
     const fond = await fondDuBandeau(page, 'Portail');
@@ -91,12 +92,38 @@ test('le bandeau est translucide, pas plein', async ({ page }) => {
     expect(alpha).toBeLessThan(0.4);
 });
 
+// Deux bandeaux collés en haut se recouvrent au défilement : sans fond opaque, on lit les deux
+// titres l'un sur l'autre.
+test('le bandeau masque ce qui passe dessous', async ({ page }) => {
+    await ouvrirGantt(page);
+
+    for (const nom of ['Portail', 'Datalab']) {
+        const fond = await opaciteDuBandeau(page, nom);
+        expect(fond).not.toContain('rgba');
+        expect(fond).not.toBe('transparent');
+    }
+    const piste = await page.locator('#timelineGrid .grid-row.piste-groupe').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(piste).not.toContain('rgba');
+});
+
+// Symétrique du test sur l'opacité, côté timeline : une barre qui défile sous la bande collée doit
+// passer dessous, pas par-dessus. Les deux vivent dans #timelineGrid, leurs z-index se comparent.
+test('la bande de la timeline passe devant les barres', async ({ page }) => {
+    await ouvrirGantt(page);
+
+    const plans = await page.evaluate(() => {
+        const lire = (sel) => parseInt(getComputedStyle(document.querySelector(sel)).zIndex, 10);
+        return { piste: lire('#timelineGrid .grid-row.piste-groupe'), barre: lire('#timelineGrid .gantt-bar') };
+    });
+    expect(plans.piste).toBeGreaterThan(plans.barre);
+});
+
 test('le bandeau se prolonge sur la timeline', async ({ page }) => {
     await ouvrirGantt(page);
 
     const pistes = page.locator('#timelineGrid .grid-row.piste-groupe');
     await expect(pistes).toHaveCount(2);
-    const fond = await pistes.first().evaluate((el) => getComputedStyle(el).backgroundColor);
+    const fond = await pistes.first().evaluate((el) => getComputedStyle(el).backgroundImage);
     expect(fond).toContain(VERT.rgb.replace('rgb(', '').replace(')', ''));
 });
 
