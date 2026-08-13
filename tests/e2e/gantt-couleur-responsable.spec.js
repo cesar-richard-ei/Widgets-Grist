@@ -115,14 +115,6 @@ test('la tache prend la couleur de son responsable, pas de son assigne', async (
     expect(fond).not.toContain(enRgb(VERT));
 });
 
-test('la legende liste les membres en mode Responsable', async ({ page }) => {
-    await ouvrirGantt(page, DOC_AVEC_RESPONSABLE);
-    await page.locator('#colorSelect').selectOption('responsable');
-
-    await expect(page.locator('#ganttLegend')).toContainText('Alice');
-    await expect(page.locator('#ganttLegend')).toContainText('Bob');
-});
-
 // Grist ne notifie que la table du widget : modifier les effectifs, les projets ou les chantiers
 // passe inapercu. Le widget relit quand il reprend la main, ce qui couvre le geste reel, aller
 // changer une couleur dans la table puis revenir sur le Gantt.

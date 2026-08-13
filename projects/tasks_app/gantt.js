@@ -763,7 +763,6 @@ function render() {
     renderTimelineHeader();
     renderTaskList();
     renderTimeline();
-    renderLegend();
     syncScroll();
     updateGanttOverlay();
 }
@@ -793,25 +792,6 @@ function updateGanttOverlay() {
         html = '<div class="tf-empty"><span class="tf-empty-glyph">'+gicon+'</span><div class="tf-empty-title">Aucune tâche à planifier</div><div class="tf-empty-sub">Créez une première tâche avec des dates pour la voir apparaître sur la timeline.</div><button class="tf-empty-btn primary" onclick="openCreatePanel()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nouvelle tâche</button></div>';
     }
     ov.innerHTML = html; ov.style.display = "flex";
-}
-function renderLegend() {
-    const el = document.getElementById('ganttLegend');
-    if (!el) return;
-    const item = (color, label) => '<div class="legend-item"><div class="legend-color" style="background:' + color + '"></div>' + label + '</div>';
-    let html = '';
-    if (colorMode === 'priority') {
-        html = item(PRIORITY_COLORS[1], 'Critique') + item(PRIORITY_COLORS[2], 'Haute') + item(PRIORITY_COLORS[3], 'Moyenne') + item(PRIORITY_COLORS[4], 'Basse');
-    } else if (colorMode === 'status') {
-        html = statusCfg.list.map(s => item(s.fillColor, s.label)).join('');
-    } else if (colorMode === 'project') {
-        const visible = projects.filter(p => p.actif !== false).slice(0, 8);
-        html = visible.map(p => item(p.couleur || '#64748b', escapeHtml(p.nom))).join('');
-    } else if (colorMode === 'assignee' || colorMode === 'responsable') {
-        const visible = team.filter(m => m.actif !== false).slice(0, 8);
-        html = visible.map(m => item(getTeamMemberColor(m.id), escapeHtml(m.nom))).join('');
-    }
-    html += '<div class="legend-separator"></div><div class="legend-item"><div class="legend-milestone"></div>Jalon</div>';
-    el.innerHTML = html;
 }
 
 // Calcule la plage effective = période vue étendue uniquement pour les tâches qui la chevauchent.
@@ -953,16 +933,14 @@ function renderTaskList() {
         const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', debutGroupe ? 'debut-groupe' : ''].filter(Boolean).join(' ');
 
         html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px">' +
-            '<span class="drag-handle">☰</span>' +
+            (sortMode === 'manual' ? '<span class="drag-handle">☰</span>' : '') +
             chevron +
-            '<div class="task-priority-bar p' + p + '"></div>' +
             '<div class="task-info">' +
                 '<div class="task-name">' + (jalon ? '◆ ' : '') + (escapeHtml(t.titre) || 'Sans titre') + '</div>' +
                 '<div class="task-meta">' +
                     '<span class="task-dates">' + formatDateShort(start) + ' → ' + formatDateShort(end) + '</span>' +
-                    (!jalon ? '<span class="task-progress-badge">' + progress + '%</span>' : '') +
-                    subBadge +
-                    childBadge +
+                    (!jalon && estChantier(t) ? '<span class="task-progress-badge">' + progress + '%</span>' : '') +
+                    (estChantier(t) ? subBadge + childBadge : '') +
                     avatarsHtml +
                 '</div>' +
             '</div>' +
