@@ -24,6 +24,10 @@ let ganttNowAligned = false;
 let selectedTaskId = null;
 let sortMode = 'date';
 let colorMode = 'project';
+let categoriesProjet = [];
+// Bandeaux replies, par identifiant de projet. Persiste comme le repli des taches.
+let groupesReplies = new Set();
+try { groupesReplies = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_groupes_replies') || '[]').map(Number).filter(n => !isNaN(n))); } catch (e) {}
 // WBS-02: état expand/collapse par tâche parente
 let expandedTasks = new Set();
 try { expandedTasks = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_expanded') || '[]').map(Number).filter(n => !isNaN(n))); } catch (e) {}
@@ -411,7 +415,51 @@ function buildVisibleTasks() {
         }
     };
     for (const r of roots) walk(r, 0);
-    return visible;
+    return avecBandeauxDeProjet(visible);
+}
+
+// Nom de la catégorie d'un projet (Projet / Produit / Offre de service), vide si le document ne
+// porte pas la table ou si le projet n'en a pas.
+function categorieDuProjet(projet) {
+    if (!projet || !projet.Categorie) return '';
+    const c = categoriesProjet.find(x => x.id === projet.Categorie);
+    return c ? (c.Categorie || '') : '';
+}
+
+// Insère un bandeau devant chaque groupe de projet. Le bandeau occupe une ligne à part entière :
+// la timeline pose ses barres à l'index de la ligne, un bandeau sans ligne décalerait tout.
+function avecBandeauxDeProjet(visible) {
+    const out = [];
+    let projetPrecedent = null;
+    for (const entree of visible) {
+        if (entree.depth === 0) {
+            const idProjet = entree.task.projet || 0;
+            if (out.length === 0 || idProjet !== projetPrecedent) {
+                const projet = projects.find(p => p.id === idProjet);
+                out.push({
+                    groupe: {
+                        id: idProjet,
+                        nom: projet ? projet.nom : 'Sans projet',
+                        categorie: categorieDuProjet(projet),
+                        replie: groupesReplies.has(idProjet)
+                    },
+                    depth: 0
+                });
+                projetPrecedent = idProjet;
+            }
+            if (groupesReplies.has(idProjet)) continue;
+        } else if (groupesReplies.has(projetPrecedent)) {
+            continue;
+        }
+        out.push(entree);
+    }
+    return out;
+}
+
+function toggleGroupeProjet(idProjet) {
+    if (groupesReplies.has(idProjet)) groupesReplies.delete(idProjet); else groupesReplies.add(idProjet);
+    localStorage.setItem('taskflow_gantt_groupes_replies', JSON.stringify([...groupesReplies]));
+    render();
 }
 
 // Dependency cycle detection
@@ -867,13 +915,21 @@ function renderTimelineHeader() {
 let currentVisible = [];
 function renderTaskList() {
     currentVisible = buildVisibleTasks();
-    panelState.taskList = currentVisible.map(v => v.task);
-    document.getElementById('taskCount').textContent = currentVisible.length;
+    panelState.taskList = currentVisible.filter(v => v.task).map(v => v.task);
+    document.getElementById('taskCount').textContent = panelState.taskList.length;
     const collapseBtn = document.getElementById('collapseAllBtn');
     if (collapseBtn) collapseBtn.style.display = tasks.some(t => hasChildren(t) && expandedTasks.has(t.id)) ? 'inline-flex' : 'none';
 
     let html = '';
-    currentVisible.forEach(({ task: t, depth, dimmed, debutGroupe }) => {
+    currentVisible.forEach(({ task: t, depth, dimmed, debutGroupe, groupe }) => {
+        if (groupe) {
+            html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '">' +
+                '<span class="groupe-chevron" onclick="event.stopPropagation();toggleGroupeProjet(' + groupe.id + ')" title="' + (groupe.replie ? 'Déplier' : 'Replier') + '">▼</span>' +
+                (groupe.categorie ? '<span class="groupe-badge">' + escapeHtml(groupe.categorie) + '</span>' : '') +
+                '<span class="groupe-nom">' + escapeHtml(groupe.nom) + '</span>' +
+            '</div>';
+            return;
+        }
         const p = getTaskPriority(t);
         const isParent = hasChildren(t);
         // Dates affichées : agrégées si parent sans dates propres, sinon dates du parent
@@ -1034,6 +1090,7 @@ function renderTimeline() {
     // Barres et jalons — ordre Y = currentVisible (DFS avec expand/collapse)
     const barresTracees = new Set();
     ft.forEach((t, idx) => {
+        if (!t) return;   // ligne de bandeau : elle occupe sa hauteur, sans barre
         const isParent = hasChildren(t);
         // Dates effectives : agrégées si parent sans dates propres, sinon dates du parent
         let tStart = gristToDate(t.dateDebut), tEnd = gristToDate(t.dateEcheance);
@@ -1103,9 +1160,10 @@ function renderDependencies(ft, start, pxPerDay, barresTracees) {
     svg.style.height = '100%';
 
     const taskIndexMap = {};
-    ft.forEach((t, i) => taskIndexMap[t.id] = i);
+    ft.forEach((t, i) => { if (t) taskIndexMap[t.id] = i; });
 
     ft.forEach(t => {
+        if (!t) return;   // ligne de bandeau : pas de dependance a tracer
         const deps = getDependsOnArray(t);
         deps.forEach(depId => {
             const depTask = tasks.find(x => x.id === depId);
@@ -2323,6 +2381,9 @@ async function loadAllData(prefetched) {
     try { const _raw = (prefetched && prefetched.Tasks) || await grist.docApi.fetchTable('Tasks'); TASK_COLS = new Set(Object.keys(_raw || {})); tasks = convert(_raw); } catch (e) { tasks = []; }
     try { team = convert((prefetched && prefetched.Team) || await grist.docApi.fetchTable('Team')); } catch (e) { team = []; }
     try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; }
+    // Categorie du sujet de niveau 1 (Projet / Produit / Offre de service), affichee en badge sur
+    // le bandeau. Table absente sur un document qui ne la porte pas : le bandeau garde le nom seul.
+    try { categoriesProjet = convert(await grist.docApi.fetchTable('Categorie_de_projet')); } catch (e) { categoriesProjet = []; }
     gristReady = true;
     await fusionnerChantiers();
     entretenirOptionResponsable();
