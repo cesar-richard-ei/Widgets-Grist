@@ -237,6 +237,9 @@
         /* Panel Slide-in */
         .panel { position: absolute; top: 0; right: 0; width: var(--panel-width); height: 100%; background: var(--card-bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.25s ease; z-index: 50; }
         .panel.open { transform: translateX(0); }
+        .poignee-largeur { flex: 0 0 5px; width: 5px; cursor: col-resize; background: transparent; z-index: 30; }
+        .poignee-largeur:hover, .poignee-largeur.active { background: var(--primary); opacity: 0.35; }
+        .poignee-panel { position: absolute; left: -2px; top: 0; height: 100%; }
         .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg); gap: 8px; }
         .panel-nav { display: flex; align-items: center; gap: 6px; flex: 1; min-width: 0; }
         .panel-nav-btn { width: 28px; height: 28px; border: 1px solid var(--border); background: var(--card-bg); border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0; }
@@ -684,6 +687,7 @@
             </div>
             <div class="gantt-body">
                 <div class="task-list" id="taskList"></div>
+                <div class="poignee-largeur" id="poigneeTaskList" title="Ajuster la largeur"></div>
                 <div class="timeline-scroll" id="timelineScroll">
                     <div class="timeline-grid" id="timelineGrid"></div>
                 </div>
@@ -692,6 +696,7 @@
         </div>
 
         <div class="panel" id="panel">
+            <div class="poignee-largeur poignee-panel" id="poigneePanel" title="Ajuster la largeur"></div>
             <div class="panel-header" id="panelHeader"></div>
             <div class="panel-content" id="panelContent"></div>
             <div class="panel-footer" id="panelFooter"></div>
@@ -2527,8 +2532,69 @@
         function openPanel() {
             panelState.open = true;
             const _tt = document.getElementById('tooltip'); if (_tt) _tt.classList.remove('visible'); // masque le tooltip survol quand le panel s'ouvre
+            poserLargeurVolet();
             document.getElementById('panel').classList.add('open');
             document.getElementById('ganttWrapper').classList.add('panel-open');
+        }
+
+        // Largeurs ajustables de la colonne de gauche et du volet. Elles vivent dans des variables CSS,
+        // que la souris déplace et que le stockage local retient d'une ouverture à l'autre.
+        const LARGEURS = {
+            taskList: { variable: '--task-list-width', cle: 'taskflow_gantt_largeur_liste', min: 140, partMax: 0.7 },
+            panel: { variable: '--panel-width', cle: 'taskflow_gantt_largeur_volet', min: 320, partMax: 0.8 }
+        };
+
+        // Référence stable pour borner les largeurs. Surtout pas celle du wrapper : le volet ouvert lui
+        // prend une marge à droite, donc s'en servir ferait rétrécir la borne à mesure qu'on élargit.
+        function largeurDeLaVue() {
+            return document.documentElement.clientWidth || window.innerWidth;
+        }
+
+        function poserLargeur(nom, px) {
+            const reglage = LARGEURS[nom];
+            const borne = Math.max(reglage.min, Math.min(px, largeurDeLaVue() * reglage.partMax));
+            document.documentElement.style.setProperty(reglage.variable, Math.round(borne) + 'px');
+            return borne;
+        }
+
+        // Le volet s'ouvre sur la moitié de la place restante, sauf largeur déjà choisie à la souris.
+        function poserLargeurVolet() {
+            const retenue = parseFloat(localStorage.getItem(LARGEURS.panel.cle));
+            if (retenue > 0) { poserLargeur('panel', retenue); return; }
+            const liste = document.getElementById('taskList');
+            const dispo = largeurDeLaVue() - (liste ? liste.getBoundingClientRect().width : 0);
+            poserLargeur('panel', dispo / 2);
+        }
+
+        function restaurerLargeurs() {
+            const retenue = parseFloat(localStorage.getItem(LARGEURS.taskList.cle));
+            if (retenue > 0) poserLargeur('taskList', retenue);
+        }
+
+        // La poignée déplace la largeur pendant le glisser, et ne la retient qu'au relâchement. Le sens
+        // est inversé pour le volet, ancré à droite : tirer vers la gauche l'élargit.
+        function brancherPoignee(idPoignee, nom, sens) {
+            const poignee = document.getElementById(idPoignee);
+            if (!poignee) return;
+            poignee.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const departX = e.clientX;
+                const cible = nom === 'taskList' ? document.getElementById('taskList') : document.getElementById('panel');
+                const departLargeur = cible.getBoundingClientRect().width;
+                poignee.classList.add('active');
+                let derniere = departLargeur;
+
+                const suivre = (ev) => { derniere = poserLargeur(nom, departLargeur + sens * (ev.clientX - departX)); };
+                const relacher = () => {
+                    document.removeEventListener('mousemove', suivre);
+                    document.removeEventListener('mouseup', relacher);
+                    poignee.classList.remove('active');
+                    localStorage.setItem(LARGEURS[nom].cle, String(Math.round(derniere)));
+                    render();
+                };
+                document.addEventListener('mousemove', suivre);
+                document.addEventListener('mouseup', relacher);
+            });
         }
 
         function closePanel() {
@@ -3810,6 +3876,9 @@
         { const s = document.getElementById('sortSelect'); if (s) s.value = sortMode; }
         // Idem pour le <select> de couleur
         { const s = document.getElementById('colorSelect'); if (s) s.value = colorMode; }
+        restaurerLargeurs();
+        brancherPoignee('poigneeTaskList', 'taskList', 1);
+        brancherPoignee('poigneePanel', 'panel', -1);
         // Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre)
         new ResizeObserver(() => render()).observe(document.getElementById('timelineScroll'));
         // Décorateur panneau (look « Propriétés / B ») : icône devant chaque libellé, sans toucher au rendu

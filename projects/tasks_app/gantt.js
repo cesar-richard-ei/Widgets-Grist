@@ -1295,8 +1295,69 @@ function syncScroll() {
 function openPanel() {
     panelState.open = true;
     const _tt = document.getElementById('tooltip'); if (_tt) _tt.classList.remove('visible'); // masque le tooltip survol quand le panel s'ouvre
+    poserLargeurVolet();
     document.getElementById('panel').classList.add('open');
     document.getElementById('ganttWrapper').classList.add('panel-open');
+}
+
+// Largeurs ajustables de la colonne de gauche et du volet. Elles vivent dans des variables CSS,
+// que la souris déplace et que le stockage local retient d'une ouverture à l'autre.
+const LARGEURS = {
+    taskList: { variable: '--task-list-width', cle: 'taskflow_gantt_largeur_liste', min: 140, partMax: 0.7 },
+    panel: { variable: '--panel-width', cle: 'taskflow_gantt_largeur_volet', min: 320, partMax: 0.8 }
+};
+
+// Référence stable pour borner les largeurs. Surtout pas celle du wrapper : le volet ouvert lui
+// prend une marge à droite, donc s'en servir ferait rétrécir la borne à mesure qu'on élargit.
+function largeurDeLaVue() {
+    return document.documentElement.clientWidth || window.innerWidth;
+}
+
+function poserLargeur(nom, px) {
+    const reglage = LARGEURS[nom];
+    const borne = Math.max(reglage.min, Math.min(px, largeurDeLaVue() * reglage.partMax));
+    document.documentElement.style.setProperty(reglage.variable, Math.round(borne) + 'px');
+    return borne;
+}
+
+// Le volet s'ouvre sur la moitié de la place restante, sauf largeur déjà choisie à la souris.
+function poserLargeurVolet() {
+    const retenue = parseFloat(localStorage.getItem(LARGEURS.panel.cle));
+    if (retenue > 0) { poserLargeur('panel', retenue); return; }
+    const liste = document.getElementById('taskList');
+    const dispo = largeurDeLaVue() - (liste ? liste.getBoundingClientRect().width : 0);
+    poserLargeur('panel', dispo / 2);
+}
+
+function restaurerLargeurs() {
+    const retenue = parseFloat(localStorage.getItem(LARGEURS.taskList.cle));
+    if (retenue > 0) poserLargeur('taskList', retenue);
+}
+
+// La poignée déplace la largeur pendant le glisser, et ne la retient qu'au relâchement. Le sens
+// est inversé pour le volet, ancré à droite : tirer vers la gauche l'élargit.
+function brancherPoignee(idPoignee, nom, sens) {
+    const poignee = document.getElementById(idPoignee);
+    if (!poignee) return;
+    poignee.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const departX = e.clientX;
+        const cible = nom === 'taskList' ? document.getElementById('taskList') : document.getElementById('panel');
+        const departLargeur = cible.getBoundingClientRect().width;
+        poignee.classList.add('active');
+        let derniere = departLargeur;
+
+        const suivre = (ev) => { derniere = poserLargeur(nom, departLargeur + sens * (ev.clientX - departX)); };
+        const relacher = () => {
+            document.removeEventListener('mousemove', suivre);
+            document.removeEventListener('mouseup', relacher);
+            poignee.classList.remove('active');
+            localStorage.setItem(LARGEURS[nom].cle, String(Math.round(derniere)));
+            render();
+        };
+        document.addEventListener('mousemove', suivre);
+        document.addEventListener('mouseup', relacher);
+    });
 }
 
 function closePanel() {
@@ -2578,6 +2639,9 @@ document.querySelectorAll('.view-controls .btn').forEach(b => b.classList.toggle
 { const s = document.getElementById('sortSelect'); if (s) s.value = sortMode; }
 // Idem pour le <select> de couleur
 { const s = document.getElementById('colorSelect'); if (s) s.value = colorMode; }
+restaurerLargeurs();
+brancherPoignee('poigneeTaskList', 'taskList', 1);
+brancherPoignee('poigneePanel', 'panel', -1);
 // Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre)
 new ResizeObserver(() => render()).observe(document.getElementById('timelineScroll'));
 // Décorateur panneau (look « Propriétés / B ») : icône devant chaque libellé, sans toucher au rendu
