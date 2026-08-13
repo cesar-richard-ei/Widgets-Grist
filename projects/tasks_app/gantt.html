@@ -2344,6 +2344,7 @@
                     const jColor = getTaskColor(t);
                     m.innerHTML = '<div class="milestone-diamond" style="background:' + jColor + '"></div><span class="milestone-label">' + escapeHtml(t.titre) + '</span>';
                     m.onclick = () => openTaskPanel(t.id);
+                    m.onmousedown = (e) => startDrag(e, m, 'move');
                     setupTooltip(m, t);
                     grid.appendChild(m);
                 } else {
@@ -3047,7 +3048,7 @@
                     '</div>' : '') +
 
                 (!panelState.isNew ?
-                    '<div class="panel-footer-left"><button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 14px">Suppr.</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
+                    '<div class="panel-footer-left">' + (chantier ? '' : '<button class="panel-btn" onclick="dupliquerTache()" style="width:auto;padding:10px 14px;margin-right:8px;background:transparent;color:var(--text-muted);border:1px solid var(--border)">Dupliquer</button>') + '<button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 14px">Suppr.</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
 
             if (chantier) adapterVoletChantier(content);
             ajusterHauteurTitre(document.getElementById('taskTitle'));
@@ -3384,6 +3385,38 @@
             }
         }
 
+        // Plusieurs tâches se ressemblent souvent : la copie reprend tout le contenu de l'originale, y
+        // compris son rattachement, et s'ouvre aussitôt pour être renommée. Les sous-tâches ne suivent
+        // pas : dupliquer une branche entière serait rarement l'intention.
+        async function dupliquerTache() {
+            const source = tasks.find(t => t.id === panelState.taskId);
+            if (!source || estChantier(source) || !gristReady) return;
+            if (panelState.dirty) await saveTaskToGrist();
+
+            const record = pruneTaskRecord({
+                titre: (source.titre || '') + ' (copie)', description: source.description || '',
+                type: source.type || 'tache', priorite: source.priorite, statut: source.statut,
+                progression: source.progression || 0, dateDebut: source.dateDebut, dateEcheance: source.dateEcheance,
+                projet: source.projet || null, assignees: toGristRefList(getAssigneesArray(source)),
+                dependDe: toGristRefList(getRefListArray(source.dependDe)), tags: source.tags || null,
+                estimationH: source.estimationH, tempsPasse: source.tempsPasse,
+                subtasks: source.subtasks || '', couleur: source.couleur || null,
+                parentTask: source.parentTask, chantier: source.chantier || null,
+                charges: source.charges || '', dateCloture: null
+            });
+
+            try {
+                const res = await grist.docApi.applyUserActions([['AddRecord', 'Tasks', null, record]]);
+                const nouvelId = Array.isArray(res && res.retValues) ? res.retValues[0] : null;
+                await loadAllData();
+                if (nouvelId) openTaskPanel(nouvelId);
+                showToast('Tâche dupliquée', 'success');
+            } catch (e) {
+                console.error(e);
+                showToast('Erreur duplication', 'error');
+            }
+        }
+
         async function createTask() {
             const data = panelState.editData;
             if (!data || !data.titre || !data.titre.trim()) {
@@ -3475,7 +3508,8 @@
         function startDrag(e, bar, type) {
             const id = parseInt(bar.dataset.id);
             const task = tasks.find(t => t.id === id);
-            if (!task || isJalon(task) || estChantier(task)) return;
+            if (!task || estChantier(task)) return;
+            if (isJalon(task) && type !== 'move') return;
 
             // WBS-02: parent autorisé uniquement pour 'move' (resize bloqué car ajusté auto)
             const isParent = hasChildren(task);
@@ -3511,7 +3545,7 @@
             const pxPerDay = effectivePxPerDay;
             const dx = e.clientX - dragState.startX;
             const daysDelta = Math.round(dx / pxPerDay);
-            const bar = document.querySelector('.gantt-bar[data-id="' + dragState.taskId + '"]');
+            const bar = document.querySelector('.gantt-bar[data-id="' + dragState.taskId + '"], .gantt-milestone[data-id="' + dragState.taskId + '"]');
             if (!bar) return;
 
             if (dragState.type === 'move') {
@@ -3535,7 +3569,7 @@
 
             if (!dragState.active) return;
 
-            const bar = document.querySelector('.gantt-bar[data-id="' + dragState.taskId + '"]');
+            const bar = document.querySelector('.gantt-bar[data-id="' + dragState.taskId + '"], .gantt-milestone[data-id="' + dragState.taskId + '"]');
             if (bar) { bar.style.zIndex = ''; bar.style.opacity = ''; }
 
             const task = tasks.find(t => t.id === dragState.taskId);

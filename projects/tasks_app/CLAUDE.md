@@ -225,6 +225,8 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 - Filtre assigné + projet
 - Sous-tâches dans panel — **FUT-01**
 - Bouton discret « replier toutes les tâches » dans l'en-tête de la colonne (fermeture seule, visible seulement quand une branche est dépliée)
+- Duplication depuis le volet : reprend les champs et le rattachement, la copie s'ouvre pour être renommée. Les sous-tâches ne suivent pas, dupliquer une branche entière n'a pas été demandé. Absent sur un chantier
+- Jalon déplaçable à la souris dans le graphique. Seul le déplacement est ouvert : un jalon n'a qu'une date, il n'y a rien à redimensionner
 - Couleurs avatars membres depuis `couleur` Team — **TEAM-01**
 - Export Print/PDF + PNG — **GEN-03**
 
