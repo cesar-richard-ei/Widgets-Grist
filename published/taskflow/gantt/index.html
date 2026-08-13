@@ -104,10 +104,12 @@
         /* Bandeau du sujet de niveau 1. Même hauteur qu'une ligne : la timeline pose ses barres à
            l'index de la ligne, une hauteur différente décalerait le Gantt. */
         .groupe-projet { display: flex; align-items: center; gap: 8px; height: var(--row-height); padding: 0 12px;
-            border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
+            background-color: var(--card-bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
         /* Prolongement du bandeau sur la timeline : même hauteur et même teinte, collé en haut
            comme son pendant de gauche, les deux colonnes défilant de concert. */
-        .grid-row.piste-groupe { position: sticky; top: 0; z-index: 6; }
+        /* Au-dessus des barres, jalons compris, pour que la bande collée les masque comme le
+           bandeau masque les lignes de gauche. */
+        .grid-row.piste-groupe { position: sticky; top: 0; z-index: 30; background-color: var(--card-bg); }
         .groupe-chevron { cursor: pointer; font-size: 0.7rem; color: var(--text-muted); transition: transform 0.15s; user-select: none; }
         .groupe-projet.replie .groupe-chevron { transform: rotate(-90deg); }
         .groupe-badge { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
@@ -1706,6 +1708,14 @@
             return 'rgba(' + parseInt(m[1], 16) + ', ' + parseInt(m[2], 16) + ', ' + parseInt(m[3], 16) + ', ' + part + ')';
         }
 
+        // La teinte est posée en aplat par-dessus le fond opaque de la ligne, et non en fond translucide :
+        // deux bandeaux collés en haut se recouvrent au défilement, et on lirait sinon les deux titres
+        // superposés.
+        function aplatDeTeinte(couleur, part) {
+            const teinte = fondTranslucide(couleur, part);
+            return 'linear-gradient(' + teinte + ', ' + teinte + ')';
+        }
+
         function avecBandeauxDeProjet(visible) {
             const out = [];
             let projetPrecedent = null;
@@ -2181,7 +2191,7 @@
             currentVisible.forEach(({ task: t, depth, dimmed, groupe }) => {
                 if (groupe) {
                     html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '"' +
-                        ' style="background:' + fondTranslucide(groupe.couleur, 0.2) + '">' +
+                        ' style="background-image:' + aplatDeTeinte(groupe.couleur, 0.2) + '">' +
                         '<span class="groupe-chevron" onclick="event.stopPropagation();toggleGroupeProjet(' + groupe.id + ')" title="' + (groupe.replie ? 'Déplier' : 'Replier') + '">▼</span>' +
                         (groupe.categorie ? '<span class="groupe-badge">' + escapeHtml(groupe.categorie) + '</span>' : '') +
                         '<span class="groupe-nom">' + escapeHtml(groupe.nom) + '</span>' +
@@ -2290,8 +2300,8 @@
             ft.forEach((_, iLigne) => {
                 const groupe = currentVisible[iLigne] && currentVisible[iLigne].groupe;
                 if (groupe) {
-                    gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background:' +
-                        fondTranslucide(groupe.couleur, 0.2) + '"></div>';
+                    gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background-image:' +
+                        aplatDeTeinte(groupe.couleur, 0.2) + '"></div>';
                     return;
                 }
                 gridHtml += '<div class="grid-row">';
