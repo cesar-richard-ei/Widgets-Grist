@@ -24,7 +24,7 @@
             /* Shadows */
             --shadow: 0 1px 3px rgba(0,0,0,0.1); --shadow-lg: 0 10px 40px rgba(0,0,0,0.15);
             /* Layout */
-            --row-height: 44px; --task-list-width: 260px; --cell-width: 34px; --panel-width: 400px;
+            --row-height: 44px; --task-list-width: 290px; --cell-width: 34px; --panel-width: 400px;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         html, body { height: 100%; overflow: hidden; }
@@ -101,13 +101,13 @@
         .tf-grow .lbl { width: var(--task-list-width); min-width: var(--task-list-width); display: flex; flex-direction: column; gap: 5px; padding: 0 16px; }
         .tf-grow .track { flex: 1; padding-right: 16px; }
         .task-row { display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border); height: var(--row-height); gap: 8px; cursor: pointer; transition: background 0.1s; }
-        /* Premiere ligne d'un projet : trait pose en ombre interne, qui ne prend pas de hauteur
-           et garde donc la liste alignee sur la timeline, ligne pour ligne. */
-        .task-row.debut-groupe, .grid-row.debut-groupe { box-shadow: inset 0 1px 0 var(--text-light); }
         /* Bandeau du sujet de niveau 1. Même hauteur qu'une ligne : la timeline pose ses barres à
            l'index de la ligne, une hauteur différente décalerait le Gantt. */
         .groupe-projet { display: flex; align-items: center; gap: 8px; height: var(--row-height); padding: 0 12px;
-            background: var(--p-50); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
+            border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 20; }
+        /* Prolongement du bandeau sur la timeline : même hauteur et même teinte, collé en haut
+           comme son pendant de gauche, les deux colonnes défilant de concert. */
+        .grid-row.piste-groupe { position: sticky; top: 0; z-index: 6; }
         .groupe-chevron { cursor: pointer; font-size: 0.7rem; color: var(--text-muted); transition: transform 0.15s; user-select: none; }
         .groupe-projet.replie .groupe-chevron { transform: rotate(-90deg); }
         .groupe-badge { font-size: 0.58rem; font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
@@ -237,7 +237,13 @@
         /* Panel Slide-in */
         .panel { position: absolute; top: 0; right: 0; width: var(--panel-width); height: 100%; background: var(--card-bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.25s ease; z-index: 50; }
         .panel.open { transform: translateX(0); }
-        .poignee-largeur { flex: 0 0 5px; width: 5px; cursor: col-resize; background: transparent; z-index: 30; }
+        .zone-ajout { position: relative; }
+        .menu-ajout { position: absolute; top: calc(100% + 4px); right: 0; min-width: 150px; background: var(--card-bg);
+            border: 1px solid var(--border); border-radius: 8px; box-shadow: var(--shadow-lg); padding: 4px; z-index: 70; }
+        .menu-ajout button { display: block; width: 100%; text-align: left; padding: 7px 10px; border: none; background: none;
+            color: var(--text); font-size: 0.8rem; border-radius: 6px; cursor: pointer; }
+        .menu-ajout button:hover { background: var(--bg); }
+        .poignee-largeur { flex: 0 0 5px; width: 5px; cursor: ew-resize; background: transparent; z-index: 30; }
         .poignee-largeur:hover, .poignee-largeur.active { background: var(--primary); opacity: 0.35; }
         .poignee-panel { position: absolute; left: -2px; top: 0; height: 100%; }
         .panel-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; background: var(--bg); gap: 8px; }
@@ -433,6 +439,8 @@
         .type-pill { padding: 4px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 600; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--text-muted); transition: all 0.15s; }
         .type-pill:hover { border-color: var(--primary); color: var(--primary); }
         .type-pill.selected { background: var(--primary); color: white; border-color: var(--primary); }
+        .type-pill.fige { cursor: default; opacity: 0.45; }
+        .type-pill.fige:hover { border-color: var(--border); color: var(--text-muted); }
         .panel-title-edit { font-size: 1.3rem; font-weight: 700; border: none; outline: none; background: transparent; color: var(--text); width: 100%; line-height: 1.3; padding: 10px 0 10px; border-bottom: 2px solid var(--border); margin-bottom: 4px; transition: border-color 0.15s; }
         .panel-title-edit { resize: none; overflow: hidden; font-family: inherit; display: block; }
         .panel-title-edit:focus { border-bottom-color: var(--primary); }
@@ -586,11 +594,13 @@
 
         /* ═════ Responsive mobile (widget embarqué étroit) ═════ */
         @media (max-width: 560px) {
-            .header { padding: 8px 12px; }
-            .header h1 { font-size: 1.05rem; }
-            .header-left, .header-center, .header-right { width: 100%; gap: 6px; }
+            /* Barre sur une seule ligne : le logo et le nom de la vue cèdent la place aux
+               contrôles, et ce qui dépasse se rattrape au défilement horizontal. */
+            .header { padding: 8px 12px; flex-wrap: nowrap; overflow-x: auto; }
+            .header h1 { display: none; }
+            .header-left, .header-center, .header-right { flex-wrap: nowrap; gap: 6px; }
             .header-right { margin-left: 0; }
-            .current-period { order: -1; flex: 1; }
+            .current-period { font-size: 0.82rem; }
             .view-controls { overflow-x: auto; max-width: 100%; }
             .btn, .filter-btn { min-height: 38px; }
             :root { --task-list-width: 132px; --cell-width: 26px; }
@@ -634,9 +644,9 @@
             </div>
             <div class="sort-selector">
                 <select id="colorSelect" onchange="changeColorMode(this.value)" title="Couleur des barres">
+                    <option value="responsable">Couleur: Responsable</option>
                     <option value="priority">Couleur: Priorité</option>
                     <option value="project">Couleur: Projet</option>
-                    <option value="responsable">Couleur: Responsable</option>
                     <option value="assignee">Couleur: Assigné</option>
                     <option value="status">Couleur: Statut</option>
                 </select>
@@ -668,8 +678,13 @@
                     <div class="filter-option" onclick="exportPNG()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Image PNG</div>
                 </div>
             </div>
-            <button class="btn" id="btnAjouterChantier" style="display:none" onclick="openCreateChantierPanel()">+ Chantier</button>
-            <button class="btn primary" onclick="openCreatePanel()">+ Tâche</button>
+            <div class="zone-ajout">
+                <button class="btn primary" id="btnAjouter" onclick="ouvrirMenuAjout(event)">+ Ajouter</button>
+                <div class="menu-ajout" id="menuAjout" hidden>
+                    <button onclick="choisirAjout('tache')">Tâche</button>
+                    <button onclick="choisirAjout('chantier')">Chantier</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -1260,7 +1275,7 @@
         let ganttNowAligned = false;
         let selectedTaskId = null;
         let sortMode = 'date';
-        let colorMode = 'project';
+        let colorMode = 'responsable';
         let categoriesProjet = [];
         // Bandeaux replies, par identifiant de projet. Persiste comme le repli des taches.
         let groupesReplies = new Set();
@@ -1621,7 +1636,7 @@
         }
 
         // Construit la liste aplatie des tâches visibles (DFS) avec respect filtres + expand/collapse
-        // Renvoie [{task, depth, dimmed, debutGroupe}]
+        // Renvoie [{task, depth, dimmed}]
         function buildVisibleTasks() {
             const filtered = getFilteredTasks();
             const directMatches = new Set(filtered.map(t => t.id));
@@ -1639,13 +1654,9 @@
             const rootsAll = tasks.filter(t => !t.parentTask || !tasks.find(x => x.id === t.parentTask));
             const roots = grouperParProjet(sortFratrie(rootsAll.filter(t => branchTasks.has(t.id))));
             const visible = [];
-            let projetPrecedent = null;
             const walk = (node, depth) => {
                 const dimmed = !directMatches.has(node.id);
-                const projet = node.projet || 0;
-                const debutGroupe = depth === 0 && projet !== projetPrecedent;
-                if (depth === 0) projetPrecedent = projet;
-                visible.push({ task: node, depth, dimmed, debutGroupe });
+                visible.push({ task: node, depth, dimmed });
                 if (hasChildren(node) && expandedTasks.has(node.id)) {
                     const kids = sortFratrie(getChildren(node.id).filter(k => branchTasks.has(k.id)));
                     for (const k of kids) walk(k, depth + 1);
@@ -1653,6 +1664,19 @@
             };
             for (const r of roots) walk(r, 0);
             return avecBandeauxDeProjet(visible);
+        }
+
+        // Une seule tête par ligne, celle du responsable, le reste de l'équipe passe dans le compteur.
+        // Sans responsable renseigné, le premier assigné tient la place.
+        function pastillesDeLigne(t, assignees) {
+            const responsable = t.Responsable || null;
+            const tete = responsable || (assignees.length ? assignees[0] : null);
+            if (!tete) return '';
+            const autres = assignees.filter(id => id !== tete).length;
+            return '<div class="task-avatars">' +
+                '<div class="task-avatar" style="background:' + getTeamMemberColor(tete) + '" title="' + escapeHtml(getTeamMemberName(tete)) + '">' + getInitials(getTeamMemberName(tete)) + '</div>' +
+                (autres > 0 ? '<div class="task-avatar more" title="' + autres + ' autre' + (autres > 1 ? 's' : '') + '">+' + autres + '</div>' : '') +
+            '</div>';
         }
 
         // Nom de la catégorie d'un projet (Projet / Produit / Offre de service), vide si le document ne
@@ -1665,6 +1689,23 @@
 
         // Insère un bandeau devant chaque groupe de projet. Le bandeau occupe une ligne à part entière :
         // la timeline pose ses barres à l'index de la ligne, un bandeau sans ligne décalerait tout.
+        // Teinte du bandeau : celle du responsable du projet, à défaut celle du projet. Posée en fond
+        // translucide pour rester lisible sous le texte, en clair comme en sombre.
+        function couleurDeGroupe(projet) {
+            if (!projet) return '#94a3b8';
+            // Couleur du responsable seulement s'il en porte une : sans ce test, un responsable sans
+            // couleur renverrait le bleu par défaut et tous les bandeaux se ressembleraient.
+            const resp = projet.responsable ? team.find(m => m.id === projet.responsable) : null;
+            if (resp && resp.couleur) return resp.couleur;
+            return projet.couleur || '#94a3b8';
+        }
+
+        function fondTranslucide(couleur, part) {
+            const m = /^#?([\da-f]{2})([\da-f]{2})([\da-f]{2})$/i.exec(couleur || '');
+            if (!m) return 'transparent';
+            return 'rgba(' + parseInt(m[1], 16) + ', ' + parseInt(m[2], 16) + ', ' + parseInt(m[3], 16) + ', ' + part + ')';
+        }
+
         function avecBandeauxDeProjet(visible) {
             const out = [];
             let projetPrecedent = null;
@@ -1678,6 +1719,7 @@
                                 id: idProjet,
                                 nom: projet ? projet.nom : 'Sans projet',
                                 categorie: categorieDuProjet(projet),
+                                couleur: couleurDeGroupe(projet),
                                 replie: groupesReplies.has(idProjet)
                             },
                             depth: 0
@@ -1992,9 +2034,6 @@
             // Un rendu demande pendant un clic ou un glisser en cours est reporte au
             // relachement (voir les ecouteurs mousedown/mouseup plus bas).
             if (gesteSourisEnCours) { renduEnAttente = true; return; }
-            // Créer un chantier n'a de sens que sur un document qui a leur table.
-            const btnChantier = document.getElementById('btnAjouterChantier');
-            if (btnChantier) btnChantier.style.display = colonneChantier() ? '' : 'none';
             updatePeriodLabel();
             computeEffectiveRange();
             renderTimelineHeader();
@@ -2139,9 +2178,10 @@
             if (collapseBtn) collapseBtn.style.display = tasks.some(t => hasChildren(t) && expandedTasks.has(t.id)) ? 'inline-flex' : 'none';
 
             let html = '';
-            currentVisible.forEach(({ task: t, depth, dimmed, debutGroupe, groupe }) => {
+            currentVisible.forEach(({ task: t, depth, dimmed, groupe }) => {
                 if (groupe) {
-                    html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '">' +
+                    html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '"' +
+                        ' style="background:' + fondTranslucide(groupe.couleur, 0.2) + '">' +
                         '<span class="groupe-chevron" onclick="event.stopPropagation();toggleGroupeProjet(' + groupe.id + ')" title="' + (groupe.replie ? 'Déplier' : 'Replier') + '">▼</span>' +
                         (groupe.categorie ? '<span class="groupe-badge">' + escapeHtml(groupe.categorie) + '</span>' : '') +
                         '<span class="groupe-nom">' + escapeHtml(groupe.nom) + '</span>' +
@@ -2157,7 +2197,7 @@
                 const progress = isParent ? aggregateProgress(t) : (t.progression || 0);
                 const selected = t.id === selectedTaskId;
                 const assignees = getAssigneesArray(t);
-                const avatarsHtml = assignees.length ? '<div class="task-avatars">' + assignees.slice(0, 2).map(id => '<div class="task-avatar" style="background:' + getTeamMemberColor(id) + '">' + getInitials(getTeamMemberName(id)) + '</div>').join('') + (assignees.length > 2 ? '<div class="task-avatar more">+' + (assignees.length - 2) + '</div>' : '') + '</div>' : '';
+                const avatarsHtml = pastillesDeLigne(t, assignees);
                 const subs = getSubtasks(t);
                 const subsDone = subs.filter(s => s.done).length;
                 const subBadge = subs.length ? '<span class="task-subtask-badge' + (subsDone === subs.length ? ' complete' : '') + '" title="Sous-tâches">◎ ' + subsDone + '/' + subs.length + '</span>' : '';
@@ -2168,7 +2208,7 @@
                     ? '<span class="tree-chevron' + (expandedTasks.has(t.id) ? ' expanded' : '') + '" onclick="event.stopPropagation();toggleExpand(' + t.id + ')" title="' + (expandedTasks.has(t.id) ? 'Replier' : 'Déplier') + '">▶</span>'
                     : '<span class="tree-chevron-placeholder"></span>';
                 const indent = depth * 18;
-                const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', debutGroupe ? 'debut-groupe' : ''].filter(Boolean).join(' ');
+                const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : ''].filter(Boolean).join(' ');
 
                 html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px">' +
                     (sortMode === 'manual' ? '<span class="drag-handle">☰</span>' : '') +
@@ -2248,7 +2288,13 @@
 
             let gridHtml = '';
             ft.forEach((_, iLigne) => {
-                gridHtml += '<div class="grid-row' + (currentVisible[iLigne] && currentVisible[iLigne].debutGroupe ? ' debut-groupe' : '') + '">';
+                const groupe = currentVisible[iLigne] && currentVisible[iLigne].groupe;
+                if (groupe) {
+                    gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background:' +
+                        fondTranslucide(groupe.couleur, 0.2) + '"></div>';
+                    return;
+                }
+                gridHtml += '<div class="grid-row">';
                 if (cfg.unit === 'month') {
                     const effEnd = addDays(start, totalDays);
                     let cur = new Date(start.getFullYear(), start.getMonth(), 1);
@@ -2649,6 +2695,32 @@
 
         function openCreatePanel() { openCreateTaskWithParent(null); }
 
+        // Créer un chantier n'a de sens que sur un document qui a leur table : sans elle, le bouton
+        // n'ouvre aucun choix et crée une tâche.
+        function ouvrirMenuAjout(e) {
+            const menu = document.getElementById('menuAjout');
+            if (!menu) return;
+            if (!colonneChantier()) { openCreatePanel(); return; }
+            if (e) e.stopPropagation();
+            menu.hidden = !menu.hidden;
+        }
+
+        function fermerMenuAjout() {
+            const menu = document.getElementById('menuAjout');
+            if (menu) menu.hidden = true;
+        }
+
+        document.addEventListener('click', (e) => {
+            const menu = document.getElementById('menuAjout');
+            if (menu && !menu.hidden && !menu.contains(e.target)) fermerMenuAjout();
+        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerMenuAjout(); });
+
+        function choisirAjout(quoi) {
+            fermerMenuAjout();
+            if (quoi === 'chantier') openCreateChantierPanel(); else openCreatePanel();
+        }
+
         // Création d'un chantier : même volet, en mode chantier, avec les champs que le cadrage laisse.
         function openCreateChantierPanel() {
             const today = new Date();
@@ -2927,10 +2999,13 @@
             content.innerHTML =
                 '<div class="panel-accent-bar" style="background:' + priorityColor + '"></div>' +
                 '<div class="panel-type-row">' +
-                    (chantier ? '<span class="type-pill selected">Chantier</span>' :
+                    (chantier ?
+                    '<span class="type-pill fige" title="Le type se choisit à la création">Tâche</span>' +
+                    '<span class="type-pill selected">Chantier</span>' +
+                    '<span class="type-pill fige" title="Le type se choisit à la création">◆ Jalon</span>' :
                     '<span class="type-pill ' + (data.type === 'tache' ? 'selected' : '') + '" onclick="updateField(\'type\',\'tache\')">Tâche</span>' +
-                    '<span class="type-pill ' + (data.type === 'jalon' ? 'selected' : '') + '" onclick="updateField(\'type\',\'jalon\')">◆ Jalon</span>' +
-                    '<span class="type-pill ' + (data.type === 'reunion' ? 'selected' : '') + '" onclick="updateField(\'type\',\'reunion\')"> Réunion</span>') +
+                    '<span class="type-pill fige" title="Un chantier se crée depuis le bouton Ajouter">Chantier</span>' +
+                    '<span class="type-pill ' + (data.type === 'jalon' ? 'selected' : '') + '" onclick="updateField(\'type\',\'jalon\')">◆ Jalon</span>') +
                 '</div>' +
                 (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
                 '<textarea rows="1" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" oninput="ajusterHauteurTitre(this);updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' + escapeHtml(data.titre) + '</textarea>' +

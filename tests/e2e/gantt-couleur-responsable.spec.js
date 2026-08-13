@@ -86,13 +86,11 @@ const fondDeLaBarre = (page, titre) => page.evaluate((t) => {
     return barre ? barre.style.background : null;
 }, titre);
 
-// Le defaut reste le projet : le responsable n'est renseigne que sur une poignee de lignes du
-// document du metier, et colorer par responsable rendrait le Gantt presque entierement gris.
-test('le mode Responsable est propose quand la colonne existe, sans devenir le defaut', async ({ page }) => {
+test('le mode Responsable est le defaut quand la colonne existe', async ({ page }) => {
     await ouvrirGantt(page, DOC_AVEC_RESPONSABLE);
 
     await expect(page.locator('#colorSelect option[value="responsable"]')).toHaveCount(1);
-    await expect(page.locator('#colorSelect')).toHaveValue('project');
+    await expect(page.locator('#colorSelect')).toHaveValue('responsable');
 });
 
 test('le chantier prend la couleur de son responsable', async ({ page }) => {
