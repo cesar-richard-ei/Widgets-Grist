@@ -434,6 +434,7 @@
         .type-pill:hover { border-color: var(--primary); color: var(--primary); }
         .type-pill.selected { background: var(--primary); color: white; border-color: var(--primary); }
         .panel-title-edit { font-size: 1.3rem; font-weight: 700; border: none; outline: none; background: transparent; color: var(--text); width: 100%; line-height: 1.3; padding: 10px 0 10px; border-bottom: 2px solid var(--border); margin-bottom: 4px; transition: border-color 0.15s; }
+        .panel-title-edit { resize: none; overflow: hidden; font-family: inherit; display: block; }
         .panel-title-edit:focus { border-bottom-color: var(--primary); }
         .panel-title-edit::placeholder { color: var(--text-light); font-weight: 400; font-size: 1.1rem; }
         .props-list { padding: 4px 0; border-bottom: 1px solid var(--border); margin-bottom: 8px; }
@@ -692,7 +693,6 @@
                 </div>
                 <div class="tf-overlay" id="ganttOverlay" style="display:none"></div>
             </div>
-            <div class="legend" id="ganttLegend"></div>
         </div>
 
         <div class="panel" id="panel">
@@ -2000,7 +2000,6 @@
             renderTimelineHeader();
             renderTaskList();
             renderTimeline();
-            renderLegend();
             syncScroll();
             updateGanttOverlay();
         }
@@ -2030,25 +2029,6 @@
                 html = '<div class="tf-empty"><span class="tf-empty-glyph">'+gicon+'</span><div class="tf-empty-title">Aucune tâche à planifier</div><div class="tf-empty-sub">Créez une première tâche avec des dates pour la voir apparaître sur la timeline.</div><button class="tf-empty-btn primary" onclick="openCreatePanel()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nouvelle tâche</button></div>';
             }
             ov.innerHTML = html; ov.style.display = "flex";
-        }
-        function renderLegend() {
-            const el = document.getElementById('ganttLegend');
-            if (!el) return;
-            const item = (color, label) => '<div class="legend-item"><div class="legend-color" style="background:' + color + '"></div>' + label + '</div>';
-            let html = '';
-            if (colorMode === 'priority') {
-                html = item(PRIORITY_COLORS[1], 'Critique') + item(PRIORITY_COLORS[2], 'Haute') + item(PRIORITY_COLORS[3], 'Moyenne') + item(PRIORITY_COLORS[4], 'Basse');
-            } else if (colorMode === 'status') {
-                html = statusCfg.list.map(s => item(s.fillColor, s.label)).join('');
-            } else if (colorMode === 'project') {
-                const visible = projects.filter(p => p.actif !== false).slice(0, 8);
-                html = visible.map(p => item(p.couleur || '#64748b', escapeHtml(p.nom))).join('');
-            } else if (colorMode === 'assignee' || colorMode === 'responsable') {
-                const visible = team.filter(m => m.actif !== false).slice(0, 8);
-                html = visible.map(m => item(getTeamMemberColor(m.id), escapeHtml(m.nom))).join('');
-            }
-            html += '<div class="legend-separator"></div><div class="legend-item"><div class="legend-milestone"></div>Jalon</div>';
-            el.innerHTML = html;
         }
 
         // Calcule la plage effective = période vue étendue uniquement pour les tâches qui la chevauchent.
@@ -2190,16 +2170,14 @@
                 const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', debutGroupe ? 'debut-groupe' : ''].filter(Boolean).join(' ');
 
                 html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px">' +
-                    '<span class="drag-handle">☰</span>' +
+                    (sortMode === 'manual' ? '<span class="drag-handle">☰</span>' : '') +
                     chevron +
-                    '<div class="task-priority-bar p' + p + '"></div>' +
                     '<div class="task-info">' +
                         '<div class="task-name">' + (jalon ? '◆ ' : '') + (escapeHtml(t.titre) || 'Sans titre') + '</div>' +
                         '<div class="task-meta">' +
                             '<span class="task-dates">' + formatDateShort(start) + ' → ' + formatDateShort(end) + '</span>' +
-                            (!jalon ? '<span class="task-progress-badge">' + progress + '%</span>' : '') +
-                            subBadge +
-                            childBadge +
+                            (!jalon && estChantier(t) ? '<span class="task-progress-badge">' + progress + '%</span>' : '') +
+                            (estChantier(t) ? subBadge + childBadge : '') +
                             avatarsHtml +
                         '</div>' +
                     '</div>' +
@@ -2833,6 +2811,14 @@
             racine.querySelectorAll('.charge-row input').forEach(i => { i.disabled = true; });
         }
 
+        // Le titre s'écrit sur autant de lignes qu'il en faut : un long libellé se relit mal quand il
+        // file en longueur. La hauteur est remise à zéro avant mesure, sinon elle ne fait que croître.
+        function ajusterHauteurTitre(champ) {
+            if (!champ) return;
+            champ.style.height = 'auto';
+            champ.style.height = champ.scrollHeight + 'px';
+        }
+
         function renderPanel() {
             const header = document.getElementById('panelHeader');
             const content = document.getElementById('panelContent');
@@ -2937,7 +2923,7 @@
                     '<span class="type-pill ' + (data.type === 'reunion' ? 'selected' : '') + '" onclick="updateField(\'type\',\'reunion\')"> Réunion</span>') +
                 '</div>' +
                 (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
-                '<input type="text" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" value="' + escapeHtml(data.titre) + '" oninput="updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' +
+                '<textarea rows="1" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" oninput="ajusterHauteurTitre(this);updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' + escapeHtml(data.titre) + '</textarea>' +
 
                 '<div class="props-list">' +
                     '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
@@ -3055,6 +3041,7 @@
                     '<div class="panel-footer-left"><button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 14px">Suppr.</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
 
             if (chantier) adapterVoletChantier(content);
+            ajusterHauteurTitre(document.getElementById('taskTitle'));
 
             if (panelState.isNew) {
                 const canCreate = data.titre && data.titre.trim().length > 0;

@@ -135,6 +135,7 @@ tfoot td.colres{background:var(--surface-2);z-index:2}
       <select class="btn" id="selGroup">
         <option value="person">Personne</option>
         <option value="project">Projet</option>
+        <option value="chantier">Chantier</option>
         <option value="role">Rôle</option>
       </select>
     </label>
@@ -756,18 +757,58 @@ if (typeof module !== 'undefined' && module.exports) module.exports = TF;
 // État
 // ============================================================================
 const S = {
-  tasks: [], team: [], projects: [],
+  tasks: [], team: [], projects: [], chantiers: [],
   granularity: 'week', offset: 0, horizon: 12,
   groupBy: 'person', unit: 'pct', includeDone: false, derive: false, mode: 'prevu', workdays: false, allocUnit: 'h',
   demo: false, extFilters: null, timeline: false
 };
 let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques — alimenté par TF.loadStatusConfig en Grist (terminal/libellés depuis les vrais choix)
+let schemaMeta = null; // métadonnées Grist (_grist_Tables[_column]), lues une fois par chargement
+const LIBELLE_GROUPE = { person: 'Personne', project: 'Projet', chantier: 'Chantier', role: 'Rôle' };
 
 // Utils
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const getRefList = (v) => Array.isArray(v) && v[0] === 'L' ? v.slice(1).map(Number) : [];
 const teamById = (id) => S.team.find(m => m.id === id);
 const projById = (id) => S.projects.find(p => p.id === id);
+const chantierById = (id) => S.chantiers.find(c => c.id === id);
+
+// Type déclaré d'une colonne, null si la table ou la colonne manque.
+function typeColonne(tableId, colId) {
+  if (!schemaMeta) return null;
+  const t = (schemaMeta.tables || []).find(x => x.tableId === tableId);
+  if (!t) return null;
+  const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.colId === colId);
+  return c ? c.type : null;
+}
+// Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents où
+// parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est parentTask qui
+// le porte : on se fie au type déclaré, jamais à la valeur, les identifiants des deux tables se
+// recouvrant.
+function colonneChantier() {
+  if (typeColonne('Tasks', 'chantier') === 'Ref:Chantiers') return 'chantier';
+  if (typeColonne('Tasks', 'parentTask') === 'Ref:Chantiers') return 'parentTask';
+  return null;
+}
+function chantierDeTache(t) {
+  const colonne = colonneChantier();
+  const id = (colonne && t) ? Number(t[colonne]) : 0;
+  return (id && chantierById(id)) ? id : 0;
+}
+// Projet d'une tâche : le sien, sinon celui de son chantier. Sur le document du métier aucune
+// tâche ne renseigne projet, le rattachement vit sur le chantier. Fonction de lecture seule : la
+// valeur déduite ne doit jamais repartir en base.
+function projetDeTache(t) {
+  if (t && t.projet) return Number(t.projet);
+  const c = chantierById(chantierDeTache(t));
+  return (c && c.projet) ? c.projet : 0;
+}
+// Un chantier vu par le plan de charge : son nom et le projet dont il hérite la couleur. Il ne
+// porte pas de charge propre, la sienne est la somme de celle de ses tâches.
+function chantierEnLigne(c) {
+  const projets = getRefList(c.Projets);
+  return { id: c.id, nom: c.Nom_du_chantier || '', projet: projets.length ? projets[0] : 0 };
+}
 const activeTeam = () => S.team.filter(m => m.actif !== false);
 const isTerminal = (t) => TF.isTerminal(statusCfg, t.statut);
 const capOf = (m) => (Number(m && m.capaciteHebdo) > 0 ? Number(m.capaciteHebdo) : 35);
@@ -786,7 +827,7 @@ function planTasks() {
   let ts = S.includeDone ? S.tasks : S.tasks.filter(t => !isTerminal(t));
   const f = S.extFilters;  // filtres partagés diffusés par la suite (onOptions)
   if (f) {
-    if (f.project != null && f.project !== '') ts = ts.filter(t => String(t.projet) === String(f.project));
+    if (f.project != null && f.project !== '') ts = ts.filter(t => String(projetDeTache(t)) === String(f.project));
     if (Array.isArray(f.assignee) && f.assignee.length) ts = ts.filter(t => getRefList(t.assignees).some(a => f.assignee.map(Number).includes(a)));
     if (Array.isArray(f.statut) && f.statut.length) ts = ts.filter(t => f.statut.includes(t.statut));
   }
@@ -815,36 +856,53 @@ const taskWeeks = (t) => Math.max((Math.floor(t.dateEcheance * 1000 / 86400000) 
 const gToInput = (ts) => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : '';
 const inputToG = (s) => s ? Math.floor(Date.parse(s + 'T00:00:00Z') / 1000) : null;
 function tasksForKey(key) {
-  if (S.groupBy === 'project') return planTasks().filter(t => String(t.projet || '0') === String(key)).map(t => t.id);
+  if (S.groupBy === 'project') return planTasks().filter(t => String(projetDeTache(t) || '0') === String(key)).map(t => t.id);
+  if (S.groupBy === 'chantier') return planTasks().filter(t => String(chantierDeTache(t) || '0') === String(key)).map(t => t.id);
   if (S.groupBy === 'person') return planTasks().filter(t => getRefList(t.assignees).includes(Number(key))).map(t => t.id);
   return [];
 }
 function toast(msg) { const el = document.getElementById('toast'); if (!el) return; el.textContent = msg; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 2800); }
 
 function keyFn() {
-  // Projet/Rôle = clé COMPOSITE "groupe|personne" → on garde la personne (vue ressource, distincte du Gantt).
-  if (S.groupBy === 'project') return (t, c) => (t.projet ? String(t.projet) : '0') + '|' + c.teamId;
+  // Projet/Chantier/Rôle = clé COMPOSITE "groupe|personne" → on garde la personne (vue ressource, distincte du Gantt).
+  if (S.groupBy === 'project') return (t, c) => String(projetDeTache(t) || '0') + '|' + c.teamId;
+  if (S.groupBy === 'chantier') return (t, c) => String(chantierDeTache(t) || '0') + '|' + c.teamId;
   if (S.groupBy === 'role') return (t, c) => { const m = teamById(c.teamId); return ((m && m.role) ? m.role : '—') + '|' + c.teamId; };
   return (t, c) => String(c.teamId);
 }
 
+// Lignes hiérarchiques d'un groupement porté par la tâche : une ligne d'en-tête par groupe, puis
+// une sous-ligne par personne qui y porte de la charge (capacité-aware).
+function lignesParGroupeDeTache(cleDe, entete) {
+  const gs = {};
+  for (const t of planTasks()) {
+    const id = cleDe(t);
+    const k = String(id || '0');
+    if (!gs[k]) gs[k] = Object.assign({ mem: new Map() }, entete(id));
+    for (const c of effCharges(t)) { const m = teamById(c.teamId); if (m) gs[k].mem.set(m.id, m); }
+  }
+  const out = [];
+  for (const k of Object.keys(gs)) {
+    const g = gs[k]; const mems = [...g.mem.values()];
+    out.push({ key: 'h:' + k, isHeader: true, label: g.label, color: g.color, members: mems, gkeys: mems.map(m => k + '|' + m.id) });
+    for (const m of mems) out.push({ key: k + '|' + m.id, isSub: true, teamId: m.id, label: m.nom, color: m.couleur || '#6366f1', cap: capOf(m), members: [m] });
+  }
+  return out;
+}
+
 // Lignes (ressources/groupes) avec libellé + capacité nominale + membres (pour la capacité par période)
 function buildRows() {
-  // Projet/Rôle : HIÉRARCHIQUE → ligne d'en-tête (groupe) + une sous-ligne par personne du groupe (capacité-aware).
   if (S.groupBy === 'project') {
-    const ps = {};
-    for (const t of planTasks()) {
-      const pk = t.projet ? String(t.projet) : '0';
-      if (!ps[pk]) { const p = projById(t.projet); ps[pk] = { label: p ? p.nom : 'Sans projet', color: p ? p.couleur : '#64748b', mem: new Map() }; }
-      for (const c of effCharges(t)) { const m = teamById(c.teamId); if (m) ps[pk].mem.set(m.id, m); }
-    }
-    const out = [];
-    for (const pk of Object.keys(ps)) {
-      const g = ps[pk]; const mems = [...g.mem.values()];
-      out.push({ key: 'h:' + pk, isHeader: true, label: g.label, color: g.color, members: mems, gkeys: mems.map(m => pk + '|' + m.id) });
-      for (const m of mems) out.push({ key: pk + '|' + m.id, isSub: true, teamId: m.id, label: m.nom, color: m.couleur || '#6366f1', cap: capOf(m), members: [m] });
-    }
-    return out;
+    return lignesParGroupeDeTache(projetDeTache, (id) => {
+      const p = projById(id);
+      return { label: p ? p.nom : 'Sans projet', color: p ? p.couleur : '#64748b' };
+    });
+  }
+  if (S.groupBy === 'chantier') {
+    return lignesParGroupeDeTache(chantierDeTache, (id) => {
+      const c = chantierById(id); const p = c ? projById(c.projet) : null;
+      return { label: c ? c.nom : 'Hors chantier', color: p ? p.couleur : '#64748b' };
+    });
   }
   if (S.groupBy === 'role') {
     const rs = {};
@@ -892,6 +950,15 @@ function capForRow(row, periodStart) {
 }
 function rowReduced(row, periodStart) { return (row.members || []).some(m => indispoFrac(m, periodStart) > 0); }
 
+// Grouper par chantier n'a de sens que sur un document qui rattache ses tâches à des chantiers.
+function entretenirOptionChantier() {
+  const select = document.getElementById('selGroup');
+  const option = select && select.querySelector('option[value="chantier"]');
+  if (!option || colonneChantier()) return;
+  option.remove();
+  if (S.groupBy === 'chantier') S.groupBy = 'person';
+}
+
 function cellColor(h, cap) {
   if (!(h > 0)) return 'transparent';
   if (!(cap > 0)) return 'var(--ok)';
@@ -906,6 +973,7 @@ function render() {
   renderSeg('segGran', [['week', 'Sem'], ['month', 'Mois']], S.granularity, v => { S.granularity = v; S.offset = 0; render(); });
   renderSeg('segMode', [['prevu', 'Prévu'], ['realise', 'Réalisé'], ['reste', 'Reste'], ['dispo', 'Dispo']], S.mode, v => { S.mode = v; if (v === 'dispo' && S.groupBy !== 'person') { S.groupBy = 'person'; document.getElementById('selGroup').value = 'person'; toast('Vue Dispo : groupement « Personne » (la marge ne se mesure qu\'au global, tous projets confondus)'); } render(); });
   renderSeg('segUnit', [['pct', '%'], ['hours', 'h']], S.unit, v => { S.unit = v; render(); });
+  entretenirOptionChantier();
   document.getElementById('selGroup').value = S.groupBy;
   document.getElementById('chkDone').checked = S.includeDone;
   document.getElementById('chkDerive').checked = S.derive;
@@ -1002,7 +1070,7 @@ function renderTimeline() {
   const body = document.getElementById('tlBody');
   const periods = TF.periodRange(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon);
   const starts = periodStarts(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon);
-  const gName = S.groupBy === 'project' ? 'projet' : S.groupBy === 'role' ? 'rôle' : 'personne';
+  const gName = (LIBELLE_GROUPE[S.groupBy] || 'Personne').toLowerCase();
   const ttl = document.querySelector('#tlPanel .tlhead strong'); if (ttl) ttl.textContent = 'Timeline par ' + gName;
   document.getElementById('tlRange').textContent = '  ' + plabel(periods[0]) + ' → ' + plabel(periods[periods.length - 1]);
   const winStart = starts[0].getTime();
@@ -1120,7 +1188,7 @@ const PRIO_TL = { 1: ['Critique', '#e5484d'], 2: ['Haute', '#f0982d'], 3: ['Moye
 function delaiDays(t) { return (t.dateCloture && t.dateEcheance) ? Math.round((t.dateCloture - t.dateEcheance) / 86400) : 0; }
 function delaiTxt(t) { const d = delaiDays(t); if (d > 0) return '+' + d + ' j de retard'; if (d < 0) return Math.abs(d) + ' j d’avance'; return 'à temps'; }
 function taskCardHtml(t) {
-  const p = projById(t.projet);
+  const p = projById(projetDeTache(t));
   const st = statusCfg.byValue[t.statut] || {};
   const pr = PRIO_TL[parseInt(t.priorite)] || PRIO_TL[3];
   const asg = getRefList(t.assignees).map(teamById).filter(Boolean);
@@ -1267,8 +1335,9 @@ function openCell(key, period) {
   const sorted = items.slice().sort((a, b) => b.slice - a.slice); // la plus grosse contribution en premier
   const unitToggle = editable ? '<div class="unitbar">Allouer en <button class="' + (S.allocUnit === 'h' ? 'on' : '') + '" onclick="setAllocUnit(\'h\')">heures</button><button class="' + (S.allocUnit === 'pct' ? 'on' : '') + '" onclick="setAllocUnit(\'pct\')">% capacité</button></div>' : '';
   document.getElementById('pBody').innerHTML = banner + hint + unitToggle + (sorted.length ? sorted.map(i => {
-    const p = projById(i.task.projet);
-    const sliceTxt = (p ? esc(p.nom) : 'Sans projet') + ' · ' + i.slice + ' h cette ' + per;
+    const p = projById(projetDeTache(i.task));
+    const ch = chantierById(chantierDeTache(i.task));
+    const sliceTxt = (ch ? esc(ch.nom) + ' · ' : '') + (p ? esc(p.nom) : 'Sans projet') + ' · ' + i.slice + ' h cette ' + per;
     const usePct = editable && S.allocUnit === 'pct' && capWk > 0;
     const wks = taskWeeks(i.task);
     const val = usePct ? Math.round(i.total / (capWk * wks) * 100) : i.total;
@@ -1409,7 +1478,7 @@ function bindToolbar() {
   document.getElementById('navPrev').onclick = () => { S.offset--; render(); };
   document.getElementById('navNext').onclick = () => { S.offset++; render(); };
   document.getElementById('navToday').onclick = () => { S.offset = 0; render(); };
-  document.getElementById('selGroup').onchange = (e) => { S.groupBy = e.target.value; if (S.groupBy !== 'person' && S.mode === 'dispo') { S.mode = 'prevu'; toast('Dispo indisponible en groupement « ' + (S.groupBy === 'project' ? 'Projet' : 'Rôle') + ' » (marge = notion globale) — vue Prévu rétablie'); } render(); };
+  document.getElementById('selGroup').onchange = (e) => { S.groupBy = e.target.value; if (S.groupBy !== 'person' && S.mode === 'dispo') { S.mode = 'prevu'; toast('Dispo indisponible en groupement « ' + (LIBELLE_GROUPE[S.groupBy] || S.groupBy) + ' » (marge = notion globale) — vue Prévu rétablie'); } render(); };
   document.getElementById('chkDone').onchange = (e) => { S.includeDone = e.target.checked; render(); };
   document.getElementById('chkDerive').onchange = (e) => { S.derive = e.target.checked; render(); };
   document.getElementById('chkWorkdays').onchange = (e) => { S.workdays = e.target.checked; render(); };
@@ -1453,6 +1522,13 @@ async function lireTable(nom, optionnelle) {
   }
 }
 
+// Métadonnées de schéma : elles portent le type déclaré des colonnes, seul moyen de savoir si
+// parentTask désigne une tâche ou un chantier.
+async function lireSchema() {
+  const [tables, cols] = await Promise.all([lireTable('_grist_Tables'), lireTable('_grist_Tables_column')]);
+  return (tables && cols) ? { tables: TF.columnarToRows(tables), cols: TF.columnarToRows(cols) } : null;
+}
+
 // Chargement encore en vol au bout du délai : nommer les tables qui n'ont pas répondu, et le
 // dire à l'écran. Sans cela le widget reste sur « Chargement… » indéfiniment. Pas de repli sur
 // les données d'exemple : les lectures peuvent encore aboutir, et la démo couperait les
@@ -1473,12 +1549,17 @@ async function loadGrist() {
   const seq = ++_chargement;
   console.log(LOG, 'chargement', seq, 'a', depuisOuverture());
   const attente = setTimeout(() => signalerAttente(seq), DELAI_SANS_REPONSE);
-  let [tasks, team, projects, dispos] = await Promise.all([
+  let [tasks, team, projects, dispos, meta] = await Promise.all([
     lireTable('Tasks'),
     lireTable('Team'),
     lireTable('Projects'),
-    lireTable('Disponibilites', true)
+    lireTable('Disponibilites', true),
+    lireSchema()
   ]);
+  schemaMeta = meta;
+  // La table des chantiers n'est lue que si une colonne de Tasks la désigne : sur l'ancien modèle
+  // elle n'existe pas, et son absence n'a rien d'anormal.
+  const chantiers = colonneChantier() ? await lireTable('Chantiers') : null;
   const ensured = await ensurePlanColumns(team, tasks, dispos); team = ensured.team; tasks = ensured.tasks; dispos = ensured.dispos;
   clearTimeout(attente);
   if (seq !== _chargement) {
@@ -1488,12 +1569,13 @@ async function loadGrist() {
   S.tasks = tasks ? TF.columnarToRows(tasks) : [];
   S.team = team ? TF.columnarToRows(team) : [];
   S.projects = projects ? TF.columnarToRows(projects) : [];
+  S.chantiers = chantiers ? TF.columnarToRows(chantiers).map(chantierEnLigne) : [];
   S.dispos = dispos ? TF.columnarToRows(dispos) : [];
   buildDispoIndex();
-  try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', S.tasks.map(t => t && t.statut)); }
+  try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', S.tasks.map(t => t && t.statut), schemaMeta); }
   catch (e) { console.warn(LOG, 'statuts non lus, valeurs par defaut :', (e && e.message) || e); }
   render();
-  console.log(LOG, 'rendu a', depuisOuverture(), '— ressources:', S.team.length, 'taches:', S.tasks.length, 'projets:', S.projects.length);
+  console.log(LOG, 'rendu a', depuisOuverture(), '— ressources:', S.team.length, 'taches:', S.tasks.length, 'projets:', S.projects.length, 'chantiers:', S.chantiers.length);
   if (!S.team.length || !S.tasks.length) console.warn(LOG, 'rendu sans ressource ou sans tache : la vue apparait vide');
 }
 
