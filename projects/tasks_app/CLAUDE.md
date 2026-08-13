@@ -250,7 +250,7 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 
 ### Plan (v16) — plan de charge
 
-- **Heatmap** capacité vs charge par ressource × période (semaine/mois), groupable par **Personne / Projet / Rôle** (Projet/Rôle = en-tête + sous-lignes par membre)
+- **Heatmap** capacité vs charge par ressource × période (semaine/mois), groupable par **Personne / Projet / Chantier / Rôle** (Projet/Chantier/Rôle = en-tête + sous-lignes par membre)
 - **Modes** : Prévu / Réalisé / Reste / **Dispo** (voir modèle ci-dessous)
 - Unités **% / h**, options **Inclure terminé / Estimer / Jours ouvrés**
 - **Allocation éditable** (drill sur cellule) : heures, %, **réaffectation** entre membres, **replanification** des dates — écriture réelle dans `Tasks.charges` / dates
@@ -633,6 +633,27 @@ ligne chantier : son identifiant décalé ne correspond à aucun enregistrement.
 
 Couvert par `tests/e2e/gantt-chantiers.spec.js`, qui exerce les trois états du document : modèle cible,
 copie de travail où `parentTask` a été repointé, et ancien modèle sans table `Chantiers`.
+
+#### Chantiers vus par le Plan
+
+Le plan de charge n'est pas un arbre : il ne fait pas remonter les chantiers en lignes. Il les lit
+pour deux choses, avec les mêmes règles de détection fondées sur le type déclaré des colonnes.
+
+`projetDeTache()` rend le projet de la tâche, ou à défaut celui de son chantier (`Chantiers.Projets`,
+premier de la liste). Sans cela, le groupement par projet et les libellés du drill s'effondrent sur un
+seul « Sans projet » : sur le document du métier, aucune des 79 tâches ne renseigne `Tasks.projet`,
+le rattachement vit sur le chantier.
+
+Le groupement **Chantier** s'ajoute à Projet et Rôle, sur le même modèle hiérarchique (en-tête de
+groupe, sous-ligne par personne chargée). Son option est retirée du sélecteur par
+`entretenirOptionChantier()` sur un document sans chantiers.
+
+`projetDeTache()` est une **lecture seule** : le projet déduit ne doit jamais repartir en base, il
+écrirait un rattachement que le métier n'a pas saisi. Le Plan n'écrit que `Tasks.charges`,
+`Tasks.assignees`, les dates, `Team.capaciteHebdo` et `Disponibilites` : aucune colonne dont le sens
+a changé.
+
+Couvert par `tests/e2e/plan-chantiers.spec.js`, sur les trois mêmes états de document que le Gantt.
 
 #### Volet chantier
 
