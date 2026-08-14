@@ -235,7 +235,7 @@ async function fusionnerChantiers() {
     const colonne = colonneChantier();
     if (!colonne) return;
     let brut;
-    try { brut = await grist.docApi.fetchTable('Chantiers'); } catch (e) { return; }
+    try { brut = await grist.docApi.fetchTable('Chantiers'); } catch (e) { noterRefus('Chantiers'); return; }
     const chantiers = convert(brut).map(chantierEnLigne);
     const parProjet = new Map(chantiers.map(c => [c.idChantier, c.projet]));
     const hierarchie = parentTaskEstHierarchie();
@@ -1251,78 +1251,6 @@ function renderDependencies(ft, start, pxPerDay, barresTracees) {
     document.getElementById('timelineGrid').appendChild(svg);
 }
 
-// Mini Gantt read-only du sous-arbre d'une tâche (affiché dans son panneau de détail).
-// Structure compacte : colonne de noms à gauche, en-tête de mois + pistes scrollables à droite.
-// Calculs via les briques partagées TF.*. Rien d'interactif.
-function buildMiniGanttHtml(rootId, highlightId) {
-    const root = tasks.find(t => t.id === rootId);
-    if (!root) return '';
-    const scoped = [root].concat(getAllDescendants(rootId));
-    // Dates avant 2000 = non renseignées (epoch 0 = 01/01/1970), à ignorer.
-    const cleanTs = (ts) => { const n = Number(ts); return (n && n > 946684800) ? n : null; };
-    const aggClean = (t, seen) => {
-        seen = seen || new Set();
-        if (seen.has(t.id)) return { s: cleanTs(t.dateDebut), e: cleanTs(t.dateEcheance) };
-        seen.add(t.id);
-        let s = cleanTs(t.dateDebut), e = cleanTs(t.dateEcheance);
-        for (const k of getChildren(t.id)) { const sub = aggClean(k, seen); if (sub.s != null && (s == null || sub.s < s)) s = sub.s; if (sub.e != null && (e == null || sub.e > e)) e = sub.e; }
-        return { s: s, e: e };
-    };
-    const datedOf = (t) => { const a = hasChildren(t) ? aggClean(t) : { s: cleanTs(t.dateDebut), e: cleanTs(t.dateEcheance) }; return { s: a.s != null ? gristToDate(a.s) : null, e: a.e != null ? gristToDate(a.e) : null }; };
-    const dated = scoped.map(t => datedOf(t)).filter(x => x.s && x.e);
-    if (!dated.length) return '<div class="mini-gantt-empty">Aucune date sur le sous-arbre.</div>';
-
-    let minS = dated[0].s, maxE = dated[0].e;
-    dated.forEach(x => { if (x.s < minS) minS = x.s; if (x.e > maxE) maxE = x.e; });
-    const viewDays = Math.max(getDaysDiff(minS, maxE), 7);
-    const view = viewDays <= 45 ? { unit: 'day', cellWidth: 20 } : viewDays <= 240 ? { unit: 'week', cellWidth: 24 } : { unit: 'month', cellWidth: 54 };
-    const scale = TF.computeTimelineScale({ tasks: dated.map(x => ({ start: x.s, end: x.e })), unit: view.unit, cellWidth: view.cellWidth, viewStart: minS, viewDays: viewDays, availableWidth: 240 });
-    const start = scale.effectiveStart, totalDays = scale.effectiveDays, pxPerDay = scale.pxPerDay;
-    const totalWidth = scale.numCells * scale.cellWidth;
-
-    // En-tête : un libellé de mois par mois de la plage, positionné par date.
-    let header = '';
-    let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-    const rangeEnd = addDays(start, totalDays);
-    while (cur < rangeEnd) {
-        const next = new Date(cur.getFullYear(), cur.getMonth() + 1, 1);
-        const from = cur < start ? start : cur;
-        const x = Math.max(0, Math.round(getDaysDiff(start, from) * pxPerDay));
-        const w = Math.round(getDaysDiff(from, next) * pxPerDay);
-        const label = cur.toLocaleDateString('fr-FR', { month: 'short' }) + ' ' + String(cur.getFullYear()).slice(2);
-        header += '<div class="mg-month" style="left:' + x + 'px;width:' + w + 'px">' + label + '</div>';
-        cur = next;
-    }
-
-    let names = '', tracks = '';
-    scoped.forEach(t => {
-        const hl = t.id === highlightId ? ' hl' : '';
-        names += '<div class="mg-name' + hl + '" title="' + escapeHtml(t.titre) + '">' + escapeHtml(t.titre) + '</div>';
-        const d = datedOf(t);
-        let mark = '';
-        if (d.s && d.e) {
-            const p = getTaskPriority(t);
-            const geo = TF.computeBarGeometry({ start: start, tStart: d.s, tEnd: d.e, pxPerDay: pxPerDay });
-            if (isJalon(t)) {
-                mark = '<div class="mg-milestone p' + p + hl + '" style="left:' + geo.diamondLeft + 'px"></div>';
-            } else {
-                mark = '<div class="mg-bar p' + p + (hasChildren(t) ? ' parent' : '') + hl + '" style="left:' + geo.barLeft + 'px;width:' + geo.barWidth + 'px"><div class="mg-progress" style="width:' + (t.progression || 0) + '%"></div></div>';
-            }
-        }
-        tracks += '<div class="mg-track' + hl + '">' + mark + '</div>';
-    });
-
-    const today = new Date();
-    const todayOffset = getDaysDiff(start, today);
-    const todayLine = (todayOffset >= 0 && todayOffset <= totalDays) ? '<div class="mg-today" style="left:' + Math.round(todayOffset * pxPerDay) + 'px"></div>' : '';
-
-    return '<div class="mg">' +
-        '<div class="mg-left"><div class="mg-head-cell"></div>' + names + '</div>' +
-        '<div class="mg-right"><div class="mg-canvas" style="width:' + totalWidth + 'px">' +
-            '<div class="mg-time-header">' + header + '</div>' + tracks + todayLine +
-        '</div></div></div>';
-}
-
 function setupTooltip(el, task) {
     const tooltip = document.getElementById('tooltip');
     el.addEventListener('mouseenter', () => {
@@ -1746,7 +1674,7 @@ function renderPanel() {
     const subtasksDone = (data.subtasks || []).filter(st => st.done).length;
     const subtasksTotal = (data.subtasks || []).length;
     const descLabel = data.type === 'reunion' ? 'Ordre du jour' : data.type === 'jalon' ? "Critères d'acceptation" : 'Description';
-    const assignLabel = data.type === 'reunion' ? 'Participants' : 'Assignés';
+    const assignLabel = data.type === 'reunion' ? 'Participants' : 'Contributeurs';
     const titlePlaceholder = data.type === 'jalon' ? 'Nom du jalon...' : data.type === 'reunion' ? 'Sujet de la réunion...' : 'Titre de la tâche...';
 
     // Champ de recherche partagé par les sélecteurs recherchables.
@@ -1814,9 +1742,7 @@ function renderPanel() {
     }).join('');
 
     content.innerHTML =
-        '<div class="panel-accent-bar" style="background:' + priorityColor + '"></div>' +
         '<div class="panel-type-row">' + pastillesDeType(data, chantier) + '</div>' +
-        (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
         '<textarea rows="1" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" oninput="ajusterHauteurTitre(this);updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' + escapeHtml(data.titre) + '</textarea>' +
 
         '<div class="props-list">' +
@@ -1851,15 +1777,9 @@ function renderPanel() {
                       '</div>'
                     : '<div class="multi-select" id="parentSelect"><button class="addbtn" onclick="toggleMultiSelect(\'parentSelect\')"><span style="font-size:1rem;line-height:1">+</span> Choisir une tâche parent</button><div class="multi-select-dropdown">' + msSearch + (parentOptions || '<div class="multi-select-empty">Aucune tâche dans ce projet</div>') + msNoResult + '</div></div>') +
             '</div></div>' +
-            '<div class="prop-row"><span class="prop-label">Couleur</span><div class="prop-value"><div style="display:flex;gap:8px;align-items:center">' +
-                '<input type="color" value="' + (data.couleur || getTaskColor(data)) + '" onchange="updateField(\'couleur\', this.value)" style="width:36px;height:28px;border:1px solid var(--border);border-radius:6px;cursor:pointer;padding:2px">' +
-                (data.couleur
-                    ? '<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="updateField(\'couleur\', null)">Réinitialiser</button>'
-                    : '<span style="font-size:0.72rem;color:var(--text-muted)">Héritée du mode « ' + colorMode + ' »</span>') +
-            '</div></div></div>' +
             '<div class="prop-row"><span class="prop-label">' + assignLabel + '</span><div class="prop-value">' +
                 (data.assignees.length ? '<div class="asg-list">' + data.assignees.map(function(id){ var nm=getTeamMemberName(id)||'?'; var initials=nm.split(' ').filter(Boolean).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase(); var mem=team.find(function(x){return x.id===id;}); return '<div class="asg"><span class="asg-ava" style="background:'+getTeamMemberColor(id)+'">'+escapeHtml(initials)+'</span><span class="an">'+escapeHtml(nm)+'</span>'+(mem&&mem.role?'<span class="ar">'+escapeHtml(mem.role)+'</span>':'')+'<button class="asg-x" title="Retirer" onclick="removeAssignee('+id+')">×</button></div>'; }).join('') + '</div>' : '') +
-                '<div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect(\'assigneesSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' + (data.type === 'reunion' ? 'Ajouter un participant' : 'Assigner un membre') + '</button><div class="multi-select-dropdown">' + msSearch + (assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>') + msNoResult + '</div></div>' +
+                '<div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect(\'assigneesSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' + (data.type === 'reunion' ? 'Ajouter un participant' : 'Ajouter un contributeur') + '</button><div class="multi-select-dropdown">' + msSearch + (assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>') + msNoResult + '</div></div>' +
             '</div></div>' +
             (data.type === 'tache' ?
                 '<div class="prop-row"><span class="prop-label">Temps &amp; charge</span><div class="prop-value">' +
@@ -1909,20 +1829,9 @@ function renderPanel() {
                 addBtn + adjustBtn + '</div>';
         })() : '') +
 
-        // Mini Gantt : sous-arbre de la tâche si elle a des enfants, sinon celui de son parent (tâche courante surlignée).
-        (function () {
-            if (panelState.isNew) return '';
-            const miniRoot = getChildren(panelState.taskId).length ? panelState.taskId : (data.parentTask || null);
-            if (!miniRoot) return '';
-            return '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Planning</span></div>' + buildMiniGanttHtml(miniRoot, panelState.taskId) + '</div>';
-        })() +
-
         (data.type === 'jalon' ?
             '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Prérequis</span>' + (data.dependDe.length ? '<span class="panel-section-badge">' + doneCount + '/' + data.dependDe.length + '</span>' : '') + '</div>' +
-            '<div class="prereq-list">' + (prereqHtml || '<div class="prereq-empty">Aucune dépendance — liez des tâches amont via le panneau d\'une tâche.</div>') + '</div></div>' :
-            '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">' + (data.type === 'reunion' ? 'Points à traiter' : 'Checklist') + '</span>' + (subtasksTotal > 0 ? '<span class="panel-section-badge">' + subtasksDone + '/' + subtasksTotal + '</span>' : '') + '</div>' +
-            '<div class="subtask-list">' + (data.subtasks || []).map(function(st) { return '<div class="subtask-item ' + (st.done ? 'done' : '') + '"><input type="checkbox" class="subtask-checkbox" ' + (st.done ? 'checked' : '') + ' onchange="toggleSubtask(' + st.id + ')"><input class="subtask-text" value="' + escapeHtml(st.text) + '" onchange="editSubtask(' + st.id + ', this.value)" onkeydown="if(event.key===\'Enter\')this.blur()"><button class="subtask-remove" onclick="removeSubtask(' + st.id + ')">×</button></div>'; }).join('') + '</div>' +
-            '<div class="subtask-add"><input type="text" id="newSubtaskInput" placeholder="Ajouter..." onkeydown="handleSubtaskKeydown(event)"><button onclick="addSubtask()">+</button></div></div>') +
+            '<div class="prereq-list">' + (prereqHtml || '<div class="prereq-empty">Aucune dépendance — liez des tâches amont via le panneau d\'une tâche.</div>') + '</div></div>' : '') +
 
         (data.type !== 'jalon' ?
             '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Détails</span></div>' +
@@ -1932,7 +1841,7 @@ function renderPanel() {
             '</div>' : '') +
 
         (!panelState.isNew ?
-            '<div class="panel-footer-left">' + (chantier ? '' : '<button class="panel-btn" onclick="dupliquerTache()" style="width:auto;padding:10px 14px;margin-right:8px;background:transparent;color:var(--text-muted);border:1px solid var(--border)">Dupliquer</button>') + '<button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 14px">Suppr.</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
+            '<div class="panel-footer-left">' + (chantier ? '' : '<button class="panel-btn" onclick="dupliquerTache()" style="width:auto;padding:10px 14px;margin-right:8px;background:transparent;color:var(--text-muted);border:1px solid var(--border)">Dupliquer</button>') + '<button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 18px">Supprimer la tâche</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
 
     if (chantier) adapterVoletChantier(content);
     ajusterHauteurTitre(document.getElementById('taskTitle'));
@@ -2588,14 +2497,34 @@ async function seedData() {
     } catch (e) { console.log('Seed error:', e); }
 }
 
+// Une table déclarée dans le document mais refusée à la lecture, c'est un problème de droits :
+// l'écran est alors le même que celui d'une erreur de structure, et rien ne le disait.
+let tablesRefusees = new Set();
+
+function noterRefus(nom) {
+    const declaree = schemaMeta && (schemaMeta.tables || []).some(t => t.tableId === nom);
+    if (declaree) tablesRefusees.add(nom);
+}
+
+function signalerTablesRefusees() {
+    const bandeau = document.getElementById('alerteTables');
+    if (!bandeau) return;
+    if (!tablesRefusees.size) { bandeau.hidden = true; return; }
+    const noms = Array.from(tablesRefusees).join(', ');
+    console.warn('[gantt] tables illisibles :', noms);
+    bandeau.textContent = 'Lecture refusée sur : ' + noms + '. Le Gantt est incomplet, vérifiez vos accès à ces tables.';
+    bandeau.hidden = false;
+}
+
 async function loadAllData(prefetched) {
+    tablesRefusees = new Set();
     // prefetched : données déjà lues par ensureSchema à l'ouverture (évite une seconde lecture). Absent sur les rechargements onRecords → lecture fraîche.
-    try { const _raw = (prefetched && prefetched.Tasks) || await grist.docApi.fetchTable('Tasks'); TASK_COLS = new Set(Object.keys(_raw || {})); tasks = convert(_raw); } catch (e) { tasks = []; }
-    try { team = convert((prefetched && prefetched.Team) || await grist.docApi.fetchTable('Team')); } catch (e) { team = []; }
-    try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; }
+    try { const _raw = (prefetched && prefetched.Tasks) || await grist.docApi.fetchTable('Tasks'); TASK_COLS = new Set(Object.keys(_raw || {})); tasks = convert(_raw); } catch (e) { tasks = []; noterRefus('Tasks'); }
+    try { team = convert((prefetched && prefetched.Team) || await grist.docApi.fetchTable('Team')); } catch (e) { team = []; noterRefus('Team'); }
+    try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; noterRefus('Projects'); }
     // Categorie du sujet de niveau 1 (Projet / Produit / Offre de service), affichee en badge sur
     // le bandeau. Table absente sur un document qui ne la porte pas : le bandeau garde le nom seul.
-    try { categoriesProjet = convert(await grist.docApi.fetchTable('Categorie_de_projet')); } catch (e) { categoriesProjet = []; }
+    try { categoriesProjet = convert(await grist.docApi.fetchTable('Categorie_de_projet')); } catch (e) { categoriesProjet = []; noterRefus('Categorie_de_projet'); }
     gristReady = true;
     await fusionnerChantiers();
     entretenirOptionResponsable();
@@ -2603,6 +2532,7 @@ async function loadAllData(prefetched) {
     sortTasks();
     try { statusCfg = await TF.loadStatusConfig(grist, 'Tasks', 'statut', tasks.map(t => t && t.statut), schemaMeta); } catch (e) {}
     updateFilterMenus();
+    signalerTablesRefusees();
     render();
 }
 
