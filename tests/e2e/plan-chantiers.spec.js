@@ -76,6 +76,17 @@ const DOC_CIBLE = {
     }
 };
 
+// Document du metier apres migration : la colonne de rattachement s'appelle « Chantiers ».
+const DOC_COLONNE_NOMMEE = {
+    Chantiers: CHANTIERS,
+    Projects: PROJECTS,
+    Team: TEAM,
+    Tasks: {
+        columns: Object.assign({ Chantiers: { type: 'Ref:Chantiers' }, parentTask: { type: 'Ref:Tasks' } }, COLONNES_TASKS),
+        records: avec([{ Chantiers: 1 }, { Chantiers: 1 }, { Chantiers: 2 }])
+    }
+};
+
 // Copie de travail du metier : parentTask a ete repointe vers Chantiers, sans colonne chantier.
 const DOC_COPIE_DE_TRAVAIL = {
     Chantiers: CHANTIERS,
@@ -125,6 +136,15 @@ test('le projet du chantier porte le groupement quand la tache n en porte pas', 
 
     await expect(grille(page)).toContainText('Portail habilitations');
     await expect(grille(page)).toContainText('Guides utilisateurs');
+    await expect(grille(page)).not.toContainText('Sans projet');
+});
+
+test('le projet est resolu quelle que soit le nom de la colonne de rattachement', async ({ page }) => {
+    await ouvrirPlan(page, DOC_COLONNE_NOMMEE);
+
+    await grouperPar(page, 'project');
+
+    await expect(grille(page)).toContainText('Portail habilitations');
     await expect(grille(page)).not.toContainText('Sans projet');
 });
 

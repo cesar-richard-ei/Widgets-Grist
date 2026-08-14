@@ -788,7 +788,11 @@ function typeColonne(tableId, colId) {
 function colonneChantier() {
   if (typeColonne('Tasks', 'chantier') === 'Ref:Chantiers') return 'chantier';
   if (typeColonne('Tasks', 'parentTask') === 'Ref:Chantiers') return 'parentTask';
-  return null;
+  // Le document du métier nomme la colonne « Chantiers » : c'est le type qui fait foi, pas le nom.
+  const t = schemaMeta && (schemaMeta.tables || []).find(x => x.tableId === 'Tasks');
+  if (!t) return null;
+  const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.type === 'Ref:Chantiers');
+  return c ? c.colId : null;
 }
 function chantierDeTache(t) {
   const colonne = colonneChantier();

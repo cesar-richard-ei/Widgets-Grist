@@ -645,6 +645,13 @@ n'en portent pas. Les lignes chantier sont marquées `estChantier` : le volet t�
 dessus et elles ne sont ni déplaçables ni redimensionnables, tant que le volet chantier n'existe pas.
 L'écriture de la colonne d'affichage de `parentTask` est également conditionnée à son type.
 
+La colonne de rattachement se reconnaît **au seul type `Ref:Chantiers`**, son nom appartenant à qui
+tient la structure du document : sur le document du métier elle s'appelle `Chantiers`, et deux noms
+en dur (`chantier`, `parentTask`) laissaient les 79 tâches sans chantier, donc sans projet hérité,
+donc toutes sous « Sans projet ». Le code manipule ensuite le rattachement sous le nom `chantier` :
+`pruneTaskRecord()` le retraduit vers la colonne réelle avant d'élaguer, sans quoi l'écriture
+partirait sans rattachement et sans le dire. Le contrat de données est décrit dans le README.
+
 **Ne pas** rattacher une ligne chantier par son identifiant brut, ni écrire dans `Tasks` depuis une
 ligne chantier : son identifiant décalé ne correspond à aucun enregistrement.
 
