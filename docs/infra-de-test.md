@@ -230,6 +230,5 @@ Aucun de ces points ne gêne le travail en cours. Les corriger maintenant revien
 des fichiers sans filet.
 
 - Le Whiteboard est un widget TaskFlow mais vit hors de `projects/tasks_app/`.
-- `projects/Artefactory/` et `projects/widget_app/` semblent être deux états du même projet.
 - Conventions de nommage des dossiers mélangées.
 - Six fichiers de documentation à la racine de `projects/tasks_app/`.
