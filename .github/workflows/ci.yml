@@ -320,6 +320,9 @@ jobs:
 
   pages-deploy:
     name: Déploiement GitHub Pages
+    # Un job dont un ancetre est saute l'est aussi, sauf s'il declare always() : sans cette garde,
+    # la republication construisait le site puis ne publiait rien, `tests` etant saute en amont.
+    if: ${{ always() && needs.pages-build.result == 'success' }}
     needs: [pages-build]
     environment:
       name: github-pages
