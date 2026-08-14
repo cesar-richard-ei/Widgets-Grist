@@ -63,11 +63,11 @@ test('sans colonne Responsable, le mode par projet reprend la main', async ({ pa
     await expect(page.locator('#colorSelect option[value="responsable"]')).toHaveCount(0);
 });
 
-test('la colonne des taches s ouvre a 290px', async ({ page }) => {
+test('la colonne des taches s ouvre a 310px', async ({ page }) => {
     await ouvrirGantt(page);
 
     const largeur = await page.locator('#taskList').evaluate((el) => Math.round(el.getBoundingClientRect().width));
-    expect(largeur).toBe(290);
+    expect(largeur).toBe(310);
 });
 
 test('les poignees affichent le curseur de redimensionnement horizontal', async ({ page }) => {
