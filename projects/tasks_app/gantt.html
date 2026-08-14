@@ -33,7 +33,6 @@
         /* Header */
         .header { background: var(--card-bg); border-bottom: 1px solid var(--border); padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-shrink: 0; }
         .header-left { display: flex; align-items: center; gap: 16px; }
-        .header h1 { font-size: 1.25rem; font-weight: 700; color: var(--primary); display: flex; align-items: center; gap: 8px; white-space: nowrap; }
         .header-center { display: flex; align-items: center; gap: 8px; }
         .header-right { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
         .btn { padding: 8px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); font-weight: 500; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; transition: all 0.15s; color: var(--text); }
@@ -596,10 +595,8 @@
 
         /* ═════ Responsive mobile (widget embarqué étroit) ═════ */
         @media (max-width: 560px) {
-            /* Barre sur une seule ligne : le logo et le nom de la vue cèdent la place aux
-               contrôles, et ce qui dépasse se rattrape au défilement horizontal. */
+            /* Barre sur une seule ligne, ce qui dépasse se rattrape au défilement horizontal. */
             .header { padding: 8px 12px; flex-wrap: nowrap; overflow-x: auto; }
-            .header h1 { display: none; }
             .header-left, .header-center, .header-right { flex-wrap: nowrap; gap: 6px; }
             .header-right { margin-left: 0; }
             .current-period { font-size: 0.82rem; }
@@ -636,7 +633,6 @@
 <body>
     <div class="header">
         <div class="header-left">
-            <h1><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/><rect x="3" y="4" width="8" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="8" y="10" width="10" height="4" rx="1" fill="currentColor" stroke="none"/><rect x="5" y="16" width="6" height="4" rx="1" fill="currentColor" stroke="none"/></svg> Gantt</h1>
             <div class="sort-selector">
                 <select id="sortSelect" onchange="changeSortMode(this.value)">
                     <option value="priority">Tri: Priorité</option>

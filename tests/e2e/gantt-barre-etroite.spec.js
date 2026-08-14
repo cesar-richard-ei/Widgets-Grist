@@ -48,16 +48,12 @@ test('en ecran etroit, la barre tient sur une seule ligne', async ({ page }) => 
     expect(await surUneSeuleLigne(page)).toBe(true);
 });
 
-test('en ecran etroit, le logo et le nom de la vue laissent la place', async ({ page }) => {
-    await page.setViewportSize({ width: 480, height: 700 });
-    await ouvrirGantt(page);
-
-    await expect(page.locator('.header h1')).toBeHidden();
-});
-
-test('en ecran large, le nom de la vue reste affiche', async ({ page }) => {
+// Le logo et le nom de la vue ne servent à rien dans Grist : la section porte déjà son titre, et
+// chaque widget est inséré seul dans sa page.
+test('le logo et le nom de la vue ont disparu de la barre', async ({ page }) => {
     await page.setViewportSize({ width: 1280, height: 720 });
     await ouvrirGantt(page);
 
-    await expect(page.locator('.header h1')).toBeVisible();
+    await expect(page.locator('.header h1')).toHaveCount(0);
+    await expect(page.locator('.header svg').first()).toBeVisible();
 });
