@@ -88,12 +88,6 @@ Widgets-Grist/
 │   │   ├── gantt.html
 │   │   ├── calendar.html
 │   │   └── ...
-│   │
-│   └── widget_app/              # Artefactory (IDE no-code)
-│       ├── CLAUDE.md
-│       ├── app.html
-│       ├── app_runtime.html
-│       └── templates/
 │
 ├── published/                    # ZONE PUBLIÉE (déployée sur GitHub Pages)
 │   ├── manifest.json            # Catalogue (généré, non versionné)
@@ -106,16 +100,6 @@ Widgets-Grist/
 │   │   │   └── index.html
 │   │   └── calendar/
 │   │       └── index.html
-│   │
-│   ├── artefactory/             # Widgets Artefactory publiés
-│   │   ├── package.json
-│   │   ├── admin/
-│   │   │   └── index.html
-│   │   ├── runtime/
-│   │   │   └── index.html
-│   │   ├── registry.json
-│   │   └── components/
-│   │       └── ...
 │   │
 │   └── [autres-widgets]/
 │
@@ -214,12 +198,10 @@ Deux versions sont servies en parallèle : la racine est figée sur la dernière
 
 ```
 # stable (dernière release)
-https://[USER].github.io/Widgets-Grist/taskflow/kanban/
-https://[USER].github.io/Widgets-Grist/artefactory/runtime/
+https://[USER].github.io/Widgets-Grist/taskflow/gantt/
 
 # nightly (main)
-https://[USER].github.io/Widgets-Grist/dev/taskflow/kanban/
-https://[USER].github.io/Widgets-Grist/dev/artefactory/runtime/
+https://[USER].github.io/Widgets-Grist/dev/taskflow/gantt/
 ```
 
 ### Configurer comme source de widgets
@@ -460,7 +442,7 @@ Conventional Commits, vérifié en CI sur les PR par `scripts/check-commits.js`.
 
 ```
 feat(taskflow): add drag-drop to kanban
-fix(artefactory): bridge timeout issue
+fix(taskflow): volet chantier sans planning
 docs: update CLAUDE.md
 chore: bump versions
 ```
@@ -475,14 +457,6 @@ Suite de 3 widgets Grist pour la gestion de projet :
 - **Calendar** : Vue calendrier mensuel/hebdo
 
 Voir `projects/tasks_app/CLAUDE.md` pour les détails.
-
-### Artefactory (`projects/widget_app/`)
-
-IDE no-code pour composer des applications Grist :
-- **Admin** : Configurateur de manifest (à créer)
-- **Runtime** : Exécuteur d'applications
-
-Voir `projects/widget_app/CLAUDE.md` pour les détails.
 
 ## Guide de publication
 

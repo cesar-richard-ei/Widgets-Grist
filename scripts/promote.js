@@ -25,7 +25,7 @@ Exemples:
   node scripts/promote.js tasks_app/kanban.html taskflow/kanban
 
   # Promouvoir un dossier entier
-  node scripts/promote.js widget_app/templates artefactory/templates
+  node scripts/promote.js projects/tasks_app/plan.html taskflow/plan
 
 Options:
   --dry-run   Afficher ce qui serait fait sans l'exécuter
