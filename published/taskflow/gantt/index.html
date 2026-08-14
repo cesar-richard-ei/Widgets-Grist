@@ -1664,6 +1664,28 @@
             return avecBandeauxDeProjet(visible);
         }
 
+        // Le responsable reprend la présentation des contributeurs, mais n'accepte qu'une personne : c'est
+        // lui qui porte la couleur de la ligne. La colonne étant facultative, la ligne disparaît avec elle.
+        function ligneResponsable(data, options, recherche, sansResultat) {
+            if (!TASK_COLS.has('Responsable')) return '';
+            const choisi = data.Responsable
+                ? '<div class="asg-list"><div class="asg resp-choisi"><span class="asg-ava" style="background:' + getTeamMemberColor(data.Responsable) + '">' + getInitials(getTeamMemberName(data.Responsable)) + '</span>' +
+                  '<span class="an">' + escapeHtml(getTeamMemberName(data.Responsable)) + '</span>' +
+                  '<button class="asg-x" title="Retirer" onclick="choisirResponsable(null)">×</button></div></div>'
+                : '';
+            return '<div class="prop-row"><span class="prop-label">Responsable</span><div class="prop-value">' + choisi +
+                '<div class="multi-select" id="responsableSelect"><button class="addbtn" onclick="toggleMultiSelect(\'responsableSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' +
+                (data.Responsable ? 'Changer de responsable' : 'Choisir un responsable') + '</button>' +
+                '<div class="multi-select-dropdown">' + recherche + (options || '<div class="multi-select-empty">Aucun membre</div>') + sansResultat + '</div></div>' +
+            '</div></div>';
+        }
+
+        function choisirResponsable(id) {
+            updateField('Responsable', id || null);
+            const menu = document.getElementById('responsableSelect');
+            if (menu) menu.classList.remove('open');
+        }
+
         // Les blocs de propriétés sont posés par paquets, dans l'ordre du cadrage : un paquet dont toutes
         // les lignes sont masquées ne doit pas laisser de cadre vide.
         function groupeDeProps(...blocs) {
@@ -2826,6 +2848,7 @@
                 assignees: getAssigneesArray(task), dependDe: getDependsOnArray(task), tags: getTagsArray(task),
                 estimationH: task.estimationH || null, tempsPasse: task.tempsPasse || null, subtasks: getSubtasks(task),
                 couleur: task.couleur || null, parentTask: task.parentTask || null, chantier: task.chantier || null,
+                Responsable: task.Responsable || null,
                 charges: TF.parseCharges(task.charges), dateCloture: task.dateCloture || null
             };
         }
@@ -2944,6 +2967,11 @@
             const assigneesChips = data.assignees.map(id =>
                 '<span class="multi-select-chip">' + escapeHtml(getTeamMemberName(id)) + '<span class="remove" onclick="event.stopPropagation();removeAssignee(' + id + ')">×</span></span>'
             ).join('');
+            const responsableOptions = team.filter(m => m.actif !== false).map(m =>
+                '<div class="multi-select-option ' + (data.Responsable === m.id ? 'selected' : '') + '" onclick="choisirResponsable(' + m.id + ')">' +
+                    '<span class="member-color-dot" style="background:' + getTeamMemberColor(m.id) + '"></span>' +
+                    '<span>' + escapeHtml(m.nom) + '</span>' +
+                '</div>').join('');
             const assigneesOptions = team.filter(m => m.actif !== false).map(m => {
                 const swatches = COLOR_PRESETS.map(c => '<span class="color-swatch" style="background:' + c + '" onclick="event.stopPropagation();setMemberColor(' + m.id + ',\'' + c + '\')"></span>').join('');
                 return '<div class="multi-select-option ' + (data.assignees.includes(m.id) ? 'selected' : '') + '" onclick="toggleAssignee(' + m.id + ')">' +
@@ -3019,7 +3047,6 @@
                     (data.type === 'tache' ?
                         '<div class="prop-row pr-prog"><span class="prop-label">Progression</span><div class="prop-value">' +
                             '<div class="progress-inline-wrap"><div class="progress-bar-mini"><div class="progress-bar-mini-fill" id="progressBarFill" style="width:' + data.progression + '%"></div></div><span class="progress-pct-label" id="progressValue">' + data.progression + '%</span></div>' +
-                            '<input type="range" class="progress-slider" min="0" max="100" value="' + data.progression + '" oninput="document.getElementById(\'progressValue\').textContent=this.value+\'%\';document.getElementById(\'progressBarFill\').style.width=this.value+\'%\'" onchange="updateField(\'progression\', parseInt(this.value))">' +
                             '<div class="progress-presets">' +
                                 '<div class="progress-preset ' + (data.progression === 0 ? 'active' : '') + '" onclick="setProgressPreset(0)">0%</div>' +
                                 '<div class="progress-preset ' + (data.progression === 25 ? 'active' : '') + '" onclick="setProgressPreset(25)">25%</div>' +
@@ -3031,6 +3058,7 @@
                 ) +
 
                 groupeDeProps(
+                    ligneResponsable(data, responsableOptions, msSearch, msNoResult),
                     '<div class="prop-row"><span class="prop-label">' + assignLabel + '</span><div class="prop-value">' +
                         (data.assignees.length ? '<div class="asg-list">' + data.assignees.map(function(id){ var nm=getTeamMemberName(id)||'?'; var initials=nm.split(' ').filter(Boolean).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase(); var mem=team.find(function(x){return x.id===id;}); return '<div class="asg"><span class="asg-ava" style="background:'+getTeamMemberColor(id)+'">'+escapeHtml(initials)+'</span><span class="an">'+escapeHtml(nm)+'</span>'+(mem&&mem.role?'<span class="ar">'+escapeHtml(mem.role)+'</span>':'')+'<button class="asg-x" title="Retirer" onclick="removeAssignee('+id+')">×</button></div>'; }).join('') + '</div>' : '') +
                         '<div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect(\'assigneesSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' + (data.type === 'reunion' ? 'Ajouter un participant' : 'Ajouter un contributeur') + '</button><div class="multi-select-dropdown">' + msSearch + (assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>') + msNoResult + '</div></div>' +
@@ -3416,7 +3444,7 @@
                 projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe),
                 tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse,
                 subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null,
-                parentTask: data.parentTask || null, chantier: data.chantier || null,
+                parentTask: data.parentTask || null, chantier: data.chantier || null, Responsable: data.Responsable || null,
                 charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))), dateCloture: data.dateCloture || null
             };
 

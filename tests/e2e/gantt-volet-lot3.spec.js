@@ -7,8 +7,7 @@ const expect = base.expect;
 
 const CHEMIN_SIMULACRE = path.join(__dirname, '..', 'fake-grist.js');
 
-// Document « UI du volet tâche », troisième lot : l'ordre des blocs. La section Responsable manque
-// à l'appel, elle attend l'arbitrage du design, le reste suit la séquence du cadrage.
+// Document « UI du volet tâche », troisième lot : l'ordre des blocs, tel que le cadrage le fixe.
 
 const jour = 86400;
 const aujourdhui = Math.floor(Date.now() / 1000 / jour) * jour;
@@ -63,6 +62,7 @@ test('les blocs suivent l ordre du cadrage', async ({ page }) => {
         'Dates',
         'Statut',
         'Progression',
+        'Responsable',
         'Contributeurs',
         'Projet',
         'Chantier',
