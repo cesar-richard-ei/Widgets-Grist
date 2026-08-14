@@ -427,6 +427,19 @@ function buildVisibleTasks() {
     return avecBandeauxDeProjet(visible);
 }
 
+// Une tâche appartient toujours à un chantier : le rattachement s'édite dans sa propre section, sur
+// un document qui porte la table. Le nom réel de la colonne est résolu à l'écriture.
+function sectionChantier(data) {
+    if (!colonneChantier()) return '';
+    const chantiers = tasks.filter(estChantier);
+    if (!chantiers.length) return '';
+    const options = chantiers.map(c => '<option value="' + c.idChantier + '"' + (data.chantier === c.idChantier ? ' selected' : '') + '>' + escapeHtml(c.titre || 'Sans titre') + '</option>').join('');
+    return '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Chantier</span></div>' +
+        '<div class="form-group"><select class="form-select" id="chantierSelect" onchange="updateField(\'chantier\', parseInt(this.value, 10) || null)">' +
+            '<option value=""' + (data.chantier ? '' : ' selected') + '>Sans chantier</option>' + options +
+        '</select></div></div>';
+}
+
 // Deux têtes par ligne, le responsable puis un contributeur, le reste de l'équipe passe dans le
 // compteur. Sans responsable renseigné, les deux premiers contributeurs tiennent la place.
 function pastillesDeLigne(t, assignees) {
@@ -1568,7 +1581,8 @@ function cloneTaskData(task) {
         dateDebut: task.dateDebut, dateEcheance: task.dateEcheance, projet: task.projet || null,
         assignees: getAssigneesArray(task), dependDe: getDependsOnArray(task), tags: getTagsArray(task),
         estimationH: task.estimationH || null, tempsPasse: task.tempsPasse || null, subtasks: getSubtasks(task),
-        couleur: task.couleur || null, parentTask: task.parentTask || null, charges: TF.parseCharges(task.charges), dateCloture: task.dateCloture || null
+        couleur: task.couleur || null, parentTask: task.parentTask || null, chantier: task.chantier || null,
+        charges: TF.parseCharges(task.charges), dateCloture: task.dateCloture || null
     };
 }
 
@@ -1834,10 +1848,12 @@ function renderPanel() {
             '<div class="prereq-list">' + (prereqHtml || '<div class="prereq-empty">Aucune dépendance — liez des tâches amont via le panneau d\'une tâche.</div>') + '</div></div>' : '') +
 
         (data.type !== 'jalon' ?
-            '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Détails</span></div>' +
-            '<div class="form-group"><div class="tags-input" onclick="document.getElementById(\'tagInput\').focus()">' + tagsChips + '<input type="text" id="tagInput" placeholder="' + (data.tags.length ? '' : 'Ajouter un tag...') + '" onkeydown="handleTagKeydown(event)"></div></div>' +
+            (chantier ? '' : sectionChantier(data)) +
             (data.type !== 'reunion' ?
-                '<div class="form-group"><div class="multi-select" id="depsSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'depsSelect\')"><div class="multi-select-values">' + (depsChips || '<span class="multi-select-placeholder">Dépendances...</span>') + '</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">' + msSearch + (depsOptions || '<div class="multi-select-empty">Aucune</div>') + msNoResult + '</div></div>' + blockedHtml + '</div>' : '') +
+                '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Dépendances</span>' + (data.dependDe.length ? '<span class="panel-section-badge">' + data.dependDe.length + '</span>' : '') + '</div>' +
+                '<div class="form-group"><div class="multi-select" id="depsSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'depsSelect\')"><div class="multi-select-values">' + (depsChips || '<span class="multi-select-placeholder">Dépendances...</span>') + '</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">' + msSearch + (depsOptions || '<div class="multi-select-empty">Aucune</div>') + msNoResult + '</div></div>' + blockedHtml + '</div></div>' : '') +
+            '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Tags</span>' + (data.tags.length ? '<span class="panel-section-badge">' + data.tags.length + '</span>' : '') + '</div>' +
+            '<div class="form-group"><div class="tags-input" onclick="document.getElementById(\'tagInput\').focus()">' + tagsChips + '<input type="text" id="tagInput" placeholder="' + (data.tags.length ? '' : 'Ajouter un tag...') + '" onkeydown="handleTagKeydown(event)"></div></div>' +
             '</div>' : '') +
 
         (!panelState.isNew ?
@@ -2141,7 +2157,7 @@ async function saveTaskToGrist() {
         projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe),
         tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse,
         subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null,
-        parentTask: data.parentTask || null,
+        parentTask: data.parentTask || null, chantier: data.chantier || null,
         charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))), dateCloture: data.dateCloture || null
     };
 
