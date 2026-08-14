@@ -503,8 +503,6 @@
         .panel-title-edit { font-weight: 700; }
         /* ════ Panneau · structure A « Sections » (libellés au-dessus, contrôles déployés) ════ */
         .props-list { border-bottom: none; padding: 0; margin-bottom: 2px; display: flex; flex-direction: column; }
-        .pr-status { order: -2; }
-        .pr-prog { order: -1; }
         .panel-crumb { display: flex; align-items: center; gap: 7px; font-size: 0.72rem; color: var(--text-muted); font-weight: 600; margin-bottom: 7px; }
         .panel-crumb .pd { width: 8px; height: 8px; border-radius: 50%; flex: none; }
         .panel .asg-list { display: flex; flex-direction: column; }
@@ -1664,6 +1662,13 @@
             };
             for (const r of roots) walk(r, 0);
             return avecBandeauxDeProjet(visible);
+        }
+
+        // Les blocs de propriétés sont posés par paquets, dans l'ordre du cadrage : un paquet dont toutes
+        // les lignes sont masquées ne doit pas laisser de cadre vide.
+        function groupeDeProps(...blocs) {
+            const corps = blocs.join('');
+            return corps ? '<div class="props-list">' + corps + '</div>' : '';
         }
 
         // Une tâche appartient toujours à un chantier : le rattachement s'édite dans sa propre section, sur
@@ -2996,53 +3001,21 @@
 
             content.innerHTML =
                 '<div class="panel-type-row">' + pastillesDeType(data, chantier) + '</div>' +
+
                 '<textarea rows="1" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" oninput="ajusterHauteurTitre(this);updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' + escapeHtml(data.titre) + '</textarea>' +
 
-                '<div class="props-list">' +
-                    '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
-                        (data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => '<div class="status-pill ' + (data.statut === s.value ? 'selected' : '') + '" data-status="' + escapeHtml(s.value) + '" onclick="updateField(\'statut\', this.dataset.status)"><span class="panel-pill-dot" style="background:' + s.fillColor + '"></span>' + escapeHtml(s.label) + '</div>').join('') +
-                    '</div></div></div>' +
-                    (data.type !== 'reunion' && !chantier ?
-                        '<div class="prop-row"><span class="prop-label">Priorité</span><div class="prop-value"><div class="priority-selector">' +
-                            '<div class="priority-pill p1 ' + (data.priorite == '1' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'1\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[1] + '"></span>Critique</div>' +
-                            '<div class="priority-pill p2 ' + (data.priorite == '2' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'2\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[2] + '"></span>Haute</div>' +
-                            '<div class="priority-pill p3 ' + (data.priorite == '3' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'3\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[3] + '"></span>Moyenne</div>' +
-                            '<div class="priority-pill p4 ' + (data.priorite == '4' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'4\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[4] + '"></span>Basse</div>' +
-                        '</div></div></div>' : '') +
+                '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">' + descLabel + '</span></div>' +
+                '<div class="form-group"><textarea class="form-textarea" id="taskDescription" placeholder="' + descLabel + '..." oninput="updateField(\'description\', this.value, true)" onchange="updateField(\'description\', this.value)">' + escapeHtml(data.description) + '</textarea></div></div>' +
+
+                groupeDeProps(
                     '<div class="prop-row"><span class="prop-label">Date' + (data.type === 'jalon' ? '' : 's') + '</span><div class="prop-value">' +
                         (data.type === 'jalon' ?
                             '<div class="dates-inline"><input type="date" value="' + formatDateISO(s) + '" onchange="updateField(\'dateDebut\', this.value); updateField(\'dateEcheance\', this.value)"><button class="today-btn" onclick="setTodayDate()">Auj.</button></div>' :
                             '<div class="dates-inline"><input type="date" value="' + formatDateISO(s) + '" onchange="updateField(\'dateDebut\', this.value)"><span class="dates-arrow">→</span><input type="date" value="' + formatDateISO(e) + '" onchange="updateField(\'dateEcheance\', this.value)"><button class="today-btn" onclick="setTodayDate()">Auj.</button></div>') +
                     '</div></div>' +
-                    '<div class="prop-row"><span class="prop-label">Projet</span><div class="prop-value"><div class="project-select-wrap">' +
-                        (currentProject
-                            ? '<span class="project-color-dot" style="background:' + projectColor + '" title="Changer la couleur du projet" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle(\'open\')"></span>' +
-                              '<div class="color-picker-pop">' + COLOR_PRESETS.map(c => '<span class="color-swatch" style="background:' + c + '" onclick="event.stopPropagation();setProjectColor(' + currentProject.id + ',\'' + c + '\')"></span>').join('') + '</div>'
-                            : '<span class="project-color-dot" style="background:' + projectColor + '"></span>') +
-                        '<select class="form-select" onchange="updateField(\'projet\', parseInt(this.value) || null)"><option value="">Aucun projet</option>' + projectOptions + '</select>' +
+                    '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
+                        (data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => '<div class="status-pill ' + (data.statut === s.value ? 'selected' : '') + '" data-status="' + escapeHtml(s.value) + '" onclick="updateField(\'statut\', this.dataset.status)"><span class="panel-pill-dot" style="background:' + s.fillColor + '"></span>' + escapeHtml(s.label) + '</div>').join('') +
                     '</div></div></div>' +
-                    // WBS-02: prop-row "Parent" — toujours affichée (création comprise), candidats filtrés par projet
-                    '<div class="prop-row"><span class="prop-label">Parent</span><div class="prop-value">' +
-                        (data.parentTask
-                            ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
-                                '<span class="multi-select-chip" ' + (panelState.isNew ? '' : 'onclick="openTaskPanel(' + data.parentTask + ')"') + ' style="' + (panelState.isNew ? '' : 'cursor:pointer;') + 'background:var(--primary-light);color:var(--primary)">↑ ' + escapeHtml((tasks.find(t => t.id === data.parentTask) || {}).titre || '(inconnu)') + '</span>' +
-                                '<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="detachFromParent()">Détacher</button>' +
-                              '</div>'
-                            : '<div class="multi-select" id="parentSelect"><button class="addbtn" onclick="toggleMultiSelect(\'parentSelect\')"><span style="font-size:1rem;line-height:1">+</span> Choisir une tâche parent</button><div class="multi-select-dropdown">' + msSearch + (parentOptions || '<div class="multi-select-empty">Aucune tâche dans ce projet</div>') + msNoResult + '</div></div>') +
-                    '</div></div>' +
-                    '<div class="prop-row"><span class="prop-label">' + assignLabel + '</span><div class="prop-value">' +
-                        (data.assignees.length ? '<div class="asg-list">' + data.assignees.map(function(id){ var nm=getTeamMemberName(id)||'?'; var initials=nm.split(' ').filter(Boolean).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase(); var mem=team.find(function(x){return x.id===id;}); return '<div class="asg"><span class="asg-ava" style="background:'+getTeamMemberColor(id)+'">'+escapeHtml(initials)+'</span><span class="an">'+escapeHtml(nm)+'</span>'+(mem&&mem.role?'<span class="ar">'+escapeHtml(mem.role)+'</span>':'')+'<button class="asg-x" title="Retirer" onclick="removeAssignee('+id+')">×</button></div>'; }).join('') + '</div>' : '') +
-                        '<div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect(\'assigneesSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' + (data.type === 'reunion' ? 'Ajouter un participant' : 'Ajouter un contributeur') + '</button><div class="multi-select-dropdown">' + msSearch + (assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>') + msNoResult + '</div></div>' +
-                    '</div></div>' +
-                    (data.type === 'tache' ?
-                        '<div class="prop-row"><span class="prop-label">Temps &amp; charge</span><div class="prop-value">' +
-                            '<div class="tc-grid">' +
-                                '<div class="tc-box"><div class="tcl">Estimé</div><div class="tcv"><input type="number" min="0" step="0.5" value="' + (estim || '') + '" placeholder="0" onchange="updateField(\'estimationH\', parseFloat(this.value) || null)"><small>h</small></div></div>' +
-                                '<div class="tc-box"><div class="tcl">Passé</div><div class="tcv"><input type="number" min="0" step="0.5" value="' + (passe || '') + '" placeholder="0" onchange="updateField(\'tempsPasse\', parseFloat(this.value) || null)"><small>h</small></div></div>' +
-                            '</div>' +
-                            (estim > 0 ? '<div class="tc-bar"><i class="' + (timeOver ? 'over' : '') + '" style="width:' + timePercent + '%"></i></div><div class="tc-foot"><span>' + Math.round((passe/estim)*100) + '% consommé</span><span>reste ' + Math.max(estim-passe,0) + ' h</span></div>' : '') +
-                            ((data.assignees.length && TASK_COLS.has('charges')) ? '<div style="margin-top:13px"><div class="prop-label" style="margin-bottom:6px">Charge par personne</div>' + data.assignees.map(function(id){ return '<div class="charge-row"><span class="an">'+escapeHtml(getTeamMemberName(id))+'</span><input type="number" min="0" step="0.5" value="'+chargeOf(id)+'" onchange="updateCharge('+id+', this.value)"><span style="font-size:0.75rem;color:var(--text-muted)">h</span></div>'; }).join('') + '<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">Total : <strong>' + chargeTotalH + '</strong> h</div></div>' : '') + chargeConsolHtml +
-                        '</div></div>' : '') +
                     (data.type === 'tache' ?
                         '<div class="prop-row pr-prog"><span class="prop-label">Progression</span><div class="prop-value">' +
                             '<div class="progress-inline-wrap"><div class="progress-bar-mini"><div class="progress-bar-mini-fill" id="progressBarFill" style="width:' + data.progression + '%"></div></div><span class="progress-pct-label" id="progressValue">' + data.progression + '%</span></div>' +
@@ -3054,11 +3027,34 @@
                                 '<div class="progress-preset ' + (data.progression === 75 ? 'active' : '') + '" onclick="setProgressPreset(75)">75%</div>' +
                                 '<div class="progress-preset ' + (data.progression === 100 ? 'active' : '') + '" onclick="setProgressPreset(100)">100%</div>' +
                             '</div>' +
-                        '</div></div>' : '') +
-                '</div>' +
+                        '</div></div>' : '')
+                ) +
 
-                '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">' + descLabel + '</span></div>' +
-                '<div class="form-group"><textarea class="form-textarea" id="taskDescription" placeholder="' + descLabel + '..." oninput="updateField(\'description\', this.value, true)" onchange="updateField(\'description\', this.value)">' + escapeHtml(data.description) + '</textarea></div></div>' +
+                groupeDeProps(
+                    '<div class="prop-row"><span class="prop-label">' + assignLabel + '</span><div class="prop-value">' +
+                        (data.assignees.length ? '<div class="asg-list">' + data.assignees.map(function(id){ var nm=getTeamMemberName(id)||'?'; var initials=nm.split(' ').filter(Boolean).map(function(w){return w[0];}).slice(0,2).join('').toUpperCase(); var mem=team.find(function(x){return x.id===id;}); return '<div class="asg"><span class="asg-ava" style="background:'+getTeamMemberColor(id)+'">'+escapeHtml(initials)+'</span><span class="an">'+escapeHtml(nm)+'</span>'+(mem&&mem.role?'<span class="ar">'+escapeHtml(mem.role)+'</span>':'')+'<button class="asg-x" title="Retirer" onclick="removeAssignee('+id+')">×</button></div>'; }).join('') + '</div>' : '') +
+                        '<div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect(\'assigneesSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' + (data.type === 'reunion' ? 'Ajouter un participant' : 'Ajouter un contributeur') + '</button><div class="multi-select-dropdown">' + msSearch + (assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>') + msNoResult + '</div></div>' +
+                    '</div></div>' +
+                    '<div class="prop-row"><span class="prop-label">Projet</span><div class="prop-value"><div class="project-select-wrap">' +
+                        (currentProject
+                            ? '<span class="project-color-dot" style="background:' + projectColor + '" title="Changer la couleur du projet" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle(\'open\')"></span>' +
+                              '<div class="color-picker-pop">' + COLOR_PRESETS.map(c => '<span class="color-swatch" style="background:' + c + '" onclick="event.stopPropagation();setProjectColor(' + currentProject.id + ',\'' + c + '\')"></span>').join('') + '</div>'
+                            : '<span class="project-color-dot" style="background:' + projectColor + '"></span>') +
+                        '<select class="form-select" onchange="updateField(\'projet\', parseInt(this.value) || null)"><option value="">Aucun projet</option>' + projectOptions + '</select>' +
+                    '</div></div></div>'
+                ) +
+
+                (data.type !== 'jalon' && !chantier ? sectionChantier(data) : '') +
+
+                groupeDeProps(
+                    (data.type !== 'reunion' && !chantier ?
+                        '<div class="prop-row"><span class="prop-label">Priorité</span><div class="prop-value"><div class="priority-selector">' +
+                            '<div class="priority-pill p1 ' + (data.priorite == '1' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'1\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[1] + '"></span>Critique</div>' +
+                            '<div class="priority-pill p2 ' + (data.priorite == '2' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'2\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[2] + '"></span>Haute</div>' +
+                            '<div class="priority-pill p3 ' + (data.priorite == '3' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'3\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[3] + '"></span>Moyenne</div>' +
+                            '<div class="priority-pill p4 ' + (data.priorite == '4' ? 'selected' : '') + '" onclick="updateField(\'priorite\',\'4\')"><span class="panel-pill-dot" style="background:' + PRIORITY_COLORS[4] + '"></span>Basse</div>' +
+                        '</div></div></div>' : '')
+                ) +
 
                 // WBS-02: Section "Sous-tâches (enfants)" — structurelles, vraies tâches Grist
                 (!panelState.isNew ? (function() {
@@ -3082,18 +3078,42 @@
                         addBtn + adjustBtn + '</div>';
                 })() : '') +
 
+                groupeDeProps(
+                    // WBS-02: prop-row "Parent" — toujours affichée (création comprise), candidats filtrés par projet
+                    '<div class="prop-row"><span class="prop-label">Parent</span><div class="prop-value">' +
+                        (data.parentTask
+                            ? '<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">' +
+                                '<span class="multi-select-chip" ' + (panelState.isNew ? '' : 'onclick="openTaskPanel(' + data.parentTask + ')"') + ' style="' + (panelState.isNew ? '' : 'cursor:pointer;') + 'background:var(--primary-light);color:var(--primary)">↑ ' + escapeHtml((tasks.find(t => t.id === data.parentTask) || {}).titre || '(inconnu)') + '</span>' +
+                                '<button class="btn" style="padding:4px 10px;font-size:0.72rem" onclick="detachFromParent()">Détacher</button>' +
+                              '</div>'
+                            : '<div class="multi-select" id="parentSelect"><button class="addbtn" onclick="toggleMultiSelect(\'parentSelect\')"><span style="font-size:1rem;line-height:1">+</span> Choisir une tâche parent</button><div class="multi-select-dropdown">' + msSearch + (parentOptions || '<div class="multi-select-empty">Aucune tâche dans ce projet</div>') + msNoResult + '</div></div>') +
+                    '</div></div>'
+                ) +
+
+                (data.type !== 'jalon' ? (data.type !== 'reunion' ?
+                        '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Dépendances</span>' + (data.dependDe.length ? '<span class="panel-section-badge">' + data.dependDe.length + '</span>' : '') + '</div>' +
+                        '<div class="form-group"><div class="multi-select" id="depsSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'depsSelect\')"><div class="multi-select-values">' + (depsChips || '<span class="multi-select-placeholder">Dépendances...</span>') + '</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">' + msSearch + (depsOptions || '<div class="multi-select-empty">Aucune</div>') + msNoResult + '</div></div>' + blockedHtml + '</div></div>' : '') : '') +
+
+                (data.type !== 'jalon' ?
+                    '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Tags</span>' + (data.tags.length ? '<span class="panel-section-badge">' + data.tags.length + '</span>' : '') + '</div>' +
+                    '<div class="form-group"><div class="tags-input" onclick="document.getElementById(\'tagInput\').focus()">' + tagsChips + '<input type="text" id="tagInput" placeholder="' + (data.tags.length ? '' : 'Ajouter un tag...') + '" onkeydown="handleTagKeydown(event)"></div></div>'
+                    : '') +
+
                 (data.type === 'jalon' ?
                     '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Prérequis</span>' + (data.dependDe.length ? '<span class="panel-section-badge">' + doneCount + '/' + data.dependDe.length + '</span>' : '') + '</div>' +
                     '<div class="prereq-list">' + (prereqHtml || '<div class="prereq-empty">Aucune dépendance — liez des tâches amont via le panneau d\'une tâche.</div>') + '</div></div>' : '') +
 
-                (data.type !== 'jalon' ?
-                    (chantier ? '' : sectionChantier(data)) +
-                    (data.type !== 'reunion' ?
-                        '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Dépendances</span>' + (data.dependDe.length ? '<span class="panel-section-badge">' + data.dependDe.length + '</span>' : '') + '</div>' +
-                        '<div class="form-group"><div class="multi-select" id="depsSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'depsSelect\')"><div class="multi-select-values">' + (depsChips || '<span class="multi-select-placeholder">Dépendances...</span>') + '</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">' + msSearch + (depsOptions || '<div class="multi-select-empty">Aucune</div>') + msNoResult + '</div></div>' + blockedHtml + '</div></div>' : '') +
-                    '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Tags</span>' + (data.tags.length ? '<span class="panel-section-badge">' + data.tags.length + '</span>' : '') + '</div>' +
-                    '<div class="form-group"><div class="tags-input" onclick="document.getElementById(\'tagInput\').focus()">' + tagsChips + '<input type="text" id="tagInput" placeholder="' + (data.tags.length ? '' : 'Ajouter un tag...') + '" onkeydown="handleTagKeydown(event)"></div></div>' +
-                    '</div>' : '') +
+                groupeDeProps(
+                    (data.type === 'tache' ?
+                        '<div class="prop-row"><span class="prop-label">Temps &amp; charge</span><div class="prop-value">' +
+                            '<div class="tc-grid">' +
+                                '<div class="tc-box"><div class="tcl">Estimé</div><div class="tcv"><input type="number" min="0" step="0.5" value="' + (estim || '') + '" placeholder="0" onchange="updateField(\'estimationH\', parseFloat(this.value) || null)"><small>h</small></div></div>' +
+                                '<div class="tc-box"><div class="tcl">Passé</div><div class="tcv"><input type="number" min="0" step="0.5" value="' + (passe || '') + '" placeholder="0" onchange="updateField(\'tempsPasse\', parseFloat(this.value) || null)"><small>h</small></div></div>' +
+                            '</div>' +
+                            (estim > 0 ? '<div class="tc-bar"><i class="' + (timeOver ? 'over' : '') + '" style="width:' + timePercent + '%"></i></div><div class="tc-foot"><span>' + Math.round((passe/estim)*100) + '% consommé</span><span>reste ' + Math.max(estim-passe,0) + ' h</span></div>' : '') +
+                            ((data.assignees.length && TASK_COLS.has('charges')) ? '<div style="margin-top:13px"><div class="prop-label" style="margin-bottom:6px">Charge par personne</div>' + data.assignees.map(function(id){ return '<div class="charge-row"><span class="an">'+escapeHtml(getTeamMemberName(id))+'</span><input type="number" min="0" step="0.5" value="'+chargeOf(id)+'" onchange="updateCharge('+id+', this.value)"><span style="font-size:0.75rem;color:var(--text-muted)">h</span></div>'; }).join('') + '<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">Total : <strong>' + chargeTotalH + '</strong> h</div></div>' : '') + chargeConsolHtml +
+                        '</div></div>' : '')
+                ) +
 
                 (!panelState.isNew ?
                     '<div class="panel-footer-left">' + (chantier ? '' : '<button class="panel-btn" onclick="dupliquerTache()" style="width:auto;padding:10px 14px;margin-right:8px;background:transparent;color:var(--text-muted);border:1px solid var(--border)">Dupliquer</button>') + '<button class="panel-btn danger" onclick="showDeleteConfirm()" style="width:auto;padding:10px 18px">Supprimer la tâche</button></div><div class="delete-confirm" id="deleteConfirm"><div class="delete-confirm-text">Supprimer ?</div><div class="delete-confirm-actions"><button class="delete-confirm-btn cancel" onclick="hideDeleteConfirm()">Annuler</button><button class="delete-confirm-btn confirm" onclick="confirmDelete()">Supprimer</button></div></div>' : '');
