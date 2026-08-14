@@ -460,6 +460,20 @@ async function setMemberColor(memberId, color) { /* UpdateRecord Team.couleur */
 function changeColorMode(mode) { /* met à jour colorMode + re-render (Gantt : en mémoire) */ }
 ```
 
+### Repère de version (Gantt)
+
+Le widget porte la constante `VERSION_SERVIE = '__VERSION_TASKFLOW__'`. Le marqueur est remplacé
+**à la construction du site** par le job `pages-build` : le tag de la dernière release à la racine,
+`dev` pour la version nightly. Sur une copie locale, il n'est jamais remplacé, et le badge affiche
+`local`.
+
+L'affichage est réservé à qui l'active : `localStorage.taskflow_show_version = "true"`. Il sert à
+voir d'un coup d'œil quelle version est réellement servie, le cache de GitHub Pages pouvant faire
+croire à un déploiement absent (cf `reference_widgets_grist_deploy`).
+
+**Ne pas remplacer le marqueur ailleurs qu'au déploiement** : le mettre dans le dépôt ferait
+diverger `projects/` et `published/` à chaque release.
+
 ### Volet tâche (Gantt)
 
 L'ordre des blocs est fixé par le document « UI du volet tâche » : Description, Dates, Statut,

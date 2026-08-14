@@ -7,6 +7,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      republier:
+        description: Republier le site sans rejouer les tests (commit déjà validé)
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -19,6 +24,7 @@ concurrency:
 jobs:
   workflows:
     name: Lint des workflows
+    if: ${{ github.event_name != 'release' && !inputs.republier }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -35,6 +41,7 @@ jobs:
 
   unit:
     name: Tests unitaires
+    if: ${{ github.event_name != 'release' && !inputs.republier }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -83,6 +90,7 @@ jobs:
 
   e2e:
     name: Tests de bout en bout
+    if: ${{ github.event_name != 'release' && !inputs.republier }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -134,7 +142,7 @@ jobs:
   # qui peuvent donc bouger sans toucher aux reglages du depot.
   tests:
     name: tests
-    if: always()
+    if: ${{ always() && github.event_name != 'release' && !inputs.republier }}
     needs: [workflows, unit, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -186,9 +194,30 @@ jobs:
             --raw-field "sha=${objet}" > /dev/null
           echo "Tag \`v${VERSION}\` (bump ${BUMP})" >> "${GITHUB_STEP_SUMMARY}"
 
+  republication:
+    name: Republication apres une release
+    # Creer une release ne suffit pas a mettre la racine a jour : le deploiement emis depuis le tag
+    # annonce a Pages la meme version que le deploiement deja publie pour ce commit, et le site
+    # garde l'ancien contenu (constate le 2026-08-10 et le 2026-08-14). Un run sur main resout la
+    # derniere release, reconstruit le site et publie. Les tests ont deja tourne sur ce commit.
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    steps:
+      - name: Declencher la republication depuis main
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPOT: ${{ github.repository }}
+        run: gh workflow run ci.yml --repo "${DEPOT}" --ref main --field republier=true
+
   pages-build:
     name: Construction du site
-    if: github.event_name != 'pull_request'
+    # Sur une release, la publication est confiee a un run declenche sur main : le deploiement
+    # emis depuis le tag porte le meme identifiant de version que celui deja en ligne, et le site
+    # continue de servir l'ancien contenu.
+    if: ${{ always() && github.event_name != 'pull_request' && github.event_name != 'release' && (needs.tests.result == 'success' || inputs.republier) }}
     needs: [tests]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -256,13 +285,21 @@ jobs:
             prod_src=dev-src
           fi
 
+          # Version servie, lue par les widgets pour le repere de deploiement : le tag a la racine,
+          # « dev » pour la nightly. Sans release, la racine vient de main et l'annonce.
+          estampiller() {
+            find "$1" -name '*.html' -type f -exec sed -i "s/__VERSION_TASKFLOW__/$2/g" {} +
+          }
+
           build "$prod_src" "$base"
           mkdir -p site
           cp -r "$prod_src/published/." site/
+          estampiller site "${{ steps.release.outputs.tag || 'dev' }}"
 
           build dev-src "${base}/dev"
           mkdir -p site/dev
           cp -r dev-src/published/. site/dev/
+          estampiller site/dev dev
 
           echo "Arborescence du site :"
           find site -maxdepth 2 -mindepth 1 | sort

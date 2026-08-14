@@ -456,6 +456,21 @@ function groupeDeProps(...blocs) {
     return corps ? '<div class="props-list">' + corps + '</div>' : '';
 }
 
+// Version servie, posée à la construction du site : le tag pour la racine, « dev » pour la version
+// nightly. Le marqueur reste tel quel sur une copie locale, qui n'est passée par aucun déploiement.
+const VERSION_SERVIE = '__VERSION_TASKFLOW__';
+
+// Repère de déploiement, réservé à qui l'active : localStorage taskflow_show_version = "true".
+function afficherVersion() {
+    const badge = document.getElementById('badgeVersion');
+    if (!badge) return;
+    let actif;
+    try { actif = localStorage.getItem('taskflow_show_version') === 'true'; } catch (e) { actif = false; }
+    if (!actif) return;
+    badge.textContent = VERSION_SERVIE.indexOf('__') === 0 ? 'local' : VERSION_SERVIE;
+    badge.hidden = false;
+}
+
 // Une tâche appartient toujours à un chantier : le rattachement s'édite dans sa propre section, sur
 // un document qui porte la table. Le nom réel de la colonne est résolu à l'écriture.
 function sectionChantier(data) {
@@ -2800,6 +2815,7 @@ document.querySelectorAll('.view-controls .btn').forEach(b => b.classList.toggle
 // Idem pour le <select> de couleur
 { const s = document.getElementById('colorSelect'); if (s) s.value = colorMode; }
 restaurerLargeurs();
+afficherVersion();
 brancherPoignee('poigneeTaskList', 'taskList', 1);
 brancherPoignee('poigneePanel', 'panel', -1);
 // Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre)
