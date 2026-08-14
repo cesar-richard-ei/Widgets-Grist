@@ -1259,6 +1259,13 @@
         let tasks = [], team = [], projects = [];
         let TASK_COLS = new Set(); // colonnes reelles de Tasks (sweet spot : charges/dateCloture n'existent que si le widget Plan a ete ouvert)
         function pruneTaskRecord(rec) {
+            // Le code manipule le rattachement sous le nom « chantier » : le traduire vers la colonne réelle
+            // avant l'élagage, sinon l'écriture partirait sans son rattachement, et sans le dire.
+            const colonne = colonneChantier();
+            if (colonne && colonne !== 'chantier' && Object.prototype.hasOwnProperty.call(rec, 'chantier')) {
+                rec[colonne] = rec.chantier;
+                delete rec.chantier;
+            }
             if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; }
             // Le parent affiché est recalculé à la lecture : l'identifiant décalé d'un chantier ne désigne
             // aucun enregistrement et ne doit jamais partir en base. Un parent qui désigne une tâche réelle
@@ -1443,7 +1450,12 @@
         function colonneChantier() {
             if (typeColonne('Tasks', 'chantier') === 'Ref:Chantiers') return 'chantier';
             if (typeColonne('Tasks', 'parentTask') === 'Ref:Chantiers') return 'parentTask';
-            return null;
+            // Le document du métier nomme la colonne « Chantiers ». Le lien se reconnaît à son type, le nom
+            // appartenant à la personne qui tient la structure du document.
+            const t = schemaMeta && (schemaMeta.tables || []).find(x => x.tableId === 'Tasks');
+            if (!t) return null;
+            const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.type === 'Ref:Chantiers');
+            return c ? c.colId : null;
         }
         // parentTask ne désigne une sous-tâche que lorsqu'il pointe Tasks. Sans ce garde-fou, un parentTask
         // qui désigne un chantier rattache les tâches entre elles, les identifiants des deux tables se
@@ -1479,6 +1491,7 @@
             const hierarchie = parentTaskEstHierarchie();
             for (const t of tasks) {
                 const idChantier = t[colonne];
+                t.chantier = idChantier || null;
                 const sousTacheDe = hierarchie ? t.parentTask : null;
                 t.parentTask = sousTacheDe || (idChantier ? ID_CHANTIER + idChantier : null);
                 if (!t.projet && idChantier && parProjet.has(idChantier)) t.projet = parProjet.get(idChantier);
