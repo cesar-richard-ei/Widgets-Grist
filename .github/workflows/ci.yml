@@ -261,6 +261,10 @@ jobs:
           package-manager-cache: false
 
       - name: Construire le site
+        env:
+          # Passee par l'environnement plutot qu'interpolee dans le script : une expression posee
+          # directement dans un bloc run est un vecteur d'injection (zizmor, template-injection).
+          VERSION_RACINE: ${{ steps.release.outputs.tag || 'dev' }}
         run: |
           set -euo pipefail
           owner="${GITHUB_REPOSITORY%/*}"
@@ -294,7 +298,7 @@ jobs:
           build "$prod_src" "$base"
           mkdir -p site
           cp -r "$prod_src/published/." site/
-          estampiller site "${{ steps.release.outputs.tag || 'dev' }}"
+          estampiller site "${VERSION_RACINE}"
 
           build dev-src "${base}/dev"
           mkdir -p site/dev
