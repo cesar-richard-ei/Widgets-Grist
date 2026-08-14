@@ -127,3 +127,25 @@ test('computeDependencyPath : chemin bezier et fleche entre deux taches', () => 
     assert.equal(d.pathD, 'M50,22 C70,22 70,66 90,66');
     assert.equal(d.arrowPoints, '90,66 84,62 84,70');
 });
+
+// Retour de revue : « pour chaque vue, quel que soit le niveau d'expand, on puisse remonter
+// jusqu'au debut de la premiere tache affichable ». Une tache entierement anterieure a la fenetre
+// doit donc reculer la borne gauche, dans toutes les vues.
+test('computeTimelineScale : une tache anterieure a la fenetre recule la borne gauche', () => {
+    const s = TF.computeTimelineScale({
+        tasks: [{ start: new Date(2025, 5, 1), end: new Date(2025, 6, 1) }],
+        unit: 'day', cellWidth: 40,
+        viewStart: new Date(2026, 0, 1), viewDays: 30, availableWidth: 600
+    });
+    assert.ok(s.effectiveStart <= new Date(2025, 5, 1), 'la plage doit remonter jusqu a la tache');
+});
+
+test('computeTimelineScale : une fenetre glissante remonte aussi jusqu a la tache', () => {
+    const s = TF.computeTimelineScale({
+        tasks: [{ start: new Date(2025, 5, 1), end: new Date(2025, 6, 1) }],
+        unit: 'week', cellWidth: 32,
+        viewStart: new Date(2026, 0, 1), viewDays: 182, availableWidth: 900,
+        extendLeft: false
+    });
+    assert.ok(s.effectiveStart <= new Date(2025, 5, 1), 'extendLeft ne doit plus figer la borne gauche');
+});

@@ -864,6 +864,13 @@ function computeEffectiveRange() {
     document.documentElement.style.setProperty('--cell-width', effectiveCellWidth + 'px');
 }
 
+// Le mois s'écrit en toutes lettres quand sa case peut l'accueillir, et s'abrège sinon. Sept
+// pixels par caractère à la taille de l'en-tête, plus une marge pour les bordures.
+function libelleDeMois(mois, largeur) {
+    const complet = MONTHS[mois];
+    return largeur >= complet.length * 7 + 12 ? complet : MONTHS_SHORT[mois];
+}
+
 function renderTimelineHeader() {
     const start = effectiveStart;
     const totalDays = effectiveDays;
@@ -901,7 +908,8 @@ function renderTimelineHeader() {
         }
         weekGroups.forEach((g, gi) => {
             const w = g.cells * effectiveCellWidth;
-            const label = (g.month === 0 || gi === 0) ? g.year + ' · ' + MONTHS_SHORT[g.month] : MONTHS_SHORT[g.month];
+            const nom = libelleDeMois(g.month, w - (g.month === 0 || gi === 0 ? 44 : 0));
+            const label = (g.month === 0 || gi === 0) ? g.year + ' · ' + nom : nom;
             monthsHtml += '<div class="month-cell" style="width:' + w + 'px">' + label + '</div>';
         });
         // Une cellule-jour par bloc de 7 jours, centrée sur le lundi ISO

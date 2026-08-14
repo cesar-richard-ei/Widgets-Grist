@@ -620,14 +620,14 @@
         // ═══════════════════════════════════════════════════════════════════════
         // MODULE COMMUN TASKFLOW (genere — voir projects/tasks_app/core/taskflow-core.js)
         // ═══════════════════════════════════════════════════════════════════════
-        // <taskflow-core> -- GENERE par scripts/build-taskflow.js, NE PAS EDITER ICI
+        // <inline:core/taskflow-core.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
         /* ============================================================================
          * taskflow-core.js — Module commun aux widgets TaskFlow
          * ----------------------------------------------------------------------------
-         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-taskflow.js entre
+         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-inline.js entre
          * les marqueurs de generation prevus a cet effet.
          * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
-         *   npm run build:taskflow
+         *   npm run build:inline
          *
          * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
          * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans
@@ -968,7 +968,11 @@
              * Gantt de fiche. Aucun effet de bord (ni etat, ni DOM) : rend les nombres,
              * l'appelant les applique. Math des dates repliquee a l'identique.
              * Entree : { tasks:[{start:Date|null,end:Date|null}], unit:'day'|'week'|'month',
-             *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number }
+             *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number,
+             *   extendLeft?:boolean }
+             * extendLeft a false fige le debut de plage sur viewStart : les vues glissantes s'y
+             * ancrent pour tenir la ligne du jour au bord, les barres anterieures restent tronquees
+             * a gauche par computeBarGeometry.
              * Sortie : { effectiveStart:Date, effectiveDays, numCells, cellWidth, pxPerDay }
              * --------------------------------------------------------------------- */
             function computeTimelineScale(opts) {
@@ -982,12 +986,16 @@
                 let eEnd = addDays(viewStart, viewDays);
                 const vEnd = new Date(eEnd.getTime());
                 const PADDING = unit === 'day' ? 3 : unit === 'week' ? 7 : 14;
+                // La borne gauche recule jusqu'au début de la tâche la plus ancienne, y compris quand
+                // celle-ci est entièrement derrière la fenêtre : sans quoi la timeline se refuse à remonter
+                // dans le passé, alors que les tâches y sont. La borne droite ne suit que les tâches qui
+                // touchent la fenêtre, une échéance lointaine n'ayant pas à étirer la vue courante.
                 for (const t of (opts.tasks || [])) {
                     const ts = t.start, te = t.end;
                     if (!ts || !te) continue;
                     if (!isPlausibleDate(ts) || !isPlausibleDate(te)) continue;
-                    if (te < viewStart || ts > vEnd) continue;
                     if (ts < eStart) eStart = addDays(ts, -PADDING);
+                    if (te < viewStart || ts > vEnd) continue;
                     if (te > eEnd) eEnd = addDays(te, PADDING);
                 }
                 if (unit === 'week') eStart = startOfWeek(eStart);
@@ -1108,7 +1116,7 @@
 
         // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
         if (typeof module !== 'undefined' && module.exports) module.exports = TF;
-        // </taskflow-core>
+        // </inline>
 
         // ═══════════════════════════════════════════════════════════════════════
         // STATE
@@ -1296,7 +1304,7 @@
         function convertGristToRecords(data) { if (!data || Array.isArray(data)) return data || []; const cols = Object.keys(data); if (!cols.length) return []; const n = data[cols[0]]?.length || 0; const records = []; for (let i = 0; i < n; i++) { const rec = {}; cols.forEach(k => { rec[k] = data[k][i]; }); records.push(rec); } return records; }
         // sweet spot : ne jamais ecrire une colonne absente du schema (ex. charges/dateCloture si le Plan n'a jamais ete ouvert). Fail-open si TASK_COLS pas encore peuple.
         function pruneTaskRecord(rec) { if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; } return rec; }
-        async function ensureSchema() { let created = 0; const tablesCreated = []; for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) { let existingCols = [], tableExists = false; try { const data = await grist.docApi.fetchTable(tableName); existingCols = Object.keys(data).filter(c => c !== 'id' && c !== 'manualSort'); tableExists = true; } catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } } if (tableExists) { const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); } catch (e) {} } } } if (tablesCreated.includes('Tasks')) await seedData();
+        async function ensureSchema() { let created = 0; const tablesCreated = []; for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) { let existingCols = [], tableExists; try { const data = await grist.docApi.fetchTable(tableName); existingCols = Object.keys(data).filter(c => c !== 'id' && c !== 'manualSort'); tableExists = true; } catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } } if (tableExists) { const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); } catch (e) {} } } } if (tablesCreated.includes('Tasks')) await seedData();
             // #1 : semer les statuts par defaut (choix + couleurs) sur la colonne Choice si vierge
             await TF.seedStatusChoices(grist, 'Tasks', 'statut', TF.DEFAULT_STATUSES);
             // #1bis : delier colId <-> label pour autoriser le renommage libre des libelles
