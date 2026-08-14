@@ -625,12 +625,16 @@ const TF = (function () {
         let eEnd = addDays(viewStart, viewDays);
         const vEnd = new Date(eEnd.getTime());
         const PADDING = unit === 'day' ? 3 : unit === 'week' ? 7 : 14;
+        // La borne gauche recule jusqu'au début de la tâche la plus ancienne, y compris quand
+        // celle-ci est entièrement derrière la fenêtre : sans quoi la timeline se refuse à remonter
+        // dans le passé, alors que les tâches y sont. La borne droite ne suit que les tâches qui
+        // touchent la fenêtre, une échéance lointaine n'ayant pas à étirer la vue courante.
         for (const t of (opts.tasks || [])) {
             const ts = t.start, te = t.end;
             if (!ts || !te) continue;
             if (!isPlausibleDate(ts) || !isPlausibleDate(te)) continue;
+            if (ts < eStart) eStart = addDays(ts, -PADDING);
             if (te < viewStart || ts > vEnd) continue;
-            if (ts < eStart && opts.extendLeft !== false) eStart = addDays(ts, -PADDING);
             if (te > eEnd) eEnd = addDays(te, PADDING);
         }
         if (unit === 'week') eStart = startOfWeek(eStart);

@@ -615,6 +615,32 @@ finit par aboutir, et le message est alors remplacé par le rendu.
 aboutir, et la démo couperait les écritures sans le dire — c'est le bug corrigé juste au-dessus.
 Ne pas raccourcir le délai jusqu'à croiser les lectures lentes légitimes.
 
+### Remonter dans le passé (Gantt)
+
+Règle posée en revue le 14/08/2026 : dans chaque vue, la timeline doit pouvoir remonter jusqu'au
+début de la tâche affichable la plus ancienne. `computeTimelineScale()` recule donc sa borne gauche
+sur **toutes** les tâches, y compris celles entièrement antérieures à la fenêtre, alors qu'elle les
+ignorait auparavant. La borne droite, elle, ne suit que les tâches qui touchent la fenêtre : une
+échéance lointaine n'a pas à étirer la vue courante.
+
+L'option `extendLeft`, qui figeait la borne gauche des vues glissantes (trimestre, semestre), ne
+s'applique plus à ce recul. C'était la cause du symptôme : le passé restait inatteignable au
+défilement dans ces deux vues, alors que la vue année y donnait accès.
+
+**Coût mesuré**, sur 132 lignes étalées sur quatre ans, à comparer aux quelque 900 cellules d'une
+fenêtre seule :
+
+| Vue | Cellules de grille | Rendu |
+|---|---|---|
+| Semaine | 83 000 | 200 ms |
+| Semestre | 15 200 | 45 ms |
+| Année | 3 600 | 21 ms |
+
+La vue Semaine est la seule qui pique, `render()` étant rejoué à chaque filtre ou clic. Si cela
+gêne, la piste identifiée est de supprimer les `div.grid-cell` au profit d'un fond CSS répété sur
+la ligne, les colonnes « aujourd'hui », week-end et début de mois devenant des surcouches. Aucune
+cellule ne serait alors créée, quelle que soit l'étendue.
+
 ### Chantiers dans leur propre table (Gantt)
 
 Les chantiers quittent `Tasks` pour une table `Chantiers`. Cible arrêtée avec le métier :
