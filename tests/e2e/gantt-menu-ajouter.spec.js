@@ -57,14 +57,14 @@ test('un seul bouton de creation, nomme Ajouter', async ({ page }) => {
     await expect(page.locator('#btnAjouterChantier')).toHaveCount(0);
 });
 
-test('le bouton propose la tache et le chantier', async ({ page }) => {
+test('le bouton propose la tache, le chantier et le jalon', async ({ page }) => {
     await ouvrirGantt(page);
 
     await expect(page.locator('#menuAjout')).toBeHidden();
     await page.locator('#btnAjouter').click();
 
     await expect(page.locator('#menuAjout')).toBeVisible();
-    await expect(page.locator('#menuAjout button')).toHaveText(['Tâche', 'Chantier']);
+    await expect(page.locator('#menuAjout button')).toHaveText(['Tâche', 'Chantier', 'Jalon']);
 });
 
 test('choisir Chantier ouvre une fiche de chantier', async ({ page }) => {

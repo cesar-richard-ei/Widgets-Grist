@@ -427,15 +427,20 @@ function buildVisibleTasks() {
     return avecBandeauxDeProjet(visible);
 }
 
-// Une seule tête par ligne, celle du responsable, le reste de l'équipe passe dans le compteur.
-// Sans responsable renseigné, le premier assigné tient la place.
+// Deux têtes par ligne, le responsable puis un contributeur, le reste de l'équipe passe dans le
+// compteur. Sans responsable renseigné, les deux premiers contributeurs tiennent la place.
 function pastillesDeLigne(t, assignees) {
     const responsable = t.Responsable || null;
-    const tete = responsable || (assignees.length ? assignees[0] : null);
-    if (!tete) return '';
-    const autres = assignees.filter(id => id !== tete).length;
-    return '<div class="task-avatars">' +
-        '<div class="task-avatar" style="background:' + getTeamMemberColor(tete) + '" title="' + escapeHtml(getTeamMemberName(tete)) + '">' + getInitials(getTeamMemberName(tete)) + '</div>' +
+    const montres = [];
+    if (responsable) montres.push(responsable);
+    for (const id of assignees) {
+        if (montres.length >= 2) break;
+        if (!montres.includes(id)) montres.push(id);
+    }
+    if (!montres.length) return '';
+    const autres = assignees.filter(id => !montres.includes(id)).length;
+    const pastille = (id) => '<div class="task-avatar" style="background:' + getTeamMemberColor(id) + '" title="' + escapeHtml(getTeamMemberName(id)) + '">' + getInitials(getTeamMemberName(id)) + '</div>';
+    return '<div class="task-avatars">' + montres.map(pastille).join('') +
         (autres > 0 ? '<div class="task-avatar more" title="' + autres + ' autre' + (autres > 1 ? 's' : '') + '">+' + autres + '</div>' : '') +
     '</div>';
 }
@@ -1485,9 +1490,44 @@ document.addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fermerMenuAjout(); });
 
+// Tant que la fiche n'est pas enregistrée, le type reste ouvert : une tâche peut devenir chantier
+// et l'inverse. Une fois enregistrée, la ligne vit dans sa table et la bascule reviendrait à la
+// déplacer d'une table à l'autre, ce qui n'est pas proposé.
+function pastillesDeType(data, chantier) {
+    const neuve = panelState.isNew;
+    const pastille = (libelle, actif, action, raison) => {
+        if (actif) return '<span class="type-pill selected">' + libelle + '</span>';
+        if (!neuve) return '<span class="type-pill fige" title="' + raison + '">' + libelle + '</span>';
+        return '<span class="type-pill" onclick="' + action + '">' + libelle + '</span>';
+    };
+    const fige = 'Le type se choisit à la création';
+    return pastille('Tâche', !chantier && data.type !== 'jalon', "changerTypeFiche('tache')", fige) +
+        pastille('Chantier', !!chantier, "changerTypeFiche('chantier')", fige) +
+        pastille('◆ Jalon', !chantier && data.type === 'jalon', "changerTypeFiche('jalon')", fige);
+}
+
+// La bascule change la table cible : on repart d'une fiche vierge du bon type, en gardant ce qui a
+// déjà été saisi et qui a un sens des deux côtés.
+function changerTypeFiche(cible) {
+    if (!panelState.isNew) return;
+    const garde = panelState.editData || {};
+    const repris = { titre: garde.titre || '', description: garde.description || '', dateDebut: garde.dateDebut || null, dateEcheance: garde.dateEcheance || null, projet: garde.projet || null };
+    const versChantier = cible === 'chantier';
+    if (versChantier === !!panelState.estChantier) {
+        if (!versChantier) updateField('type', cible);
+        return;
+    }
+    if (versChantier) openCreateChantierPanel(); else openCreateTaskWithParent(null);
+    Object.assign(panelState.editData, repris);
+    if (!versChantier) panelState.editData.type = cible;
+    renderPanel();
+}
+
 function choisirAjout(quoi) {
     fermerMenuAjout();
-    if (quoi === 'chantier') openCreateChantierPanel(); else openCreatePanel();
+    if (quoi === 'chantier') { openCreateChantierPanel(); return; }
+    openCreatePanel();
+    if (quoi === 'jalon') updateField('type', 'jalon');
 }
 
 // Création d'un chantier : même volet, en mode chantier, avec les champs que le cadrage laisse.
@@ -1767,15 +1807,7 @@ function renderPanel() {
 
     content.innerHTML =
         '<div class="panel-accent-bar" style="background:' + priorityColor + '"></div>' +
-        '<div class="panel-type-row">' +
-            (chantier ?
-            '<span class="type-pill fige" title="Le type se choisit à la création">Tâche</span>' +
-            '<span class="type-pill selected">Chantier</span>' +
-            '<span class="type-pill fige" title="Le type se choisit à la création">◆ Jalon</span>' :
-            '<span class="type-pill ' + (data.type === 'tache' ? 'selected' : '') + '" onclick="updateField(\'type\',\'tache\')">Tâche</span>' +
-            '<span class="type-pill fige" title="Un chantier se crée depuis le bouton Ajouter">Chantier</span>' +
-            '<span class="type-pill ' + (data.type === 'jalon' ? 'selected' : '') + '" onclick="updateField(\'type\',\'jalon\')">◆ Jalon</span>') +
-        '</div>' +
+        '<div class="panel-type-row">' + pastillesDeType(data, chantier) + '</div>' +
         (currentProject ? '<div class="panel-crumb"><span class="pd" style="background:' + projectColor + '"></span>' + escapeHtml(currentProject.nom) + '</div>' : '') +
         '<textarea rows="1" class="panel-title-edit" id="taskTitle" placeholder="' + titlePlaceholder + '" oninput="ajusterHauteurTitre(this);updateField(\'titre\', this.value, true)" onchange="updateField(\'titre\', this.value)">' + escapeHtml(data.titre) + '</textarea>' +
 

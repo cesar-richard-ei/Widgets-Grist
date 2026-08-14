@@ -52,22 +52,22 @@ async function ouvrirGantt(page) {
 
 const pastilles = (page, titre) => page.locator('#taskList .task-row', { hasText: titre }).locator('.task-avatar').allTextContents();
 
-test('seul le responsable garde ses initiales, les autres sont comptes', async ({ page }) => {
+test('le responsable ouvre la ligne, un contributeur suit, le reste est compte', async ({ page }) => {
     await ouvrirGantt(page);
 
-    expect(await pastilles(page, 'Responsable assigne')).toEqual(['BK', '+2']);
+    expect(await pastilles(page, 'Responsable assigne')).toEqual(['BK', 'AM', '+1']);
 });
 
 test('un responsable qui n est pas assigne compte quand meme les assignes', async ({ page }) => {
     await ouvrirGantt(page);
 
-    expect(await pastilles(page, 'Responsable hors equipe projet')).toEqual(['DS', '+3']);
+    expect(await pastilles(page, 'Responsable hors equipe projet')).toEqual(['DS', 'AM', '+2']);
 });
 
-test('sans responsable, le premier assigne prend la place', async ({ page }) => {
+test('sans responsable, les deux premiers assignes prennent la place', async ({ page }) => {
     await ouvrirGantt(page);
 
-    expect(await pastilles(page, 'Sans responsable')).toEqual(['AM', '+2']);
+    expect(await pastilles(page, 'Sans responsable')).toEqual(['AM', 'BK', '+1']);
 });
 
 test('un seul intervenant n affiche aucun compteur', async ({ page }) => {
