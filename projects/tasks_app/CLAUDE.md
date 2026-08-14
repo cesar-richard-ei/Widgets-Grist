@@ -460,6 +460,21 @@ async function setMemberColor(memberId, color) { /* UpdateRecord Team.couleur */
 function changeColorMode(mode) { /* met à jour colorMode + re-render (Gantt : en mémoire) */ }
 ```
 
+### Volet tâche (Gantt)
+
+L'ordre des blocs est fixé par le document « UI du volet tâche » : Description, Dates, Statut,
+Progression, Responsable, Contributeurs, Projet, Chantier, Priorité, Sous-tâches, Parent,
+Dépendances, Tags, Temps et charge. Il est écrit **dans le gabarit**, `groupeDeProps()` posant les
+lignes de propriétés par paquets et n'émettant rien quand toutes sont masquées.
+
+**Ne pas réintroduire d'ordre CSS** (`order:` sur `.pr-status`, `.pr-prog` ou équivalent) : deux
+règles de ce genre contredisaient l'ordre du gabarit à l'écran, et un test qui lisait l'ordre du DOM
+passait au vert malgré tout. Les tests d'ordre mesurent donc la position **affichée**.
+
+`Responsable` est facultative comme les colonnes du Plan : sans elle, la ligne disparaît du volet et
+le mode de couleur correspondant quitte le sélecteur. Le rattachement au chantier s'édite depuis la
+fiche et passe par la colonne réelle, cf la détection par type plus bas.
+
 ### Bandeau de projet (Gantt)
 
 Le bandeau qui ouvre chaque groupe de projet porte la couleur de son **responsable**
