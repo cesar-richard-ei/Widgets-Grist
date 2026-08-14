@@ -382,6 +382,28 @@ CodeQL passe sur le JavaScript et sur les workflows eux-mêmes, à chaque PR, à
 fois par semaine. `published/` est exclu par `.github/codeql/config.yml` puisque c'est une copie de
 `projects/`. Les alertes remontent dans l'onglet Security, elles ne bloquent pas le merge.
 
+### Publier une version stable, et pourquoi un second run
+
+Créer une release ne publie pas directement le site. Le run déclenché par l'événement `release`
+tourne sur le tag, et le déploiement qu'il émet annonce à Pages une version identifiée par le **SHA
+du commit**, pas par le contenu de l'artifact. Or ce commit a déjà été déployé au moment du merge,
+avec une racine figée sur la release précédente. Pages voit donc la même version et continue de
+servir l'ancien contenu, alors que le run se termine en succès. Constaté le 2026-08-10 puis le
+2026-08-14, dans les deux cas résolu par un déploiement supplémentaire.
+
+Le workflow s'en charge désormais seul : sur `release`, le job `republication` ne construit rien et
+déclenche `ci.yml` sur `main` avec l'entrée `republier=true`. Ce second run saute les tests, déjà
+joués sur ce commit, résout la dernière release, reconstruit le site et publie. Compter environ une
+minute entre la création de la release et la mise en ligne.
+
+`workflow_dispatch` fait partie des deux seuls événements qui créent un run même déclenchés par le
+`GITHUB_TOKEN` du dépôt, avec `repository_dispatch` : c'est ce qui rend l'enchaînement possible sans
+jeton personnel, et il n'y a pas de boucle à craindre puisqu'un run sur `main` ne crée pas de
+release.
+
+**Ne pas remettre les tests dans le run de republication** sans raison : ils rallongeraient la mise
+en ligne de plusieurs minutes pour rejouer une validation déjà faite au merge et sur le tag.
+
 ### Publier une version stable
 
 Les tags sont posés par la CI, la release reste manuelle. Choisir le tag à figer et créer la release
