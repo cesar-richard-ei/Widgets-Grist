@@ -216,7 +216,7 @@
         .mg { display: flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; background: var(--card-bg); }
 
         /* Tooltip */
-        .tooltip { position: fixed; background: var(--text); color: white; padding: 10px 14px; border-radius: 8px; font-size: 0.78rem; z-index: 1000; max-width: 280px; box-shadow: var(--shadow-lg); pointer-events: none; opacity: 0; transition: opacity 0.15s; }
+        .tooltip { position: fixed; background: var(--bulle-fond, #1f2738); color: white; padding: 10px 14px; border-radius: 8px; font-size: 0.78rem; z-index: 1000; max-width: 280px; box-shadow: var(--shadow-lg); pointer-events: none; opacity: 0; transition: opacity 0.15s; }
         .tooltip.visible { opacity: 1; }
         .tooltip-title { font-weight: 600; margin-bottom: 6px; }
         .tooltip-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.72rem; opacity: 0.9; }
@@ -616,6 +616,8 @@
                 --border:#283145; --border-dark:#3a455c;
                 --shadow:0 1px 2px rgba(0,0,0,0.4); --shadow-lg:0 24px 60px -16px rgba(0,0,0,0.7);
                 --p-50:#1a2150; --p-100:#22306e; --surface-2:#161f33; --warn-ink:#f5b454;
+                /* La bulle garde un fond sombre : son texte est blanc dans les deux thèmes. */
+                --bulle-fond:#060a14;
             }
             .demo-badge { color: #1f2738; }
             .toast { background: #060a14; }
