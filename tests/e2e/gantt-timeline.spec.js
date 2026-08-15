@@ -77,8 +77,9 @@ test('la navigation avance et recule d un mois en vue semestre', async ({ page }
     const depart = await libelle.textContent();
 
     await page.locator('.btn-nav').last().click();
-    const suivant = await libelle.textContent();
-    expect(suivant).not.toBe(depart);
+
+    // Le libellé est réécrit au rendu suivant : le lire aussitôt le trouve encore inchangé.
+    await expect(libelle).not.toHaveText(depart);
 
     await page.locator('.btn-nav').first().click();
 
