@@ -374,7 +374,13 @@ servir l'ancien contenu, alors que le run se termine en succès. Constaté le 20
 2026-08-14, dans les deux cas résolu par un déploiement supplémentaire.
 
 Le workflow s'en charge désormais seul : sur `release`, le job `republication` ne construit rien et
-déclenche `ci.yml` sur `main` avec l'entrée `republier=true`. Ce second run saute les tests, déjà
+déclenche `ci.yml` sur `main` avec l'entrée `republier=true`. Deux types d'activité sont écoutés :
+`published`, émis à la publication d'une release comme d'une pre-release, et `released`, émis quand
+une pre-release bascule en release stable. Sans ce second type, promouvoir une pre-release ne
+mettrait pas la racine à jour.
+
+Publier une **pre-release** déclenche donc le mécanisme sans rien changer en production : la racine
+est résolue via `releases/latest`, qui ignore les pre-releases, et se reconstruit à l'identique. Ce second run saute les tests, déjà
 joués sur ce commit, résout la dernière release, reconstruit le site et publie. Compter environ une
 minute entre la création de la release et la mise en ligne.
 
