@@ -1,234 +1,62 @@
 # Infrastructure de test et trajectoire d'assainissement
 
-## Contexte
-
-Les widgets sont des fichiers HTML autonomes de 100 à 230 Ko, tout inline, sans aucun test.
-`gantt.html` fait 3164 lignes dont un seul scope global, des gestionnaires en attributs `onclick`
-et un panneau latéral reconstruit par concaténation de chaînes.
-
-Le seul code déjà factorisé est `projects/tasks_app/core/taskflow-core.js` (323 lignes,
-17 fonctions exportées), inliné dans 6 widgets par `scripts/build-inline.js` entre les
-marqueurs `// <taskflow-core>` et `// </taskflow-core>`.
-
-Les widgets sont intégrés par « Custom URL » sur une instance Grist SecNumCloud
-(`grist.numerique.gouv.fr`) que nous n'administrons pas. Le catalogue `manifest.json` n'y est
-donc pas exploitable, la variable `GRIST_WIDGET_LIST_URL` n'étant pas accessible.
-
-Le dépôt est un fork divergent : aucune synchronisation avec l'amont n'est prévue.
-
-## Objectifs
-
-- Pouvoir vérifier un correctif sans instance Grist ni document de test.
-- Attraper les régressions sur le core, inliné dans 6 widgets, où un bug se propage partout.
-- Disposer d'une mesure de performance reproductible.
-- Faire converger la structure vers des unités testables, sans refonte préalable.
-
-## Non-objectifs
-
-- Remplacer la vérification sur l'instance réelle avant publication.
-- Introduire un bundler ou un framework.
-- Restructurer le dépôt avant que le travail ne l'exige.
-
-## Le faux Grist
-
-`tests/fake-grist.js`. Objet injecté dans la page avant chargement, adossé à un document en
-mémoire. Le widget ne sait pas qu'il est testé.
-
-### Surface à couvrir
-
-Relevé sur les 6 widgets.
-
-| Méthode | Appels | Comportement attendu |
-|---------|--------|----------------------|
-| `docApi.applyUserActions` | 79 | Applique les actions au document et les journalise |
-| `docApi.fetchTable` | 71 | Rend le format colonnaire `{ id: [...], col: [...] }` |
-| `ready` | 12 | Enregistre les options, déclenche l'émission initiale |
-| `setSelectedRows` | 7 | Journalise |
-| `setOption` | 7 | Écrit dans les options du widget, notifie `onOptions` |
-| `onRecords` | 6 | Rappel sur la table liée, réémis après mutation |
-| `onOptions` | 6 | Rappel sur changement d'options |
-| `onRecord` | 5 | Rappel sur changement de sélection |
-| `docApi.listTables` | 3 | Liste des tables du document |
-| `setCursorPos` | 2 | Journalise |
-| `widgetApi.getOptions` | 1 | Lecture des options |
-
-### Actions utilisateur à implémenter
-
-`AddRecord` (44), `UpdateRecord` (34), `AddColumn` (15), `ModifyColumn` (8),
-`SetDisplayFormula` (7), `RemoveRecord` (6), `AddTable` (6), `BulkAddRecord` (1).
-
-`AddColumn`, `ModifyColumn` et `SetDisplayFormula` sont indispensables : `ensureSchema()` s'en
-sert à chaque ouverture de widget. Sans elles, aucun widget ne démarre.
-
-### Tables de métadonnées
-
-Les widgets lisent `_grist_Tables` (12 fois) et `_grist_Tables_column` (18 fois) pour découvrir
-le schéma réel et les choix de la colonne `statut`. Le simulacre doit donc maintenir ces deux
-tables en cohérence avec les tables applicatives : toute action de schéma s'y répercute.
-
-Tables applicatives rencontrées : `Tasks`, `Team`, `Projects`, `Disponibilites`.
-
-### Propriétés
-
-- **Format colonnaire fidèle**, pour que la conversion soit réellement exercée.
-- **Application réelle des actions**, permettant d'assertir sur l'état obtenu.
-- **Journal des actions**, permettant d'assertir sur ce qui a été émis, indépendamment de l'état.
-- **Réémission de `onRecords` après mutation**, comme le vrai Grist, pour exposer les bugs de
-  réactivité.
-
-### Limites assumées
-
-Un simulacre diverge du produit réel. Le Whiteboard documente déjà un cas
-(`projects/whiteboard/index.html`, lignes 1463 et 2122) : sur `grist.numerique.gouv.fr`,
-`ModifyColumn` sur une colonne `Ref` déclenche trois actions internes.
-
-Le simulacre reste donc volontairement minimal et les divergences constatées sont consignées
-dans ce document au fur et à mesure. Il ne dispense pas d'un passage sur l'instance avant
-publication.
-
-### Registre des divergences
-
-| Sujet | État |
-|-------|------|
-| `ModifyColumn` sur une colonne `Ref` | Déclenche trois actions internes sur l'instance réelle, une seule dans le simulacre. Relevé dans `projects/whiteboard/index.html`, lignes 1463 et 2122. |
-| Second argument de `onOptions` | Implémenté en `{ source: 'self' }`, **déduit** de la garde `interaction?.source !== 'self'` présente à l'identique dans le Gantt, le Kanban et le Calendar. Non vérifié contre l'API réelle. À confronter à l'instance en phase 1. |
-| Instance unique | Le simulacre ne modélise qu'un widget. Il ne peut donc pas produire une notification `onOptions` venue d'un autre widget, donc pas exercer la branche « notification externe » de la garde anti-boucle. |
-| Compteurs de références internes | `prochainRefTable` et `prochainRefColonne` ne sont pas couverts par l'instantané transactionnel. Après restauration d'un lot échoué, la numérotation des métadonnées présente un trou. Sans collision ni effet fonctionnel. |
-
-## Niveaux de test
-
-### Niveau 1, unitaire sur le core
-
-Runner `node:test`, intégré à Node 20, déjà la version utilisée par la CI. Aucune dépendance pour
-ce niveau : Playwright n'intervient qu'au niveau 2.
-
-Une ligne ajoutée en fin de `core/taskflow-core.js` :
-
-```js
-if (typeof module !== 'undefined' && module.exports) module.exports = TF;
-```
-
-Inerte dans le navigateur, où `module` n'existe pas. Le code inliné dans les widgets n'est pas
-affecté.
-
-Couvre les fonctions pures : `columnarToRows`, `buildStatusConfig`, `getStatus`, `isTerminal`,
-`parseCharges`, `chargesToJson`, `chargeTotal`, `chargeByMember`, `periodKey`,
-`chargeByMemberPeriod`, `shiftPeriods`, `periodRange`, `chargeMatrix`.
-
-Les trois fonctions couplées à Grist (`loadStatusConfig`, `seedStatusChoices`,
-`setRefDisplayColumns`) sont testées avec le simulacre.
-
-### Niveau 2, widget complet
-
-`@playwright/test`, Chromium réel, simulacre injecté par `addInitScript` avant chargement de la
-page.
-
-jsdom a été écarté faute de moteur de rendu. Les correctifs attendus portent sur un calque qui
-intercepte les clics (#4, #11), sur de l'interface (#10) et sur une mesure de temps (#5). jsdom
-ne peut en valider aucun. Un test qui passe sans rien prouver est plus nuisible qu'absent.
-
-Coût : une dépendance de développement et le téléchargement d'un navigateur.
-
-### Niveau 3, performance
-
-Même outil. Jeux de données générés dans le simulacre à 50, 200, 500 et 2000 tâches, avec
-hiérarchie et dépendances, mesure du temps d'ouverture du Gantt à chaque palier. Répond au
-ticket #5, pour lequel aucun ordre de grandeur n'est disponible, et établit le seuil de
-non-régression une fois le volume réel connu.
-
-### Commandes
-
-```
-npm test           niveau 1
-npm run test:e2e   niveaux 2 et 3
-```
-
-Deux runners plutôt qu'un. Unifier sous Vitest ajouterait une dépendance et une configuration
-pour n'économiser qu'une commande.
-
-## Structure
-
-Ajouté en phase initiale, sans toucher au code de production :
-
-```
-tests/
-  fake-grist.js
-  fixtures/
-  unit/core.test.js
-  e2e/
-    gantt-panel.spec.js
-    gantt-filters.spec.js
-    perf.spec.js
-```
-
-Cible de modularisation, atteinte progressivement :
-
-```
-projects/tasks_app/
-  src/
-    core/taskflow-core.js
-    gantt/
-      panel.js
-      timeline.js
-      filters.js
-  gantt.html      gabarit a marqueurs
-```
-
-`build-inline.js` accepte des marqueurs nommés, `// <inline:chemin.js>`, de sorte que n'importe
-quel module soit inlinable. Le mécanisme est idempotent et dispose d'un mode `--check`. Aucun
-bundler n'est introduit. Le script du Gantt est extrait dans `gantt.js` ; sa découpe en modules
-par préoccupation reste à faire.
-
-Le livrable reste un fichier HTML autonome : sur une instance non administrée, un widget sans
-chemin relatif à résoudre ni ressource externe à charger ne peut pas être cassé par
-l'hébergement ou par une politique de sécurité.
-
-## Intégration continue
-
-Le workflow existant est étendu d'un job de test exécutant les deux niveaux, ainsi que
-`check:inline`. Une désynchronisation entre une source et les widgets inlinés est donc bloquante.
-
-## Trajectoire
-
-| Phase | Contenu | Code de production | État |
-|-------|---------|--------------------|------|
-| 0 | Simulacre, unitaires sur le core, CI | Une ligne d'export | Faite |
-| 1 | Tests figeant le comportement du panneau, puis #8/#9 et #4/#11 | Correctifs ciblés | Faite |
-| 2 | #7, #10, #3, #5 | Correctifs ciblés | À venir |
-| 3 | Extraction du panneau en module | Refonte garantie par la phase 1 | À venir |
-
-La phase 1 a ajouté Playwright comme dépendance de développement et une étape d'installation en
-CI, jusque-là inutile faute de dépendance.
-
-**Règle de migration.** On n'extrait que ce que les tickets font toucher, et jamais avant que des
-tests de niveau 2 aient figé le comportement existant du morceau concerné. Le panneau latéral est
-le premier candidat, environ 350 lignes, parce que #8, #9, #4 et #7 y vivent tous.
-
-## Décisions
-
-| Sujet | Retenu | Écarté |
-|-------|--------|--------|
-| Livrable | HTML autonome produit par build | Fichiers séparés servis à côté |
-| Source | Modules, extraits progressivement | Extraction en une fois |
-| Runner unitaire | `node:test` | Vitest, Jest |
-| Runner navigateur | `@playwright/test` | jsdom, happy-dom |
-| Données de test | Simulacre paramétrable | Mode démo existant, non paramétrable |
-| Amont | Fork divergent | Suivi du dépôt d'origine |
-
-## Points ouverts
-
-Sans effet sur cette infrastructure, mais bloquants pour une partie du backlog. Voir
-`projects/tasks_app/BACKLOG.md`.
-
-- Vocabulaire métier et modèle de données : *domaine*, *chantier*, *produit*, *offre de service*.
-  Bloque #6, #12, #13, et structure #1.
-- Geste utilisateur exact derrière #2.
-
-## Dette de structure repérée, non traitée
-
-Aucun de ces points ne gêne le travail en cours. Les corriger maintenant reviendrait à déplacer
-des fichiers sans filet.
-
-- Le Whiteboard est un widget TaskFlow mais vit hors de `projects/tasks_app/`.
-- Conventions de nommage des dossiers mélangées.
-- Six fichiers de documentation à la racine de `projects/tasks_app/`.
+## Organisation des tests de bout en bout
+
+Un fichier par **domaine fonctionnel**, jamais par lot de livraison : un test décrit le
+comportement attendu aujourd'hui, pas ce qui a changé. Proscrire les titres du genre « n'est plus »,
+« désormais », « au lieu de » : l'historique vit dans git, pas dans la suite de tests.
+
+| Fichier | Domaine |
+|---|---|
+| `gantt-timeline.spec.js` | calage sur le jour, navigation, profondeur historique, en-tête des mois, jalon déplaçable |
+| `gantt-bandeaux-projet.spec.js` | bandeaux de projet, teintes, repli, alignement des deux colonnes |
+| `gantt-colonne-gauche.spec.js` | largeurs, pastilles, contenu d'une ligne, repli, barre étroite |
+| `gantt-lisibilite.spec.js` | titres reportés, noms de jalons, bulle de survol, contrastes |
+| `gantt-chantiers.spec.js` | détection du rattachement par type, hiérarchie, volet et création |
+| `gantt-volet.spec.js` | composition et ordre des blocs du volet |
+| `gantt-creation.spec.js` | bouton d'ajout, types, duplication, listes filtrables |
+| `gantt-saisie.spec.js` | persistance de la saisie, bascule entre lignes, gestes souris |
+| `gantt-couleurs-et-defauts.spec.js` | réglages d'ouverture, couleur des lignes, relecture au retour |
+| `gantt-filtres-cross-page.spec.js` | filtres partagés entre vues |
+| `diagnostic.spec.js` | schéma semé, lectures, repli démonstration, tables refusées, badge de version |
+| `plan-chantiers.spec.js`, `plan-journal.spec.js` | plan de charge |
+| `launcher.spec.js` | page de lancement |
+
+### Le socle : `tests/e2e/documents.js`
+
+Un seul endroit décrit les documents Grist et les helpers d'ouverture. Avant, 32 fichiers
+recopiaient le même jeu de colonnes : une évolution de schéma demandait de passer partout, et les
+fixtures divergeaient silencieusement.
+
+- `documentCible(nomColonne)` : modèle cible, table `Chantiers` et colonne de rattachement dont le
+  nom est libre, le lien se reconnaissant à son **type** ;
+- `documentParentRepointe()` : copie de travail où `parentTask` désigne un chantier ;
+- `documentSansChantiers()` : ancien modèle, hiérarchie entre tâches ;
+- `sansColonne(doc, colonne)` : pour ce qui doit disparaître avec sa donnée ;
+- `ouvrirGantt` / `ouvrirPlan(page, doc, options)` avec `theme`, `largeur`, `reglages`, `refuser`,
+  `optionsSection` ;
+- `ligne`, `deplier`, `toutDeplier`, `ouvrirVolet`, `champTache`, `contraste`.
+
+**Le document de référence porte le schéma complet** attendu par le widget. Une colonne manquante
+le ferait la créer à l'ouverture puis relire la table : les mesures de lecture deviennent fausses et
+chaque test paie une écriture de structure.
+
+**Un seul appel à `ouvrirGantt` par test.** La préparation du stockage local est gardée par un
+drapeau en `sessionStorage`, pour qu'un rechargement de page ne l'efface pas au milieu d'un test de
+persistance. Un second appel dans le même test ne poserait donc pas ses réglages.
+
+**`ouvrirVolet` attend la fin de la transition** d'ouverture : mesurer une largeur pendant que le
+volet glisse donne une valeur intermédiaire, et un glisser démarré à ce moment part d'une poignée en
+mouvement.
+
+### Trois pièges qui rendent un test vert et faux
+
+**Lire l'ordre du DOM** quand c'est l'ordre affiché qui compte : une règle CSS `order` peut
+contredire le gabarit, et le test ne verra rien. Mesurer les positions à l'écran.
+
+**Croire qu'un élément présent est visible** : un parent qui découpe son débordement suffit à le
+masquer sans que `toBeVisible` ne bronche. Vérifier aussi que rien ne le découpe.
+
+**Choisir une donnée qui ne discrimine pas** : un mois dont l'abréviation est identique au nom
+complet, ou une barre déjà couverte par un autre cas. Comparer aux constantes du widget plutôt qu'à
+une valeur écrite en dur.

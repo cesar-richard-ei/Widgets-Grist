@@ -1,264 +1,148 @@
 'use strict';
 
-const path = require('path');
-const base = require('@playwright/test');
-const test = base.test;
-const expect = base.expect;
+const { test, expect } = require('@playwright/test');
+const D = require('./documents.js');
 
-const CHEMIN_SIMULACRE = path.join(__dirname, '..', 'fake-grist.js');
+// Le rattachement d'une tâche à son chantier se reconnaît au **type** de la colonne, jamais à son
+// nom ni à sa valeur : les identifiants de Chantiers et de Tasks se recouvrent, et résoudre un
+// parent dans la mauvaise table rattache des lignes sans rapport, sans que rien ne plante.
+//
+// Trois documents coexistent dans la nature, et les trois doivent tenir :
+//   - modèle cible : une colonne dédiée, quel que soit son nom ;
+//   - copie de travail : parentTask repointé vers Chantiers ;
+//   - ancien modèle : pas de table Chantiers du tout.
 
-// Les chantiers quittent la table Tasks pour leur propre table. Le Gantt doit rester lisible
-// sur les deux modeles : le lien vers le chantier est porte par Tasks.chantier quand elle
-// existe, sinon par Tasks.parentTask si son type designe Chantiers. Seul un parentTask qui
-// designe Tasks est une sous-tache.
+const volet = (page) => page.locator('#panel');
 
-const jour = 86400;
-const aujourdhui = Math.floor(Date.now() / 1000 / jour) * jour;
-const j = (n) => aujourdhui + n * jour;
+test('le chantier tient le niveau 0, ses tâches le niveau 1', async ({ page }) => {
+    await D.ouvrirGantt(page);
 
-const COLONNES_TASKS = {
-    titre: { type: 'Text' }, description: { type: 'Text' }, dateDebut: { type: 'Date' }, dateEcheance: { type: 'Date' },
-    priorite: { type: 'Choice' }, statut: { type: 'Choice' }, progression: { type: 'Numeric' },
-    assignees: { type: 'RefList:Team' }, type: { type: 'Choice' }, dependDe: { type: 'RefList:Tasks' },
-    tags: { type: 'ChoiceList' }, estimationH: { type: 'Numeric' }, tempsPasse: { type: 'Numeric' },
-    couleur: { type: 'Text' }, subtasks: { type: 'Text' }, projet: { type: 'Ref:Projects' },
-    charges: { type: 'Text' }, dateCloture: { type: 'Date' }
-};
-
-const COLONNES_CHANTIERS = {
-    Nom_du_chantier: { type: 'Text' }, Description: { type: 'Text' },
-    Date_debut: { type: 'Date' }, Date_fin: { type: 'Date' },
-    Projets: { type: 'RefList:Projects' }, Contributeurs: { type: 'RefList:Team' },
-    Responsable: { type: 'Ref:Team' }, Statut_chantier: { type: 'Choice' }
-};
-
-const TEAM = { columns: { nom: { type: 'Text' }, actif: { type: 'Bool' }, couleur: { type: 'Text' } }, records: [{ id: 1, nom: 'Alice', actif: true, couleur: '#3e5de7' }] };
-const PROJECTS = { columns: { nom: { type: 'Text' }, couleur: { type: 'Text' }, actif: { type: 'Bool' } }, records: [{ id: 1, nom: 'Portail', couleur: '#10b981', actif: true }] };
-const CHANTIERS = {
-    columns: COLONNES_CHANTIERS,
-    records: [
-        { id: 1, Nom_du_chantier: 'Socle technique', Date_debut: j(-5), Date_fin: j(20), Projets: ['L', 1], Contributeurs: ['L', 1] },
-        // Sans dates : le volet doit les preremplir depuis les taches du chantier.
-        { id: 2, Nom_du_chantier: 'Documentation', Projets: ['L', 1] }
-    ]
-};
-
-// Modele cible : le rattachement est dans chantier, parentTask reste la sous-tache.
-const DOC_CIBLE = {
-    Chantiers: CHANTIERS,
-    Projects: PROJECTS,
-    Team: TEAM,
-    Tasks: {
-        columns: Object.assign({ chantier: { type: 'Ref:Chantiers' }, parentTask: { type: 'Ref:Tasks' } }, COLONNES_TASKS),
-        records: [
-            { id: 1, titre: 'Cadrage', chantier: 1, dateDebut: j(-4), dateEcheance: j(6), statut: 'inprogress', type: 'tache', priorite: '1', assignees: ['L', 1], estimationH: 8 },
-            { id: 2, titre: 'Atelier de recette', chantier: 1, parentTask: 1, dateDebut: j(0), dateEcheance: j(4), statut: 'todo', type: 'tache', priorite: '2' },
-            { id: 3, titre: 'Rediger le guide', chantier: 2, dateDebut: j(2), dateEcheance: j(9), statut: 'todo', type: 'tache', priorite: '3', assignees: ['L', 1] }
-        ]
-    }
-};
-
-// Copie de travail : parentTask a ete repointe vers Chantiers, sans colonne chantier. Les ids
-// se recouvrent d'une table a l'autre, ce qui ferait rattacher des taches entre elles.
-const DOC_COPIE_DE_TRAVAIL = {
-    Chantiers: CHANTIERS,
-    Projects: PROJECTS,
-    Team: TEAM,
-    Tasks: {
-        columns: Object.assign({ parentTask: { type: 'Ref:Chantiers' } }, COLONNES_TASKS),
-        records: [
-            { id: 1, titre: 'Cadrage', parentTask: 1, dateDebut: j(-4), dateEcheance: j(6), statut: 'inprogress', type: 'tache', priorite: '1' },
-            { id: 2, titre: 'Atelier de recette', parentTask: 1, dateDebut: j(0), dateEcheance: j(4), statut: 'todo', type: 'tache', priorite: '2' }
-        ]
-    }
-};
-
-// Ancien modele : pas de table Chantiers, parentTask designe une tache.
-const DOC_ANCIEN = {
-    Projects: PROJECTS,
-    Team: TEAM,
-    Tasks: {
-        columns: Object.assign({ parentTask: { type: 'Ref:Tasks' } }, COLONNES_TASKS),
-        records: [
-            { id: 1, titre: 'Socle technique', dateDebut: j(-5), dateEcheance: j(20), statut: 'inprogress', type: 'tache', priorite: '1', projet: 1 },
-            { id: 2, titre: 'Cadrage', parentTask: 1, dateDebut: j(-4), dateEcheance: j(6), statut: 'todo', type: 'tache', priorite: '2', projet: 1 }
-        ]
-    }
-};
-
-async function ouvrirGantt(page, doc) {
-    await page.route('**/grist-plugin-api.js', (route) => route.abort());
-    await page.addInitScript({ path: CHEMIN_SIMULACRE });
-    await page.addInitScript((d) => {
-        window.grist = window.createFakeGrist(d);
-        try { localStorage.removeItem('taskflow_gantt_expanded'); } catch (e) {}
-    }, doc);
-    await page.goto('http://localhost:3001/tasks_app/gantt.html');
-    await page.waitForSelector('#taskList .task-row');
-}
-
-const lignes = (page) => page.locator('#taskList .task-row');
-const ligne = (page, titre) => page.locator('#taskList .task-row', { hasText: titre });
-
-test('le chantier est la ligne de niveau 0, la tache est dessous', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
-
-    await expect(ligne(page, 'Socle technique')).toHaveAttribute('data-depth', '0');
-
-    await ligne(page, 'Socle technique').locator('.tree-chevron').click();
-
-    await expect(ligne(page, 'Cadrage')).toHaveAttribute('data-depth', '1');
+    await expect(D.ligne(page, 'Socle technique')).toHaveAttribute('data-depth', '0');
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await expect(D.ligne(page, 'Cadrage des outils')).toHaveAttribute('data-depth', '1');
 });
 
-test('une sous-tache reste sous sa tache, pas sous le chantier', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
+test('une sous-tâche reste sous sa tâche, pas sous le chantier', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.toutDeplier(page);
 
-    await ligne(page, 'Socle technique').locator('.tree-chevron').click();
-    await ligne(page, 'Cadrage').locator('.tree-chevron').click();
-
-    await expect(ligne(page, 'Atelier de recette')).toHaveAttribute('data-depth', '2');
+    await expect(D.ligne(page, 'Atelier de cadrage')).toHaveAttribute('data-depth', '2');
 });
 
-test('le projet du chantier est repris quand la tache n en porte pas', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
+test('le nom de la colonne de rattachement n a pas d importance', async ({ page }) => {
+    await D.ouvrirGantt(page, D.documentCible('Chantiers'));
 
-    await expect(ligne(page, 'Socle technique')).toHaveAttribute('data-projet', '1');
+    await expect(D.ligne(page, 'Socle technique')).toHaveAttribute('data-depth', '0');
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await expect(D.ligne(page, 'Cadrage des outils')).toHaveAttribute('data-depth', '1');
 });
 
-test('sur la copie de travail, les taches ne sont pas rattachees entre elles', async ({ page }) => {
-    await ouvrirGantt(page, DOC_COPIE_DE_TRAVAIL);
+test('sur la copie de travail, les tâches ne se rattachent pas entre elles', async ({ page }) => {
+    await D.ouvrirGantt(page, D.documentParentRepointe());
+    await D.toutDeplier(page);
 
-    // parentTask=1 designe le chantier 1, pas la tache 1 : « Cadrage » ne doit pas devenir le
-    // parent de « Atelier de recette ».
-    await expect(ligne(page, 'Socle technique')).toHaveAttribute('data-depth', '0');
-    await ligne(page, 'Socle technique').locator('.tree-chevron').click();
-
-    await expect(ligne(page, 'Cadrage')).toHaveAttribute('data-depth', '1');
-    await expect(ligne(page, 'Atelier de recette')).toHaveAttribute('data-depth', '1');
+    await expect(D.ligne(page, 'Socle technique')).toHaveAttribute('data-depth', '0');
+    await expect(D.ligne(page, 'Cadrage des outils')).toHaveAttribute('data-depth', '1');
+    await expect(D.ligne(page, 'Recette')).toHaveAttribute('data-depth', '1');
 });
 
-test('cliquer une ligne chantier ouvre le volet chantier', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
+test('sans table Chantiers, la hiérarchie des tâches est conservée', async ({ page }) => {
+    await D.ouvrirGantt(page, D.documentSansChantiers());
+    await D.toutDeplier(page);
 
-    await ligne(page, 'Socle technique').click();
+    await expect(D.ligne(page, 'Cadrage des outils')).toHaveAttribute('data-depth', '0');
+    await expect(D.ligne(page, 'Atelier de cadrage')).toHaveAttribute('data-depth', '1');
+    await expect(page.locator('#btnAjouter')).toBeVisible();
+});
 
-    await expect(page.locator('#panel')).toHaveClass(/open/);
+test('une tâche hérite du projet de son chantier', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.toutDeplier(page);
+
+    // Aucune tâche ne porte de projet : celui du chantier fait foi, et le bandeau les regroupe.
+    await expect(page.locator('#taskList .groupe-projet', { hasText: 'Portail habilitations' })).toHaveCount(1);
+    await expect(page.locator('#taskList .groupe-projet', { hasText: 'Sans projet' })).toHaveCount(0);
+});
+
+test('le volet d un chantier s ouvre sur son nom, sans type modifiable', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Socle technique');
+
     await expect(page.locator('#taskTitle')).toHaveValue('Socle technique');
-    // Le type est affiche sans possibilite de changement.
-    await expect(page.locator('#panel .panel-type-row')).toContainText('Chantier');
-    await expect(page.locator('#panel .type-pill[onclick]')).toHaveCount(0);
+    await expect(volet(page).locator('.panel-type-row')).toContainText('Chantier');
+    await expect(volet(page).locator('.type-pill[onclick]')).toHaveCount(0);
+    await expect(volet(page)).toContainText('Ajouter une tâche');
 });
 
-test('le volet chantier masque les champs prevus', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
+test('un chantier sans dates prend celles de ses tâches', async ({ page }) => {
+    const doc = D.documentCible();
+    delete doc.Chantiers.records[0].Date_debut;
+    delete doc.Chantiers.records[0].Date_fin;
+    await D.ouvrirGantt(page, doc);
+    await D.ouvrirVolet(page, 'Socle technique');
 
-    await ligne(page, 'Socle technique').click();
-    const volet = page.locator('#panel');
-
-    for (const absent of ['Priorité', 'Progression', 'Parent', 'Couleur', 'Planning', 'Checklist']) {
-        await expect(volet).not.toContainText(absent);
-    }
-    await expect(volet).toContainText('Ajouter une tâche');
-});
-
-test('le volet chantier prend les dates de ses taches quand il n en a pas', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
-
-    await ligne(page, 'Documentation').click();
-
-    const dates = page.locator('#panel .dates-inline input[type="date"]');
+    const dates = volet(page).locator('input[type="date"]');
     await expect(dates.first()).not.toHaveValue('');
     await expect(dates.nth(1)).not.toHaveValue('');
 });
 
-test('modifier un chantier ecrit dans Chantiers, pas dans Tasks', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
+test('modifier un chantier écrit dans sa table, pas dans Tasks', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Socle technique');
 
-    await ligne(page, 'Socle technique').click();
-    await page.locator('#taskDescription').fill('Cadre technique du portail');
-    await page.locator('#taskDescription').blur();
-
-    await expect.poll(() => page.evaluate(async () => {
-        const c = await window.grist.docApi.fetchTable('Chantiers');
-        return c.Description[c.id.indexOf(1)];
-    })).toBe('Cadre technique du portail');
-
-    const titres = await page.evaluate(async () => {
-        const t = await window.grist.docApi.fetchTable('Tasks');
-        return t.titre;
-    });
-    expect(titres).toEqual(['Cadrage', 'Atelier de recette', 'Rediger le guide']);
-});
-
-// Le parent affiche est recalcule a la lecture : le reecrire remettrait en base l'identifiant
-// decale d'un chantier, qui ne designe aucun enregistrement.
-test('modifier une tache ne reecrit pas son parent', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
-
-    await ligne(page, 'Socle technique').locator('.tree-chevron').click();
-    await ligne(page, 'Cadrage').click();
-    await expect(page.locator('#panel')).toHaveClass(/open/);
-
-    await page.locator('#taskTitle').fill('Cadrage revu');
+    await page.locator('#taskTitle').fill('Socle technique v2');
     await page.locator('#taskTitle').blur();
 
     await expect.poll(() => page.evaluate(async () => {
-        const t = await window.grist.docApi.fetchTable('Tasks');
-        return t.titre[t.id.indexOf(1)];
-    })).toBe('Cadrage revu');
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Nom_du_chantier[c.id.indexOf(1)];
+    })).toBe('Socle technique v2');
 
-    const enBase = await page.evaluate(async () => {
-        const t = await window.grist.docApi.fetchTable('Tasks');
-        const i = t.id.indexOf(1);
-        return { chantier: t.chantier[i], parentTask: t.parentTask[i] || 0 };
-    });
-    expect(enBase).toEqual({ chantier: 1, parentTask: 0 });
+    // Les titres des tâches n'ont pas bougé : l'identifiant décalé d'un chantier ne désigne
+    // aucun enregistrement de Tasks.
+    const titres = await page.evaluate(async () => (await window.grist.docApi.fetchTable('Tasks')).titre);
+    expect(titres).toContain('Cadrage des outils');
+    expect(titres).not.toContain('Socle technique v2');
 });
 
-test('le bouton Chantier cree un chantier dans sa table', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
+test('modifier une tâche ne réécrit pas son rattachement', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    await page.locator('#taskTitle').fill('Cadrage des outils v2');
+    await page.locator('#taskTitle').blur();
+
+    await expect.poll(() => D.champTache(page, 1, 'titre')).toBe('Cadrage des outils v2');
+    expect(await D.champTache(page, 1, 'chantier')).toBe(1);
+    expect(await D.champTache(page, 1, 'parentTask') || 0).toBe(0);
+});
+
+test('créer un chantier l ajoute à sa table, en ligne racine', async ({ page }) => {
+    await D.ouvrirGantt(page);
 
     await page.locator('#btnAjouter').click();
     await page.locator('#menuAjout button', { hasText: 'Chantier' }).click();
-    await page.locator('#taskTitle').fill('Recette metier');
+    await page.locator('#taskTitle').fill('Recette métier');
     await page.locator('#panel .panel-btn.success').click();
 
-    await expect.poll(() => page.evaluate(async () => {
-        const c = await window.grist.docApi.fetchTable('Chantiers');
-        return c.Nom_du_chantier;
-    })).toContain('Recette metier');
-    await expect(ligne(page, 'Recette metier')).toHaveAttribute('data-depth', '0');
+    await expect.poll(() => page.evaluate(async () => (await window.grist.docApi.fetchTable('Chantiers')).Nom_du_chantier)).toContain('Recette métier');
+    await expect(D.ligne(page, 'Recette métier')).toHaveAttribute('data-depth', '0');
 });
 
-test('une tache creee depuis un chantier lui est rattachee', async ({ page }) => {
-    await ouvrirGantt(page, DOC_CIBLE);
+for (const nomColonne of ['chantier', 'Chantiers']) {
+    test('une tâche créée depuis un chantier est rattachée via la colonne ' + nomColonne, async ({ page }) => {
+        await D.ouvrirGantt(page, D.documentCible(nomColonne));
+        await D.ouvrirVolet(page, 'Socle technique');
 
-    await ligne(page, 'Socle technique').click();
-    await page.locator('#panel button', { hasText: 'Ajouter une tâche' }).click();
-    await page.locator('#taskTitle').fill('Recette technique');
-    await page.locator('#panel .panel-btn.success').click();
+        await page.locator('#panel button', { hasText: 'Ajouter une tâche' }).click();
+        await page.locator('#taskTitle').fill('Nouvelle tâche');
+        await page.locator('#panel .panel-btn.success').click();
 
-    await expect.poll(() => page.evaluate(async () => {
-        const t = await window.grist.docApi.fetchTable('Tasks');
-        const i = t.titre.indexOf('Recette technique');
-        return i === -1 ? null : { chantier: t.chantier[i], parentTask: t.parentTask[i] || 0 };
-    })).toEqual({ chantier: 1, parentTask: 0 });
-});
-
-test('sans table Chantiers, le bouton Chantier reste absent', async ({ page }) => {
-    await ouvrirGantt(page, DOC_ANCIEN);
-
-    await expect(page.locator('#btnAjouterChantier')).toBeHidden();
-});
-
-test('sans table Chantiers, la hierarchie des taches est inchangee', async ({ page }) => {
-    await ouvrirGantt(page, DOC_ANCIEN);
-
-    await expect(lignes(page).first()).toContainText('Socle technique');
-    await lignes(page).first().locator('.tree-chevron').click();
-
-    await expect(ligne(page, 'Cadrage')).toHaveAttribute('data-depth', '1');
-    await expect(page.locator('#panel')).not.toHaveClass(/open/);
-    await lignes(page).first().click();
-    await expect(page.locator('#panel')).toHaveClass(/open/);
-});
+        await expect.poll(() => page.evaluate(async (col) => {
+            const t = await window.grist.docApi.fetchTable('Tasks');
+            const i = t.titre.indexOf('Nouvelle tâche');
+            return i === -1 ? null : t[col][i];
+        }, nomColonne)).toBe(1);
+    });
+}
