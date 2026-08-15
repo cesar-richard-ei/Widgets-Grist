@@ -5,7 +5,9 @@ on:
     branches: [main]
   pull_request:
   release:
-    types: [published]
+    # published couvre la publication, pre-release comprise ; released couvre la bascule d'une
+    # pre-release en release stable, qui n'est pas une publication et ne l'emettrait pas.
+    types: [published, released]
   workflow_dispatch:
     inputs:
       republier:
