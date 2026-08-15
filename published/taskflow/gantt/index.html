@@ -178,7 +178,14 @@
         .gantt-bar .resize-handle.right { right: 0; }
         .gantt-bar-progress { position: absolute; left: 0; top: 0; height: 100%; background: rgba(255,255,255,0.25); border-radius: 4px 0 0 4px; pointer-events: none; }
         /* GANTT-04: Label externe pour barres étroites */
-        .gantt-bar-external-label { position: absolute; left: 100%; margin-left: 6px; font-size: 0.7rem; font-weight: 500; color: var(--text); white-space: nowrap; pointer-events: none; }
+        /* Fond opaque : le titre passe au-dessus de la grille et des barres, sa lisibilité ne doit
+           pas dépendre de ce qui se trouve dessous. */
+        .gantt-bar-external-label { position: absolute; left: 100%; margin-left: 6px; padding: 1px 5px; border-radius: 4px;
+            background: var(--card-bg); font-size: 0.7rem; font-weight: 500; color: var(--text); white-space: nowrap; pointer-events: none; }
+        /* En bout de plage, le titre reporté sortirait de la zone dessinée : il passe à gauche. */
+        .gantt-bar.titre-a-gauche .gantt-bar-external-label { left: auto; right: 100%; margin-left: 0; margin-right: 6px; }
+        /* Le titre reporté vit hors de la barre : sans cela il serait découpé par son overflow. */
+        .gantt-bar.narrow-bar { overflow: visible; }
         .gantt-bar.narrow-bar .gantt-bar-label { display: none; }
         .gantt-bar:not(.narrow-bar) .gantt-bar-external-label { display: none; }
 
@@ -2497,7 +2504,28 @@
                 }
             });
 
+            sortirLesTitresQuiDebordent(grid);
             renderDependencies(ft, start, pxPerDay, barresTracees);
+        }
+
+        // Un titre plus long que sa barre est reporté à côté d'elle plutôt que tronqué. La largeur de la
+        // barre ne suffit pas à en décider : c'est le texte qu'il faut mesurer, une fois posé. Une seule
+        // passe de lecture après l'écriture du DOM, pour ne provoquer qu'un recalcul de mise en page.
+        function sortirLesTitresQuiDebordent(grid) {
+            const largeurGrille = grid.scrollWidth;
+            const aSortir = [];
+            for (const bar of grid.querySelectorAll('.gantt-bar:not(.parent):not(.narrow-bar)')) {
+                const dedans = bar.querySelector('.gantt-bar-label');
+                if (!dedans) continue;
+                // 16px : les marges intérieures de la barre, que le texte ne peut pas occuper.
+                if (dedans.scrollWidth <= bar.clientWidth - 16) continue;
+                aSortir.push({ bar: bar, largeur: dedans.scrollWidth, fin: bar.offsetLeft + bar.offsetWidth });
+            }
+            for (const item of aSortir) {
+                item.bar.classList.add('narrow-bar');
+                // Le titre déborderait de la plage dessinée : il passe à gauche de la barre.
+                if (item.fin + 6 + item.largeur > largeurGrille) item.bar.classList.add('titre-a-gauche');
+            }
         }
 
         function renderDependencies(ft, start, pxPerDay, barresTracees) {
