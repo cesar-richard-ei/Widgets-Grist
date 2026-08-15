@@ -1257,7 +1257,28 @@ function renderTimeline() {
         }
     });
 
+    sortirLesTitresQuiDebordent(grid);
     renderDependencies(ft, start, pxPerDay, barresTracees);
+}
+
+// Un titre plus long que sa barre est reporté à côté d'elle plutôt que tronqué. La largeur de la
+// barre ne suffit pas à en décider : c'est le texte qu'il faut mesurer, une fois posé. Une seule
+// passe de lecture après l'écriture du DOM, pour ne provoquer qu'un recalcul de mise en page.
+function sortirLesTitresQuiDebordent(grid) {
+    const largeurGrille = grid.scrollWidth;
+    const aSortir = [];
+    for (const bar of grid.querySelectorAll('.gantt-bar:not(.parent):not(.narrow-bar)')) {
+        const dedans = bar.querySelector('.gantt-bar-label');
+        if (!dedans) continue;
+        // 16px : les marges intérieures de la barre, que le texte ne peut pas occuper.
+        if (dedans.scrollWidth <= bar.clientWidth - 16) continue;
+        aSortir.push({ bar: bar, largeur: dedans.scrollWidth, fin: bar.offsetLeft + bar.offsetWidth });
+    }
+    for (const item of aSortir) {
+        item.bar.classList.add('narrow-bar');
+        // Le titre déborderait de la plage dessinée : il passe à gauche de la barre.
+        if (item.fin + 6 + item.largeur > largeurGrille) item.bar.classList.add('titre-a-gauche');
+    }
 }
 
 function renderDependencies(ft, start, pxPerDay, barresTracees) {
