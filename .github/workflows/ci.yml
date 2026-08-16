@@ -4,29 +4,19 @@ on:
   push:
     branches: [main]
   pull_request:
-  release:
-    # published couvre la publication, pre-release comprise ; released couvre la bascule d'une
-    # pre-release en release stable, qui n'est pas une publication et ne l'emettrait pas.
-    types: [published, released]
   workflow_dispatch:
-    inputs:
-      republier:
-        description: Republier le site sans rejouer les tests (commit déjà validé)
-        type: boolean
-        default: false
 
 permissions:
   contents: read
 
 concurrency:
   group: ci-${{ github.ref }}
-  # On n'annule que les runs de PR : un run de main doit aller jusqu'au tag.
+  # On n'annule que les runs de PR : un run de main doit aller jusqu'a la publication de /dev/.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   workflows:
     name: Lint des workflows
-    if: ${{ github.event_name != 'release' && !inputs.republier }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -43,7 +33,6 @@ jobs:
 
   unit:
     name: Tests unitaires
-    if: ${{ github.event_name != 'release' && !inputs.republier }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -92,7 +81,6 @@ jobs:
 
   e2e:
     name: Tests de bout en bout
-    if: ${{ github.event_name != 'release' && !inputs.republier }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -144,7 +132,7 @@ jobs:
   # qui peuvent donc bouger sans toucher aux reglages du depot.
   tests:
     name: tests
-    if: ${{ always() && github.event_name != 'release' && !inputs.republier }}
+    if: always()
     needs: [workflows, unit, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 2
@@ -158,189 +146,14 @@ jobs:
             *failure*|*cancelled*|*skipped*) exit 1 ;;
           esac
 
-  tag:
-    name: Tag SemVer
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  publication:
+    name: Publication du site
+    # Sur main uniquement : /dev/ suit la branche, la racine attend une release.
+    if: github.event_name != 'pull_request'
     needs: [tests]
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Calcul de la version
-        id: version
-        run: node scripts/next-version.js >> "$GITHUB_OUTPUT"
-
-      - name: Creation du tag
-        if: steps.version.outputs.bump != 'none'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ steps.version.outputs.version }}
-          BUMP: ${{ steps.version.outputs.bump }}
-        run: |
-          set -euo pipefail
-          objet=$(gh api "repos/${GITHUB_REPOSITORY}/git/tags" \
-            --raw-field "tag=v${VERSION}" \
-            --raw-field "message=v${VERSION}" \
-            --raw-field "object=${GITHUB_SHA}" \
-            --raw-field type=commit \
-            --jq .sha)
-          gh api "repos/${GITHUB_REPOSITORY}/git/refs" \
-            --raw-field "ref=refs/tags/v${VERSION}" \
-            --raw-field "sha=${objet}" > /dev/null
-          echo "Tag \`v${VERSION}\` (bump ${BUMP})" >> "${GITHUB_STEP_SUMMARY}"
-
-  republication:
-    name: Republication apres une release
-    # Creer une release ne suffit pas a mettre la racine a jour : le deploiement emis depuis le tag
-    # annonce a Pages la meme version que le deploiement deja publie pour ce commit, et le site
-    # garde l'ancien contenu (constate le 2026-08-10 et le 2026-08-14). Un run sur main resout la
-    # derniere release, reconstruit le site et publie. Les tests ont deja tourne sur ce commit.
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      actions: write
-    steps:
-      - name: Declencher la republication depuis main
-        env:
-          GH_TOKEN: ${{ github.token }}
-          DEPOT: ${{ github.repository }}
-        run: gh workflow run ci.yml --repo "${DEPOT}" --ref main --field republier=true
-
-  pages-build:
-    name: Construction du site
-    # Sur une release, la publication est confiee a un run declenche sur main : le deploiement
-    # emis depuis le tag porte le meme identifiant de version que celui deja en ligne, et le site
-    # continue de servir l'ancien contenu.
-    if: ${{ always() && github.event_name != 'pull_request' && github.event_name != 'release' && (needs.tests.result == 'success' || inputs.republier) }}
-    needs: [tests]
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
+    uses: ./.github/workflows/pages.yml
     permissions:
       contents: read
-    steps:
-      - name: Checkout main
-        # On construit le commit valide par les jobs precedents et pas la tete
-        # de main, qui peut avoir avance entre-temps.
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event_name == 'push' && github.sha || 'main' }}
-          path: dev-src
-          # Historique complet : le manifest date chaque widget depuis les commits.
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Résoudre la dernière release
-        id: release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          tag=$(gh api "repos/${GITHUB_REPOSITORY}/releases/latest" --jq .tag_name || true)
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout de la release
-        if: steps.release.outputs.tag != ''
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ steps.release.outputs.tag }}
-          path: prod-src
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: dev-src/.nvmrc
-          # Pas de cache npm sur le chemin de deploiement : le contenu servi ne
-          # doit dependre que du depot.
-          package-manager-cache: false
-
-      - name: Construire le site
-        env:
-          # Passee par l'environnement plutot qu'interpolee dans le script : une expression posee
-          # directement dans un bloc run est un vecteur d'injection (zizmor, template-injection).
-          VERSION_RACINE: ${{ steps.release.outputs.tag || 'dev' }}
-        run: |
-          set -euo pipefail
-          owner="${GITHUB_REPOSITORY%/*}"
-          repo="${GITHUB_REPOSITORY#*/}"
-          base="https://${owner}.github.io/${repo}"
-
-          build() {
-            (
-              cd "$1"
-              npm ci --ignore-scripts || {
-                echo "::warning::Lockfile desynchronise dans $1, repli sur npm install"
-                npm install --ignore-scripts
-              }
-              npm run build --if-present
-              GITHUB_USER="$owner" REPO_NAME="$repo" BASE_URL="$2" node scripts/generate-manifest.js
-            )
-          }
-
-          prod_src=prod-src
-          if [ ! -d "$prod_src" ]; then
-            echo "::warning::Aucune release publiée : la racine est servie depuis main"
-            prod_src=dev-src
-          fi
-
-          # Version servie, lue par les widgets pour le repere de deploiement : le tag a la racine,
-          # « dev » pour la nightly. Sans release, la racine vient de main et l'annonce.
-          estampiller() {
-            find "$1" -name '*.html' -type f -exec sed -i "s/__VERSION_TASKFLOW__/$2/g" {} +
-          }
-
-          build "$prod_src" "$base"
-          mkdir -p site
-          cp -r "$prod_src/published/." site/
-          estampiller site "${VERSION_RACINE}"
-
-          build dev-src "${base}/dev"
-          mkdir -p site/dev
-          cp -r dev-src/published/. site/dev/
-          estampiller site/dev dev
-
-          echo "Arborescence du site :"
-          find site -maxdepth 2 -mindepth 1 | sort
-          echo "URL du premier widget, racine : $(node -e 'process.stdout.write(require("./site/manifest.json")[0].url)')"
-          echo "URL du premier widget, dev    : $(node -e 'process.stdout.write(require("./site/dev/manifest.json")[0].url)')"
-
-      - name: Setup Pages
-        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: './site'
-
-  pages-deploy:
-    name: Déploiement GitHub Pages
-    # Un job dont un ancetre est saute l'est aussi, sauf s'il declare always() : sans cette garde,
-    # la republication construisait le site puis ne publiait rien, `tests` etant saute en amont.
-    if: ${{ always() && needs.pages-build.result == 'success' }}
-    needs: [pages-build]
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      actions: read
       pages: write
       id-token: write
-    concurrency:
-      # Un deploiement en cours n'est pas interrompu : deux publications a
-      # quelques secondes d'intervalle s'enchainent, la plus recente reste active.
-      group: pages
-      cancel-in-progress: false
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+      actions: read

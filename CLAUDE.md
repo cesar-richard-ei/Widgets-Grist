@@ -122,7 +122,6 @@ Widgets-Grist/
     ├── build-inline.js          # Inline les sources .js dans les widgets HTML
     ├── check-commits.js         # Vérifie la convention des messages de commit
     ├── generate-manifest.js     # Génère manifest.json depuis published/
-    ├── next-version.js          # Calcule le prochain tag SemVer
     └── promote.js               # Copie de projects/ vers published/
 ```
 
@@ -311,7 +310,7 @@ npm run deploy
 
 ## CI/CD avec GitHub Actions
 
-### `ci.yml` — contrôles, tag et déploiement
+### `ci.yml` — contrôles et nightly
 
 Sur chaque PR et chaque push sur `main` : lint des workflows (actionlint et zizmor), lint JavaScript
 (ESLint), tests unitaires plus vérification du core inline, tests Playwright. Sur les PR uniquement, un job
@@ -319,36 +318,62 @@ vérifie que chaque message de commit suit Conventional Commits, puisque la vers
 récupérables en artefact du run. Le job `tests` agrège ces trois jobs et fournit le contexte unique exigé
 par le ruleset de `main` : ajouter ou renommer un job ne demande donc pas de toucher aux réglages du dépôt.
 
-Quand ces trois jobs passent sur un push vers `main`, le job `tag` crée un tag annoté `vX.Y.Z`. La version
-est calculée par `scripts/next-version.js` à partir des commits accumulés depuis le dernier tag stable :
+Quand `tests` passe sur un push vers `main`, `ci.yml` appelle `pages.yml`, qui republie le site. Rien
+d'autre : `main` n'est pas tagué, et la racine n'est mise à jour que par une release.
+
+### `pages.yml` — construction et déploiement du site
+
+Workflow réutilisable, sans déclencheur propre. Il est appelé par `ci.yml` après les tests sur `main`
+et par `release.yml` après la création d'une release. Les deux appelants publient par le même chemin,
+il n'y a donc pas deux constructions à garder synchronisées.
+
+| Chemin | Contenu | Mis à jour par |
+|--------|---------|----------------|
+| `/` | dernière release | exécution de `release.yml` |
+| `/dev/` | nightly | push sur `main` |
+
+Chaque exécution reconstruit le site entier, la racine depuis le tag de la dernière release, `/dev/`
+depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis `main` et le workflow émet
+un avertissement.
+
+Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets
+référencent bien les URL nightly. Chaque page reçoit une estampille substituée à
+`__VERSION_TASKFLOW__` : le tag à la racine, la sortie de `git describe --tags` pour la nightly, par
+exemple `v1.19.2-12-gbfa201d`, qui donne la distance à la dernière version livrée.
+
+### `release.yml` — livrer en production
+
+Déclenchement manuel depuis l'onglet Actions, sur `main`. C'est le seul chemin qui crée une release,
+donc le seul qui met la racine du site à jour.
+
+`semantic-release` analyse les commits accumulés depuis le dernier tag, en déduit la version, pose le
+tag annoté et crée la release avec ses notes :
 
 | Commit | Incrément |
 |--------|-----------|
 | `type!: ...` ou footer `BREAKING CHANGE:` | MAJOR, minor et patch remis à 0 |
 | `feat: ...` | MINOR, patch remis à 0 |
-| tout le reste, y compris hors convention | PATCH |
+| `fix`, `perf`, `revert` | PATCH |
+| `build`, `chore`, `ci`, `docs`, `refactor`, `style`, `test` | aucune version |
 
-Le bump le plus fort du lot l'emporte. Les tags de pre-release et les tags préfixés par widget
-(`taskflow-v1.1.2`) sont ignorés dans le calcul de la base. Un tag posé par le workflow ne redéclenche
-aucun autre workflow : rien n'est déployé ni publié à ce moment-là.
+Le bump le plus fort du lot l'emporte. Un lot composé uniquement de la dernière ligne ne produit rien :
+le run le signale et s'arrête, sans republier le site.
 
-### GitHub Pages
+`@semantic-release/github` commente ensuite chaque PR incluse dans la version et lui pose le label
+`livré`. La file de vérification produit se lit donc `is:merged label:"A tester" -label:livré`.
 
-Les jobs `pages-build` et `pages-deploy`, en fin de `ci.yml`, servent deux versions du site sur le même
-domaine :
+L'entrée `simulation` du déclenchement passe `--dry-run` : la version calculée et les notes
+s'affichent dans le run, rien n'est publié.
 
-| Chemin | Contenu | Mis à jour par |
-|--------|---------|----------------|
-| `/` | version stable | publication d'une release GitHub |
-| `/dev/` | version nightly | push sur `main` |
+La configuration tient dans `.releaserc.json`. Ni `changelog` ni `git` parmi les plugins : rien n'est
+commité sur `main`, les notes de release sont le seul journal. Les dépendances vivent dans
+`.github/release/package.json`, séparées du manifeste principal pour ne pas alourdir le `npm ci` des
+jobs de test et de construction du site.
 
-Ils dépendent de `tests` et ne tournent jamais sur une PR : rien n'est servi tant que les contrôles ne sont
-pas verts. Chaque exécution reconstruit le site entier, la racine depuis le tag de la dernière release,
-`/dev/` depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis `main` et le workflow
-émet un avertissement.
-
-Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets référencent
-bien les URL nightly.
+**Une release créée par un workflow ne déclenche aucun autre workflow**, puisqu'elle est émise avec le
+`GITHUB_TOKEN` du dépôt. C'est pourquoi `release.yml` appelle `pages.yml` lui-même plutôt que de
+s'appuyer sur l'événement `release`. Corollaire : créer une release à la main depuis l'interface ne
+republie rien, il faut passer par le workflow.
 
 ### Lint JavaScript
 
@@ -363,48 +388,6 @@ que les bibliothèques arrivent par balise `script`.
 CodeQL passe sur le JavaScript et sur les workflows eux-mêmes, à chaque PR, à chaque push sur `main` et une
 fois par semaine. `published/` est exclu par `.github/codeql/config.yml` puisque c'est une copie de
 `projects/`. Les alertes remontent dans l'onglet Security, elles ne bloquent pas le merge.
-
-### Publier une version stable, et pourquoi un second run
-
-Créer une release ne publie pas directement le site. Le run déclenché par l'événement `release`
-tourne sur le tag, et le déploiement qu'il émet annonce à Pages une version identifiée par le **SHA
-du commit**, pas par le contenu de l'artifact. Or ce commit a déjà été déployé au moment du merge,
-avec une racine figée sur la release précédente. Pages voit donc la même version et continue de
-servir l'ancien contenu, alors que le run se termine en succès. Constaté le 2026-08-10 puis le
-2026-08-14, dans les deux cas résolu par un déploiement supplémentaire.
-
-Le workflow s'en charge désormais seul : sur `release`, le job `republication` ne construit rien et
-déclenche `ci.yml` sur `main` avec l'entrée `republier=true`. Deux types d'activité sont écoutés :
-`published`, émis à la publication d'une release comme d'une pre-release, et `released`, émis quand
-une pre-release bascule en release stable. Sans ce second type, promouvoir une pre-release ne
-mettrait pas la racine à jour.
-
-Publier une **pre-release** déclenche donc le mécanisme sans rien changer en production : la racine
-est résolue via `releases/latest`, qui ignore les pre-releases, et se reconstruit à l'identique. Ce second run saute les tests, déjà
-joués sur ce commit, résout la dernière release, reconstruit le site et publie. Compter environ une
-minute entre la création de la release et la mise en ligne.
-
-`workflow_dispatch` fait partie des deux seuls événements qui créent un run même déclenchés par le
-`GITHUB_TOKEN` du dépôt, avec `repository_dispatch` : c'est ce qui rend l'enchaînement possible sans
-jeton personnel, et il n'y a pas de boucle à craindre puisqu'un run sur `main` ne crée pas de
-release.
-
-**Ne pas remettre les tests dans le run de republication** sans raison : ils rallongeraient la mise
-en ligne de plusieurs minutes pour rejouer une validation déjà faite au merge et sur le tag.
-
-### Publier une version stable
-
-Les tags sont posés par la CI, la release reste manuelle. Choisir le tag à figer et créer la release
-depuis ce tag :
-
-```bash
-gh release create v1.2.0 --generate-notes
-```
-
-Une release marquée pre-release (`--prerelease`) n'est jamais renvoyée par `releases/latest` et ne met donc
-pas la racine à jour : c'est le canal pour faire tester une version candidate sans l'imposer aux
-utilisateurs. Le tag correspondant porte alors un suffixe, par exemple `v1.2.0-rc.1`, que SemVer classe
-en précédence inférieure à `v1.2.0`. Ce tag est à poser à la main, la CI ne produit que des versions stables.
 
 ### Configuration GitHub Pages
 
@@ -437,7 +420,7 @@ Les contrôles suivants sont actifs et valent la peine d'être connus avant de t
 ### Versioning
 
 - Utiliser semver dans les `package.json`
-- Le tag `vX.Y.Z` du dépôt est posé automatiquement à chaque push sur `main`, voir la section CI/CD
+- Le tag `vX.Y.Z` du dépôt ne marque que les versions livrées, voir la section CI/CD
 - Le manifest date chaque widget depuis l'historique git
 
 ### Commits

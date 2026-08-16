@@ -12,19 +12,21 @@
 'use strict';
 
 const { execFileSync } = require('node:child_process');
-const { parseHeader } = require('./next-version.js');
 
 const TYPES = ['build', 'chore', 'ci', 'docs', 'feat', 'fix', 'perf', 'refactor', 'revert', 'style', 'test'];
 const SEPARATEUR_COMMIT = '\x1e';
 const REVERT_GIT = /^Revert "/;
+const ENTETE_CONVENTIONNELLE = /^([a-zA-Z]+)(?:\(([^)]*)\))?(!)?:\s+\S/;
 
 function verifier(message) {
     const entete = String(message).trim().split('\n', 1)[0];
     if (REVERT_GIT.test(entete)) return null;
 
-    const parsed = parseHeader(entete);
-    if (!parsed) return 'entete hors convention, format attendu `type(portee): sujet`';
-    if (!TYPES.includes(parsed.type)) return `type inconnu \`${parsed.type}\`, attendu ${TYPES.join(', ')}`;
+    const trouve = ENTETE_CONVENTIONNELLE.exec(entete);
+    if (!trouve) return 'entete hors convention, format attendu `type(portee): sujet`';
+
+    const type = trouve[1].toLowerCase();
+    if (!TYPES.includes(type)) return `type inconnu \`${type}\`, attendu ${TYPES.join(', ')}`;
     if (entete.length > 100) return `entete de ${entete.length} caracteres, 100 au maximum`;
     return null;
 }

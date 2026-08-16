@@ -463,13 +463,13 @@ function changeColorMode(mode) { /* met à jour colorMode + re-render (Gantt : e
 ### Repère de version (Gantt)
 
 Le widget porte la constante `VERSION_SERVIE = '__VERSION_TASKFLOW__'`. Le marqueur est remplacé
-**à la construction du site** par le job `pages-build` : le tag de la dernière release à la racine,
-`dev` pour la version nightly. Sur une copie locale, il n'est jamais remplacé, et le badge affiche
-`local`.
+**à la construction du site** par `pages.yml` : le tag de la dernière release à la racine, la sortie
+de `git describe --tags` pour la nightly, par exemple `v1.19.2-12-gbfa201d`. Sur une copie locale, il
+n'est jamais remplacé, et le badge affiche `local`.
 
 L'affichage est réservé à qui l'active : `localStorage.taskflow_show_version = "true"`. Il sert à
 voir d'un coup d'œil quelle version est réellement servie, le cache de GitHub Pages pouvant faire
-croire à un déploiement absent (cf `reference_widgets_grist_deploy`).
+croire à un déploiement absent.
 
 **Ne pas remplacer le marqueur ailleurs qu'au déploiement** : le mettre dans le dépôt ferait
 diverger `projects/` et `published/` à chaque release.

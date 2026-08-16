@@ -1,0 +1,77 @@
+name: Release
+
+run-name: Release${{ inputs.simulation && ' (simulation)' || '' }}
+
+# Declenchement manuel depuis main : c'est le seul chemin qui cree une release, donc le seul qui
+# met la racine du site a jour. Un push sur main ne publie que /dev/.
+on:
+  workflow_dispatch:
+    inputs:
+      simulation:
+        description: Calculer la version et les notes sans rien publier
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Calcul et publication de la version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write        # tag et release
+      issues: write          # commentaire sur les issues resolues
+      pull-requests: write   # commentaire et label sur les PR livrees
+    outputs:
+      version: ${{ steps.semantic.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # semantic-release remonte jusqu'au dernier tag pour analyser les commits accumules.
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Installation des dependances de release
+        run: npm ci --prefix .github/release
+
+      - name: semantic-release
+        id: semantic
+        env:
+          # Le push du tag passe par l'URL authentifiee que semantic-release construit depuis ce
+          # jeton : le checkout ne conserve aucun identifiant.
+          GITHUB_TOKEN: ${{ github.token }}
+          SIMULATION: ${{ inputs.simulation }}
+        run: |
+          set -euo pipefail
+          # Appel par le chemin du binaire : le repertoire courant doit rester la racine du depot,
+          # ou se trouvent le depot git et .releaserc.json.
+          binaire=./.github/release/node_modules/.bin/semantic-release
+          if [ "${SIMULATION}" = "true" ]; then
+            "${binaire}" --dry-run
+          else
+            "${binaire}"
+          fi
+
+  publication:
+    name: Publication du site
+    needs: [version]
+    # La sortie n'est ecrite que si une version a ete publiee : rien a livrer, rien a republier.
+    if: needs.version.outputs.version != ''
+    uses: ./.github/workflows/pages.yml
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+      actions: read
