@@ -1,0 +1,21 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    "@semantic-release/commit-analyzer",
+    "@semantic-release/release-notes-generator",
+    [
+      "@semantic-release/exec",
+      {
+        "successCmd": "echo version=<%= nextRelease.version %> >> $GITHUB_OUTPUT"
+      }
+    ],
+    [
+      "@semantic-release/github",
+      {
+        "successComment": "Livré dans la [version <%= nextRelease.version %>](https://github.com/cesar-richard-ei/Widgets-Grist/releases/tag/<%= nextRelease.gitTag %>), en ligne sur https://cesar-richard-ei.github.io/Widgets-Grist/",
+        "releasedLabels": ["livré"],
+        "failTitle": false
+      }
+    ]
+  ]
+}

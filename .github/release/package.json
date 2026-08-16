@@ -1,0 +1,10 @@
+{
+  "name": "widgets-grist-release",
+  "private": true,
+  "description": "Dependances du workflow de release, isolees du manifeste principal",
+  "devDependencies": {
+    "@semantic-release/exec": "^7.1.0",
+    "@semantic-release/github": "^12.0.9",
+    "semantic-release": "^25.0.9"
+  }
+}

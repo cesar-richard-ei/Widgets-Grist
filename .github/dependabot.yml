@@ -21,3 +21,14 @@ updates:
     groups:
       dev:
         dependency-type: development
+
+  - package-ecosystem: npm
+    directory: /.github/release
+    schedule:
+      interval: weekly
+    commit-message:
+      prefix: chore(deps)
+    groups:
+      release:
+        patterns:
+          - '*'
