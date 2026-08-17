@@ -192,22 +192,30 @@ async function toutDeplier(page) {
 }
 
 /**
- * Ouvre le volet sur une ligne, et attend la fin de sa transition d'ouverture : mesurer une
- * largeur pendant que le volet glisse donne une valeur intermédiaire, et un glisser démarré à ce
- * moment part d'une poignée encore en mouvement.
+ * Ouvre le volet sur une ligne, et attend la fin de sa transition d'ouverture. Le volet entre en
+ * translateX : sa largeur vaut sa valeur finale dès la première image, c'est son bord gauche qui
+ * se déplace. Surveiller la largeur rendrait donc la main sur un volet encore en mouvement, dont
+ * la poignée n'est pas à sa place.
  */
 async function ouvrirVolet(page, titre) {
     await ligne(page, titre).click();
     await base.expect(page.locator('#panel')).toHaveClass(/open/);
-    const largeur = () => page.locator('#panel').evaluate((el) => el.getBoundingClientRect().width);
-    let precedente = -1;
+    const bord = () => page.locator('#panel').evaluate((el) => el.getBoundingClientRect().x);
+    let precedent = -1;
     for (let i = 0; i < 20; i++) {
-        const actuelle = await largeur();
-        if (Math.abs(actuelle - precedente) < 0.5) return;
-        precedente = actuelle;
+        const actuel = await bord();
+        if (Math.abs(actuel - precedent) < 0.5) return;
+        precedent = actuel;
         await page.waitForTimeout(50);
     }
 }
+
+/**
+ * Attend le rendu reporté : un render() demandé pendant un geste souris est mis de côté et rejoué
+ * au relâchement, un tour de boucle plus tard. Lire le DOM sans cette attente rend l'état d'avant
+ * le geste.
+ */
+const attendreRendu = (page) => page.waitForFunction(() => !gesteSourisEnCours && !renduEnAttente);
 
 /** Valeur d'une colonne de Tasks pour un enregistrement, lue dans le document. */
 const champTache = (page, id, colonne) => page.evaluate(({ id, colonne }) => {
@@ -228,5 +236,5 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
     documentCible, documentParentRepointe, documentSansChantiers, sansColonne,
-    ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, champTache, contraste
+    ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste
 };
