@@ -32,3 +32,10 @@ updates:
       release:
         patterns:
           - '*'
+    # semantic-release tire @semantic-release/npm, qui installe npm et son arbre embarqué. Ces
+    # deux paquets vivent dans le tarball de npm : ni un override ni un audit fix ne les atteint,
+    # seule une version de npm les corrigera. Le plugin lui-même n'est pas chargé, il ne figure
+    # pas dans .releaserc.json.
+    ignore:
+      - dependency-name: undici
+      - dependency-name: ip-address
