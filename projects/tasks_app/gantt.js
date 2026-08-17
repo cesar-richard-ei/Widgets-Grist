@@ -166,6 +166,13 @@ function getChoiceListArray(val) { if (!val) return []; if (Array.isArray(val)) 
 function toGristChoiceList(arr) { return arr && arr.length ? ['L', ...arr] : null; }
 const getAssigneesArray = (t) => getRefListArray(t?.assignees);
 const getDependsOnArray = (t) => getRefListArray(t?.dependDe);
+// Un lien début→début se lit dans sa propre colonne : Grist tient une RefList par type de lien,
+// plutôt qu'un type porté à côté d'une liste unique, qui ne se relirait pas dans le document. La
+// colonne appartient à la structure du document, elle est donc facultative : sans elle, les liens
+// début→début disparaissent du volet comme du tracé.
+const COL_DEP_DEBUT = 'dependDebutDe';
+const getStartDependsOnArray = (t) => getRefListArray(t?.[COL_DEP_DEBUT]);
+const depDebutDisponible = () => TASK_COLS.has(COL_DEP_DEBUT);
 const getTagsArray = (t) => getChoiceListArray(t?.tags);
 
 // Project/Team helpers
@@ -299,7 +306,7 @@ function donneesChantier(c) {
         projet: c.projet || null,
         assignees: assignes,
         charges: Array.from(cumul, ([teamId, heures]) => ({ teamId: teamId, heures: heures })),
-        dependDe: [], tags: [], subtasks: [], progression: 0, priorite: null,
+        dependDe: [], dependDebutDe: [], tags: [], subtasks: [], progression: 0, priorite: null,
         estimationH: null, tempsPasse: null, couleur: null, parentTask: null
     };
 }
@@ -603,6 +610,10 @@ function toggleGroupeProjet(idProjet) {
     render();
 }
 
+// Prédécesseurs d'une tâche, tous types de lien confondus : un cycle se forme aussi bien par des
+// fin→début que par des début→début, ou en mélangeant les deux.
+const getAllPredecessors = (t) => getDependsOnArray(t).concat(getStartDependsOnArray(t));
+
 // Dependency cycle detection
 function wouldCreateCycle(taskId, depId, visited = new Set()) {
     if (taskId === depId) return true;
@@ -610,10 +621,11 @@ function wouldCreateCycle(taskId, depId, visited = new Set()) {
     visited.add(depId);
     const depTask = tasks.find(t => t.id === depId);
     if (!depTask) return false;
-    return getDependsOnArray(depTask).some(d => wouldCreateCycle(taskId, d, visited));
+    return getAllPredecessors(depTask).some(d => wouldCreateCycle(taskId, d, visited));
 }
 function getAvailableDependencies(taskId) { return tasks.filter(t => t.id !== taskId && !wouldCreateCycle(taskId, t.id)); }
 function getBlockedTasks(taskId) { return tasks.filter(t => getDependsOnArray(t).includes(taskId)); }
+function getStartBlockedTasks(taskId) { return tasks.filter(t => getStartDependsOnArray(t).includes(taskId)); }
 
 // GANTT-06: Propagation des dates aux tâches dépendantes
 function propagateDependencyDates(changedTaskId, visited = new Set()) {
@@ -624,19 +636,22 @@ function propagateDependencyDates(changedTaskId, visited = new Set()) {
     if (!changedTask) return [];
 
     const changedEnd = gristToDate(changedTask.dateEcheance);
+    const changedStart = gristToDate(changedTask.dateDebut);
     if (!changedEnd) return [];
 
     const updates = [];
-    const blockedTasks = getBlockedTasks(changedTaskId);
+    // Les deux types de lien contraignent le début du successeur, à des dates différentes : le
+    // lendemain de la fin du prédécesseur pour un fin→début, son début même pour un début→début.
+    const contraintes = getBlockedTasks(changedTaskId).map(t => ({ tache: t, minimum: addDays(changedEnd, 1) }));
+    if (changedStart) {
+        for (const t of getStartBlockedTasks(changedTaskId)) contraintes.push({ tache: t, minimum: changedStart });
+    }
 
-    blockedTasks.forEach(depTask => {
+    contraintes.forEach(({ tache: depTask, minimum: requiredStart }) => {
         const depStart = gristToDate(depTask.dateDebut);
         const depEnd = gristToDate(depTask.dateEcheance);
 
         if (!depStart || !depEnd) return;
-
-        // Si la tâche dépendante commence avant la fin de la tâche modifiée, la décaler
-        const requiredStart = addDays(changedEnd, 1); // Commence le jour suivant
 
         if (depStart < requiredStart) {
             const duration = getDaysDiff(depStart, depEnd);
@@ -659,7 +674,11 @@ function propagateDependencyDates(changedTaskId, visited = new Set()) {
         }
     });
 
-    return updates;
+    // Une tâche liée deux fois au même prédécesseur, en fin→début et en début→début, est décalée
+    // deux fois : ne garder que le dernier report évite de la compter deux fois dans le message.
+    const parTache = new Map();
+    for (const u of updates) parTache.set(u.id, u);
+    return Array.from(parTache.values());
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -1326,26 +1345,30 @@ function renderDependencies(ft, start, pxPerDay, barresTracees) {
 
     ft.forEach(t => {
         if (!t) return;   // ligne de bandeau : pas de dependance a tracer
-        const deps = getDependsOnArray(t);
-        deps.forEach(depId => {
+        const liens = getDependsOnArray(t).map(id => ({ id: id, lien: 'fin' }))
+            .concat(getStartDependsOnArray(t).map(id => ({ id: id, lien: 'debut' })));
+        liens.forEach(({ id: depId, lien }) => {
             const depTask = tasks.find(x => x.id === depId);
             if (!depTask || taskIndexMap[depId] === undefined) return;
             // Une flèche vers une barre non tracée partirait dans le vide.
             if (barresTracees && (!barresTracees.has(t.id) || !barresTracees.has(depId))) return;
 
             const depEnd = gristToDate(depTask.dateEcheance);
+            const depStart = gristToDate(depTask.dateDebut);
             const tStart = gristToDate(t.dateDebut);
-            if (!depEnd || !tStart) return;
+            if (!tStart) return;
+            if (lien === 'debut' ? !depStart : !depEnd) return;
 
             const depIdx = taskIndexMap[depId];
             const tIdx = taskIndexMap[t.id];
 
-            const dep = TF.computeDependencyPath({ start: start, depEnd: depEnd, tStart: tStart, depIdx: depIdx, tIdx: tIdx, pxPerDay: pxPerDay });
+            const dep = TF.computeDependencyPath({ start: start, depEnd: depEnd, depStart: depStart, tStart: tStart, depIdx: depIdx, tIdx: tIdx, pxPerDay: pxPerDay, lien: lien });
             const highlight = selectedTaskId === t.id || selectedTaskId === depId;
 
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', dep.pathD);
             path.classList.add('dependency-line');
+            if (lien === 'debut') path.classList.add('depart-debut');
             if (highlight) path.classList.add('highlight');
             svg.appendChild(path);
 
@@ -1586,7 +1609,7 @@ function openCreateChantierPanel() {
             titre: '', description: '', type: 'chantier', statut: '', progression: 0, priorite: null,
             dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 30)),
             projet: projects.length > 0 ? projects[0].id : null,
-            assignees: [], dependDe: [], tags: [], subtasks: [], charges: [],
+            assignees: [], dependDe: [], dependDebutDe: [], tags: [], subtasks: [], charges: [],
             estimationH: null, tempsPasse: null, couleur: null, parentTask: null
         }
     };
@@ -1630,7 +1653,7 @@ function openCreateTaskWithParent(parentId) {
             titre: '', description: '', type: 'tache', priorite: '3', statut: 'todo', progression: 0,
             dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)),
             projet: parent?.projet || (projects.length > 0 ? projects[0].id : null),
-            assignees: [], dependDe: [], tags: [], estimationH: null, tempsPasse: null, subtasks: [],
+            assignees: [], dependDe: [], dependDebutDe: [], tags: [], estimationH: null, tempsPasse: null, subtasks: [],
             couleur: null, parentTask: estChantier(parent) ? null : (parentId || null),
             chantier: chantierParent, charges: []
         }
@@ -1675,7 +1698,8 @@ function cloneTaskData(task) {
         titre: task.titre || '', description: task.description || '', type: task.type || 'tache',
         priorite: String(task.priorite || '3'), statut: task.statut || 'todo', progression: task.progression || 0,
         dateDebut: task.dateDebut, dateEcheance: task.dateEcheance, projet: task.projet || null,
-        assignees: getAssigneesArray(task), dependDe: getDependsOnArray(task), tags: getTagsArray(task),
+        assignees: getAssigneesArray(task), dependDe: getDependsOnArray(task),
+        dependDebutDe: getStartDependsOnArray(task), tags: getTagsArray(task),
         estimationH: task.estimationH || null, tempsPasse: task.tempsPasse || null, subtasks: getSubtasks(task),
         couleur: task.couleur || null, parentTask: task.parentTask || null, chantier: task.chantier || null,
         Responsable: task.Responsable || null,
@@ -1701,6 +1725,7 @@ function syncLocalTask() {
     task.assignees = ['L', ...data.assignees];
     task.Responsable = data.Responsable || null;
     task.dependDe = ['L', ...data.dependDe];
+    task.dependDebutDe = ['L', ...data.dependDebutDe];
     task.tags = ['L', ...data.tags];
     task.estimationH = data.estimationH;
     task.tempsPasse = data.tempsPasse;
@@ -1823,22 +1848,31 @@ function renderPanel() {
     const chargeConsolHtml = (chargeConsol && Object.keys(chargeConsol).length) ? ('<div style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border)"><div class="prop-label" style="margin-bottom:6px">Consolidé (avec sous-tâches)</div>' + Object.keys(chargeConsol).map(function(tid){ return '<div class="charge-row"><span class="an">' + escapeHtml(getTeamMemberName(Number(tid))) + '</span><span style="font-weight:600;font-size:0.82rem">' + chargeConsol[tid] + ' h</span></div>'; }).join('') + '<div style="margin-top:6px;font-size:0.78rem;color:var(--text-muted)">Total consolidé : <strong>' + Object.values(chargeConsol).reduce(function(s,h){ return s + h; }, 0) + '</strong> h</div></div>') : '';
     const chargeRows = data.assignees.map(id => '<div style="display:flex;align-items:center;gap:8px"><span style="flex:1;font-size:0.8rem">' + escapeHtml(getTeamMemberName(id)) + '</span><input type="number" min="0" step="0.5" value="' + chargeOf(id) + '" onchange="updateCharge(' + id + ', this.value)" style="width:64px;padding:4px 6px;border:1px solid var(--border);border-radius:6px"><span style="font-size:0.75rem;color:var(--text-muted)">h</span></div>').join('');
 
-    const depsChips = data.dependDe.map(id => {
-        const d = tasks.find(t => t.id === id);
-        return d ? '<span class="multi-select-chip">' + escapeHtml(d.titre) + '<span class="remove" onclick="event.stopPropagation();removeDependency(' + id + ')">×</span></span>' : '';
-    }).join('');
     const availableDeps = panelState.isNew ? tasks : getAvailableDependencies(panelState.taskId);
-    const depsOptions = availableDeps.map(t =>
-        '<div class="multi-select-option ' + (data.dependDe.includes(t.id) ? 'selected' : '') + '" onclick="toggleDependency(' + t.id + ')"><input type="checkbox" ' + (data.dependDe.includes(t.id) ? 'checked' : '') + ' onclick="event.stopPropagation();toggleDependency(' + t.id + ')">' + escapeHtml(t.titre) + '</div>'
+    const pastillesDeLien = (champ) => data[champ].map(id => {
+        const d = tasks.find(t => t.id === id);
+        return d ? '<span class="multi-select-chip">' + escapeHtml(d.titre) + '<span class="remove" onclick="event.stopPropagation();removeDependency(' + id + ', \'' + champ + '\')">×</span></span>' : '';
+    }).join('');
+    const optionsDeLien = (champ) => availableDeps.map(t =>
+        '<div class="multi-select-option ' + (data[champ].includes(t.id) ? 'selected' : '') + '" onclick="toggleDependency(' + t.id + ', \'' + champ + '\')"><input type="checkbox" ' + (data[champ].includes(t.id) ? 'checked' : '') + ' onclick="event.stopPropagation();toggleDependency(' + t.id + ', \'' + champ + '\')">' + escapeHtml(t.titre) + '</div>'
     ).join('');
+    const listeDeLien = (id, champ, etiquette, place) =>
+        '<div class="dep-lien"><div class="prop-label">' + etiquette + '</div>' +
+        '<div class="multi-select" id="' + id + '"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'' + id + '\')"><div class="multi-select-values">' + (pastillesDeLien(champ) || '<span class="multi-select-placeholder">' + place + '</span>') + '</div><span class="multi-select-arrow">▾</span></div>' +
+        '<div class="multi-select-dropdown">' + msSearch + (optionsDeLien(champ) || '<div class="multi-select-empty">Aucune</div>') + msNoResult + '</div></div></div>';
+
+    const nbLiens = data.dependDe.length + (depDebutDisponible() ? data[COL_DEP_DEBUT].length : 0);
     let blockedHtml = '';
     if (!panelState.isNew) {
         const blocked = getBlockedTasks(panelState.taskId);
-        if (blocked.length) {
-            blockedHtml = '<div class="deps-display"><div class="deps-group"><div class="deps-group-label">→ Bloque :</div><div class="deps-list">' +
-                blocked.map(t => '<div class="dep-item" onclick="openTaskPanel(' + t.id + ')">→ ' + escapeHtml(t.titre) + '</div>').join('') +
-            '</div></div></div>';
-        }
+        const blockedDebut = getStartBlockedTasks(panelState.taskId);
+        const groupe = (titre, liste) => liste.length
+            ? '<div class="deps-group"><div class="deps-group-label">' + titre + '</div><div class="deps-list">' +
+              liste.map(t => '<div class="dep-item" onclick="openTaskPanel(' + t.id + ')">→ ' + escapeHtml(t.titre) + '</div>').join('') +
+              '</div></div>'
+            : '';
+        const groupes = groupe('→ Bloque :', blocked) + groupe('→ Démarre avec :', blockedDebut);
+        if (groupes) blockedHtml = '<div class="deps-display">' + groupes + '</div>';
     }
 
     const tagsChips = data.tags.map(tag =>
@@ -1950,8 +1984,13 @@ function renderPanel() {
         ) +
 
         (data.type !== 'jalon' ? (data.type !== 'reunion' ?
-                '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Dépendances</span>' + (data.dependDe.length ? '<span class="panel-section-badge">' + data.dependDe.length + '</span>' : '') + '</div>' +
-                '<div class="form-group"><div class="multi-select" id="depsSelect"><div class="multi-select-trigger" onclick="toggleMultiSelect(\'depsSelect\')"><div class="multi-select-values">' + (depsChips || '<span class="multi-select-placeholder">Dépendances...</span>') + '</div><span class="multi-select-arrow">▾</span></div><div class="multi-select-dropdown">' + msSearch + (depsOptions || '<div class="multi-select-empty">Aucune</div>') + msNoResult + '</div></div>' + blockedHtml + '</div></div>' : '') : '') +
+                '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Dépendances</span>' + (nbLiens ? '<span class="panel-section-badge">' + nbLiens + '</span>' : '') + '</div>' +
+                '<div class="form-group">' +
+                listeDeLien('depsSelect', 'dependDe', 'Commence après la fin de', 'Dépendances...') +
+                // Pas sur un chantier : sa table ne porte pas de dépendances, la liste n'aurait pas
+                // où écrire, comme celle des prérequis que le volet chantier retire déjà.
+                (depDebutDisponible() && !chantier ? listeDeLien('depsDebutSelect', COL_DEP_DEBUT, 'Commence en même temps que', 'Aucune...') : '') +
+                blockedHtml + '</div></div>' : '') : '') +
 
         (data.type !== 'jalon' ?
             '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Tags</span>' + (data.tags.length ? '<span class="panel-section-badge">' + data.tags.length + '</span>' : '') + '</div>' +
@@ -2038,7 +2077,7 @@ function updateField(field, value, noSave) {
 
     // Responsable en fait partie : il porte la couleur de la ligne et la tête affichée, et sa
     // sélection doit se voir dans la fiche sans attendre un rechargement.
-    const visualFields =['type', 'priorite', 'statut', 'projet', 'progression', 'dateDebut', 'dateEcheance', 'couleur', 'parentTask', 'Responsable'];
+    const visualFields = ['type', 'priorite', 'statut', 'projet', 'progression', 'dateDebut', 'dateEcheance', 'couleur', 'parentTask', 'Responsable'];
     if (visualFields.includes(field)) {
         renderPanel();
         if (!panelState.isNew) render();
@@ -2202,22 +2241,26 @@ function removeAssignee(id) {
     }
 }
 
-function toggleDependency(id) {
+// `champ` désigne la liste visée : dependDe pour un lien fin→début, dependDebutDe pour un
+// début→début. Les deux listes se manipulent à l'identique, seule la contrainte de dates diffère.
+function toggleDependency(id, champ = 'dependDe') {
     const data = panelState.editData;
-    const idx = data.dependDe.indexOf(id);
-    if (idx === -1) data.dependDe.push(id);
-    else data.dependDe.splice(idx, 1);
+    const liste = data[champ];
+    const idx = liste.indexOf(id);
+    if (idx === -1) liste.push(id);
+    else liste.splice(idx, 1);
     syncLocalTask();  // FIX
     if (!panelState.isNew && gristReady) saveTaskToGrist();
     renderPanel();
     render();
 }
 
-function removeDependency(id) {
+function removeDependency(id, champ = 'dependDe') {
     const data = panelState.editData;
-    const idx = data.dependDe.indexOf(id);
+    const liste = data[champ];
+    const idx = liste.indexOf(id);
     if (idx !== -1) {
-        data.dependDe.splice(idx, 1);
+        liste.splice(idx, 1);
         syncLocalTask();  // FIX
         if (!panelState.isNew && gristReady) saveTaskToGrist();
         renderPanel();
@@ -2275,6 +2318,7 @@ async function saveTaskToGrist() {
         titre: data.titre, description: data.description, type: data.type, priorite: data.priorite,
         statut: data.statut, progression: data.progression, dateDebut: data.dateDebut, dateEcheance: data.dateEcheance,
         projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe),
+        dependDebutDe: toGristRefList(data.dependDebutDe),
         tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse,
         subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null,
         parentTask: data.parentTask || null, chantier: data.chantier || null, Responsable: data.Responsable || null,
@@ -2334,7 +2378,7 @@ async function dupliquerTache() {
         type: source.type || 'tache', priorite: source.priorite, statut: source.statut,
         progression: source.progression || 0, dateDebut: source.dateDebut, dateEcheance: source.dateEcheance,
         projet: source.projet || null, assignees: toGristRefList(getAssigneesArray(source)),
-        dependDe: toGristRefList(getRefListArray(source.dependDe)), tags: source.tags || null,
+        dependDe: toGristRefList(getRefListArray(source.dependDe)), dependDebutDe: toGristRefList(getStartDependsOnArray(source)), tags: source.tags || null,
         estimationH: source.estimationH, tempsPasse: source.tempsPasse,
         subtasks: source.subtasks || '', couleur: source.couleur || null,
         parentTask: source.parentTask, chantier: source.chantier || null,
@@ -2369,6 +2413,7 @@ async function createTask() {
         priorite: data.priorite || '3', statut: data.statut || 'todo', progression: data.progression || 0,
         dateDebut: data.dateDebut, dateEcheance: data.dateEcheance, projet: data.projet,
         assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe),
+        dependDebutDe: toGristRefList(data.dependDebutDe),
         tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse,
         subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null,
         parentTask: data.parentTask || null, chantier: data.chantier || null,

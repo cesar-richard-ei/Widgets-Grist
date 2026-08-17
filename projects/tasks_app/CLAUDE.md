@@ -149,7 +149,8 @@ Le widget lit et écrit **tout par colId**. Or Grist régénère le colId à cha
 | `dateEcheance` | Date | Timestamp Unix (÷1000 pour JS) |
 | `projet` | Ref:Projects | Référence projet |
 | `assignees` | RefList:Team | Liste d'assignés (format `['L', id1, id2]`) |
-| `dependDe` | RefList:Tasks | Dépendances (prédécesseurs) |
+| `dependDe` | RefList:Tasks | Dépendances fin→début (prédécesseurs) |
+| `dependDebutDe` | RefList:Tasks | Dépendances début→début. **Colonne opt-in**, aucun widget ne la crée — voir « Deux types de lien » |
 | `tags` | ChoiceList | Étiquettes libres |
 | `estimationH` | Numeric | Estimation en heures |
 | `tempsPasse` | Numeric | Temps réellement passé |
@@ -764,6 +765,38 @@ la maquette, là où le texte du cadrage parle d'un bouton « Ajouter » génér
 Une tâche créée depuis un chantier reçoit `chantier`, pas `parentTask` : le niveau 0 est réservé aux
 chantiers. `pruneTaskRecord()` ne retire `parentTask` que lorsqu'il vaut un identifiant décalé, sans
 quoi il deviendrait impossible de créer une sous-tâche.
+
+### Deux types de lien entre tâches (Gantt)
+
+Une tâche peut en suivre une autre de deux façons : commencer **après sa fin** (fin→début, le modèle
+historique) ou **en même temps qu'elle** (début→début). Chaque type a sa colonne, `Tasks.dependDe` et
+`Tasks.dependDebutDe`, toutes deux `RefList:Tasks`.
+
+**Pourquoi deux colonnes plutôt qu'un type porté à côté d'une liste unique.** Une liste typée
+demanderait un JSON, illisible dans Grist et à migrer depuis l'existant. Deux RefList restent lisibles
+et modifiables directement dans le document, et l'ajout est purement additif.
+
+`dependDebutDe` est **opt-in** : la structure du document appartient au métier, aucun widget ne crée
+la colonne. Sans elle, `depDebutDisponible()` est faux, la seconde liste disparaît du volet,
+`pruneTaskRecord()` retire la clé des écritures, et rien n'est tracé. Le Gantt fonctionne comme avant.
+
+Ce que les deux types partagent et ce qui les sépare :
+
+| | fin→début | début→début |
+|---|---|---|
+| Contrainte sur le successeur | commence le lendemain de la fin du prédécesseur | commence au plus tôt au début du prédécesseur |
+| Origine de la flèche | fin de la barre du prédécesseur | son début |
+| Trait | tirets `4 2` | pointillé `1 3` (`.depart-debut`) |
+| Volet, liste amont | « Commence après la fin de » | « Commence en même temps que » |
+| Volet, liste aval | « → Bloque : » | « → Démarre avec : » |
+| Prérequis d'un jalon | oui | non, un démarrage conjoint n'est pas un préalable |
+
+Les deux comptent pour la **détection de cycle** (`getAllPredecessors`) : un cycle se forme aussi bien
+en mélangeant les deux types qu'avec un seul. `propagateDependencyDates()` calcule une date minimale
+par lien, puis ne garde qu'un report par tâche : une tâche liée deux fois au même prédécesseur serait
+sinon comptée deux fois dans le message de fin de déplacement.
+
+Couvert par `tests/e2e/gantt-dependances.spec.js`.
 
 ### Écritures vers une table dont la structure ne nous appartient pas
 

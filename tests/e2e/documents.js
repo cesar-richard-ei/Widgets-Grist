@@ -25,7 +25,7 @@ const COLONNES_TASKS = {
     priorite: { type: 'Choice' }, statut: { type: 'Choice' }, type: { type: 'Choice' },
     progression: { type: 'Numeric' }, estimationH: { type: 'Numeric' }, tempsPasse: { type: 'Numeric' },
     assignees: { type: 'RefList:Team' }, Responsable: { type: 'Ref:Team' },
-    dependDe: { type: 'RefList:Tasks' }, tags: { type: 'ChoiceList' },
+    dependDe: { type: 'RefList:Tasks' }, dependDebutDe: { type: 'RefList:Tasks' }, tags: { type: 'ChoiceList' },
     couleur: { type: 'Text' }, subtasks: { type: 'Text' }, charges: { type: 'Text' },
     projet: { type: 'Ref:Projects' }, parentTask: { type: 'Ref:Tasks' }
 };
@@ -133,6 +133,18 @@ function sansColonne(doc, colonne) {
 function colonneCalculee(doc, table, colonne) {
     const copie = clone(doc);
     copie[table].columns[colonne].isFormula = true;
+    return copie;
+}
+
+/** Pose des liens de dépendance sur les tâches, par titre : { 'Recette': { fin: [...], debut: [...] } }. */
+function avecLiens(doc, liens) {
+    const copie = clone(doc);
+    const idDe = (titre) => copie.Tasks.records.find((r) => r.titre === titre).id;
+    for (const [titre, lien] of Object.entries(liens)) {
+        const rec = copie.Tasks.records.find((r) => r.titre === titre);
+        if (lien.fin) rec.dependDe = ['L', ...lien.fin.map(idDe)];
+        if (lien.debut) rec.dependDebutDe = ['L', ...lien.debut.map(idDe)];
+    }
     return copie;
 }
 
@@ -246,6 +258,6 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
-    documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee,
+    documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee, avecLiens,
     ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste
 };

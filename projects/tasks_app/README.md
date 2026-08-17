@@ -29,7 +29,8 @@ Cette table est **obligatoire** pour le fonctionnement des widgets.
 │ projet          │ Reference (Projects) │ Lien vers table Projects                │           │
 │ assignees       │ Reference List (Team)│ Liste des assignés                      │           │
 │ type            │ Choice               │ tache, jalon, reunion                   │           │
-│ dependDe        │ Reference List (Tasks)│ Tâches prédécesseurs                   │           │
+│ dependDe        │ Reference List (Tasks)│ Prédécesseurs, lien fin → début        │           │
+│ dependDebutDe   │ Reference List (Tasks)│ Prédécesseurs, lien début → début      │           │
 │ tags            │ Choice List          │ Étiquettes                              │           │
 │ estimationH     │ Numeric              │ Heures estimées                         │           │
 │ tempsPasse      │ Numeric              │ Heures passées                          │           │
@@ -189,9 +190,10 @@ function selectTask(taskId) {
 - Manuel (drag & drop)
 
 **Dépendances :**
-- Colonne `dependDe` : Reference List vers d'autres tâches
-- Affichage : Flèches courbes entre les barres
-- Types supportés : Fin → Début
+- Colonne `dependDe` : Reference List vers d'autres tâches, lien **fin → début**
+- Colonne `dependDebutDe` : Reference List vers d'autres tâches, lien **début → début**
+- Affichage : flèches courbes entre les barres, tirets pour un fin → début, pointillé serré pour un début → début
+- `dependDebutDe` est facultative : sans elle, seuls les liens fin → début existent
 
 **Navigation :**
 - Vues : Semaine, Mois, Trimestre, Année
