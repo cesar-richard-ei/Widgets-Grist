@@ -34,6 +34,7 @@ fixtures divergeaient silencieusement.
 - `documentSansChantiers()` : ancien modèle, hiérarchie entre tâches ;
 - `sansColonne(doc, colonne)` : pour ce qui doit disparaître avec sa donnée ;
 - `colonneCalculee(doc, table, colonne)` : colonne lisible qui refuse l'écriture, comme une formule ;
+- `avecLiens(doc, liens)` : pose des dépendances par titre, fin→début et début→début ;
 - `ouvrirGantt` / `ouvrirPlan(page, doc, options)` avec `theme`, `largeur`, `reglages`, `refuser`,
   `optionsSection` ;
 - `ligne`, `deplier`, `toutDeplier`, `ouvrirVolet`, `champTache`, `contraste`.
