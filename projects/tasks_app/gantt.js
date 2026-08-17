@@ -1668,6 +1668,7 @@ function syncLocalTask() {
     task.dateEcheance = data.dateEcheance;
     task.projet = data.projet;
     task.assignees = ['L', ...data.assignees];
+    task.Responsable = data.Responsable || null;
     task.dependDe = ['L', ...data.dependDe];
     task.tags = ['L', ...data.tags];
     task.estimationH = data.estimationH;
@@ -2004,7 +2005,9 @@ function updateField(field, value, noSave) {
     // FIX: Synchroniser le task local pour affichage immédiat
     syncLocalTask();
 
-    const visualFields = ['type', 'priorite', 'statut', 'projet', 'progression', 'dateDebut', 'dateEcheance', 'couleur', 'parentTask'];
+    // Responsable en fait partie : il porte la couleur de la ligne et la tête affichée, et sa
+    // sélection doit se voir dans la fiche sans attendre un rechargement.
+    const visualFields =['type', 'priorite', 'statut', 'projet', 'progression', 'dateDebut', 'dateEcheance', 'couleur', 'parentTask', 'Responsable'];
     if (visualFields.includes(field)) {
         renderPanel();
         if (!panelState.isNew) render();
