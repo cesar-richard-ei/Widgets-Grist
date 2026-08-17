@@ -130,6 +130,34 @@ test('créer un chantier l ajoute à sa table, en ligne racine', async ({ page }
     await expect(D.ligne(page, 'Recette métier')).toHaveAttribute('data-depth', '0');
 });
 
+// Le document du métier déduit certaines colonnes plutôt que de les saisir. La création posait
+// Projets sans vérifier, Grist refusait le lot entier, et le formulaire restait ouvert sur un toast
+// sans indice : c'est le « impossible de créer un chantier » remonté après la démonstration.
+test('un chantier se crée même quand une colonne de sa table est calculée', async ({ page }) => {
+    await D.ouvrirGantt(page, D.colonneCalculee(D.documentCible(), 'Chantiers', 'Projets'));
+
+    await page.locator('#btnAjouter').click();
+    await page.locator('#menuAjout button', { hasText: 'Chantier' }).click();
+    await page.locator('#taskTitle').fill('Recette métier');
+    await page.locator('#panel .panel-btn.success').click();
+
+    await expect.poll(() => page.evaluate(async () => (await window.grist.docApi.fetchTable('Chantiers')).Nom_du_chantier)).toContain('Recette métier');
+    await expect(page.locator('#panel')).not.toHaveClass(/open/);
+});
+
+test('un chantier s enregistre même quand une colonne de sa table est calculée', async ({ page }) => {
+    await D.ouvrirGantt(page, D.colonneCalculee(D.documentCible(), 'Chantiers', 'Contributeurs'));
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await page.locator('#taskTitle').fill('Socle technique v2');
+    await page.locator('#taskTitle').blur();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Nom_du_chantier[c.id.indexOf(1)];
+    })).toBe('Socle technique v2');
+});
+
 for (const nomColonne of ['chantier', 'Chantiers']) {
     test('une tâche créée depuis un chantier est rattachée via la colonne ' + nomColonne, async ({ page }) => {
         await D.ouvrirGantt(page, D.documentCible(nomColonne));

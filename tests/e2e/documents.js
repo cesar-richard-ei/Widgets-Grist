@@ -126,6 +126,17 @@ function sansColonne(doc, colonne) {
 }
 
 /**
+ * Passe une colonne en calculée : elle reste lisible et refuse l'écriture, comme dans Grist. Le
+ * métier remonte volontiers en formule une colonne qu'il veut déduire, et le widget doit continuer
+ * d'écrire le reste plutôt que de perdre le lot entier.
+ */
+function colonneCalculee(doc, table, colonne) {
+    const copie = clone(doc);
+    copie[table].columns[colonne].isFormula = true;
+    return copie;
+}
+
+/**
  * Ouvre un widget sur un document donné.
  * options : { theme, largeur, hauteur, reglages, refuser, optionsSection, attendre }
  */
@@ -235,6 +246,6 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
-    documentCible, documentParentRepointe, documentSansChantiers, sansColonne,
+    documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee,
     ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste
 };

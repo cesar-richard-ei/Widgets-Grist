@@ -33,6 +33,7 @@ fixtures divergeaient silencieusement.
 - `documentParentRepointe()` : copie de travail où `parentTask` désigne un chantier ;
 - `documentSansChantiers()` : ancien modèle, hiérarchie entre tâches ;
 - `sansColonne(doc, colonne)` : pour ce qui doit disparaître avec sa donnée ;
+- `colonneCalculee(doc, table, colonne)` : colonne lisible qui refuse l'écriture, comme une formule ;
 - `ouvrirGantt` / `ouvrirPlan(page, doc, options)` avec `theme`, `largeur`, `reglages`, `refuser`,
   `optionsSection` ;
 - `ligne`, `deplier`, `toutDeplier`, `ouvrirVolet`, `champTache`, `contraste`.
@@ -48,6 +49,16 @@ persistance. Un second appel dans le même test ne poserait donc pas ses réglag
 **`ouvrirVolet` attend la fin de la transition** d'ouverture : mesurer une largeur pendant que le
 volet glisse donne une valeur intermédiaire, et un glisser démarré à ce moment part d'une poignée en
 mouvement.
+
+### Le simulacre refuse ce que Grist refuse
+
+`applyUserActions` lève sur une colonne absente ou calculée, et restaure l'instantané : le lot entier
+est perdu, comme sur un vrai document. Sans cette vérification, le simulacre acceptait n'importe quel
+nom de colonne. La création de chantier était couverte, verte ici, et cassée sur le document du
+métier : elle posait `Chantiers.Projets` sans savoir si la colonne s'écrit.
+
+Conséquence pour les fixtures : une écriture vers une colonne que le document de test ne déclare pas
+fait désormais échouer le test au lieu de passer inaperçue.
 
 ### Trois pièges qui rendent un test vert et faux
 

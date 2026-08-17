@@ -765,6 +765,22 @@ Une tâche créée depuis un chantier reçoit `chantier`, pas `parentTask` : le 
 chantiers. `pruneTaskRecord()` ne retire `parentTask` que lorsqu'il vaut un identifiant décalé, sans
 quoi il deviendrait impossible de créer une sous-tâche.
 
+### Écritures vers une table dont la structure ne nous appartient pas
+
+Grist rejette **le lot entier** dès qu'une action vise une colonne absente ou calculée. Une seule
+colonne en trop et rien n'est enregistré, sans autre indice qu'un refus.
+
+`pruneTaskRecord()` élaguait déjà les écritures de `Tasks` sur les colonnes réellement présentes ;
+`colonnesEcrivables(tableId)` y ajoute le filtre des colonnes calculées, que la lecture rend pourtant
+comme les autres. `pruneChantierRecord()` applique le même traitement à `Chantiers`, table que le
+widget ne crée pas et dont il ne choisit pas la structure.
+
+C'est ce qui manquait à la création de chantier : elle posait `Projets`, seule colonne que
+l'enregistrement n'écrit pas, et cassait donc là où la modification passait. Les refus font désormais
+remonter leur raison dans le toast et la console, sans quoi l'échec ne se diagnostique pas.
+
+Couvert par `tests/e2e/gantt-chantiers.spec.js`, sur un document dont une colonne est calculée.
+
 ### Gantt : report du rendu pendant un geste souris
 
 `render()` (gantt.html) commence par une garde :
