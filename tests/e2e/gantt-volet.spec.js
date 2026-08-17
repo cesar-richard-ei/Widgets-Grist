@@ -121,7 +121,11 @@ test('le responsable se choisit, se remplace et se retire', async ({ page }) => 
     await page.locator('#responsableSelect .addbtn').click();
     await page.locator('#responsableSelect .multi-select-option', { hasText: 'Alice Martin' }).click();
     await expect.poll(() => D.champTache(page, 1, 'Responsable')).toBe(1);
+    // Nommer la personne, et pas seulement compter les pastilles : le volet gardait celle d'avant,
+    // le compte restait à 1 et la fiche montrait l'ancien responsable jusqu'au rechargement.
     await expect(page.locator('#panel .resp-choisi')).toHaveCount(1);
+    await expect(page.locator('#panel .resp-choisi')).toContainText('Alice Martin');
+    await expect(D.ligne(page, 'Cadrage des outils').locator('.task-avatar').first()).toHaveAttribute('title', 'Alice Martin');
 
     await page.locator('#panel .resp-choisi .asg-x').click();
     await expect.poll(() => D.champTache(page, 1, 'Responsable')).toBeFalsy();
