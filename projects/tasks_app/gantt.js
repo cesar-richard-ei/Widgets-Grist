@@ -17,6 +17,10 @@ function pruneTaskRecord(rec) {
         delete rec.chantier;
     }
     if (TASK_COLS.size) { for (const k in rec) if (!TASK_COLS.has(k)) delete rec[k]; }
+    // TASK_COLS vient de la lecture, qui rend aussi les colonnes calculées : une colonne passée en
+    // formule côté document est lisible mais refuse l'écriture, et emporte le lot avec elle.
+    const ecrivables = colonnesEcrivables('Tasks');
+    if (ecrivables) { for (const k in rec) if (!ecrivables.has(k)) delete rec[k]; }
     // Le parent affiché est recalculé à la lecture : l'identifiant décalé d'un chantier ne désigne
     // aucun enregistrement et ne doit jamais partir en base. Un parent qui désigne une tâche réelle
     // reste légitime, sans quoi on ne pourrait plus créer de sous-tâche.
@@ -95,6 +99,13 @@ const getTaskPriority = (t) => (t?.priorite >= 1 && t?.priorite <= 4) ? parseInt
 const isJalon = (t) => t?.type === 'jalon';
 
 function showToast(msg, type = 'info') { const c = document.getElementById('toastContainer'); const t = document.createElement('div'); t.className = 'toast ' + type; t.textContent = msg; c.appendChild(t); setTimeout(() => t.remove(), 3000); }
+
+// Un refus d'écriture porte la raison, la perdre laisse l'utilisateur devant un échec muet et
+// personne ne sait quelle colonne pose problème. Tronqué : le toast n'a pas la place d'une trace.
+function messageErreur(e) {
+    const brut = (e && (e.message || e.error)) || String(e || '');
+    return brut.length > 120 ? brut.slice(0, 120) + '…' : brut;
+}
 
 // GEN-03: Export functions
 // WBS-02: déplie toute la hiérarchie temporairement pour l'export, retourne l'état précédent
@@ -207,6 +218,26 @@ function colonneChantier() {
     const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.type === 'Ref:Chantiers');
     return c ? c.colId : null;
 }
+// Colonnes d'une table dans lesquelles une écriture a une chance d'aboutir : celles qui existent, et
+// qui ne sont pas calculées. Rend null quand les métadonnées manquent, auquel cas rien n'est élagué.
+function colonnesEcrivables(tableId) {
+    if (!schemaMeta) return null;
+    const t = (schemaMeta.tables || []).find(x => x.tableId === tableId);
+    if (!t) return null;
+    return new Set((schemaMeta.cols || []).filter(c => c.parentId === t.id && !c.isFormula).map(c => c.colId));
+}
+
+// Grist rejette le lot entier dès qu'une action vise une colonne absente ou calculée : une seule
+// colonne en trop et rien n'est enregistré. Les tâches passent par pruneTaskRecord ; les chantiers
+// vivent dans une table que le widget ne crée pas, dont la structure appartient au document, d'où le
+// même élagage avant chaque écriture. La création posait Projets sans ce filet, ce que la
+// modification ne fait pas : elle seule échouait sur un document où la colonne est calculée.
+function pruneChantierRecord(rec) {
+    const colonnes = colonnesEcrivables('Chantiers');
+    if (colonnes) { for (const k in rec) if (!colonnes.has(k)) delete rec[k]; }
+    return rec;
+}
+
 // parentTask ne désigne une sous-tâche que lorsqu'il pointe Tasks. Sans ce garde-fou, un parentTask
 // qui désigne un chantier rattache les tâches entre elles, les identifiants des deux tables se
 // recouvrant.
@@ -1576,12 +1607,12 @@ async function createChantier() {
         Projets: toGristRefList(data.projet ? [data.projet] : [])
     };
     try {
-        await grist.docApi.applyUserActions([['AddRecord', 'Chantiers', null, record]]);
+        await grist.docApi.applyUserActions([['AddRecord', 'Chantiers', null, pruneChantierRecord(record)]]);
         closePanel();
         await loadAllData();
     } catch (e) {
-        console.error(e);
-        showToast('Erreur création du chantier', 'error');
+        console.error('Création du chantier refusée', e, record);
+        showToast('Erreur création du chantier : ' + messageErreur(e), 'error');
     }
 }
 // WBS-02: création d'une sous-tâche (ou tâche racine si parentId === null)
@@ -2267,19 +2298,26 @@ async function saveTaskToGrist() {
 async function saveChantierToGrist(data) {
     const idChantier = panelState.taskId - ID_CHANTIER;
     if (idChantier <= 0) return;
-    const record = {
+    const record = pruneChantierRecord({
         Nom_du_chantier: data.titre, Description: data.description,
         Date_debut: data.dateDebut || null, Date_fin: data.dateEcheance || null,
         Contributeurs: toGristRefList(data.assignees)
-    };
+    });
+    // La ligne locale ne reprend que ce qui est réellement parti : une colonne élaguée n'a pas été
+    // enregistrée, l'afficher comme telle ferait mentir le graphique jusqu'au rechargement.
+    const local = {};
+    if ('Nom_du_chantier' in record) local.titre = record.Nom_du_chantier;
+    if ('Description' in record) local.description = record.Description;
+    if ('Date_debut' in record) local.dateDebut = record.Date_debut;
+    if ('Date_fin' in record) local.dateEcheance = record.Date_fin;
     try {
         await grist.docApi.applyUserActions([['UpdateRecord', 'Chantiers', idChantier, record]]);
         showSaveIndicator();
         const idx = tasks.findIndex(t => t.id === panelState.taskId);
-        if (idx !== -1) tasks[idx] = Object.assign({}, tasks[idx], { titre: data.titre, description: data.description, dateDebut: record.Date_debut, dateEcheance: record.Date_fin });
+        if (idx !== -1) tasks[idx] = Object.assign({}, tasks[idx], local);
     } catch (e) {
-        console.error(e);
-        showToast('Erreur sauvegarde', 'error');
+        console.error('Enregistrement du chantier refusé', e, record);
+        showToast('Erreur sauvegarde : ' + messageErreur(e), 'error');
     }
 }
 

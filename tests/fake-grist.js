@@ -68,7 +68,8 @@ function createFakeGrist(documentInitial, options) {
                     type: info.type,
                     widgetOptions: info.widgetOptions != null ? info.widgetOptions : '',
                     visibleCol: info.visibleCol != null ? info.visibleCol : 0,
-                    untieColIdFromLabel: info.untieColIdFromLabel != null ? info.untieColIdFromLabel : false
+                    untieColIdFromLabel: info.untieColIdFromLabel != null ? info.untieColIdFromLabel : false,
+                    isFormula: !!info.isFormula
                 });
             }
         }
@@ -81,7 +82,7 @@ function createFakeGrist(documentInitial, options) {
             return versColonnaire(lignesMetaTables(), ['tableId']);
         }
         if (nom === '_grist_Tables_column') {
-            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'type', 'widgetOptions', 'visibleCol', 'untieColIdFromLabel']);
+            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'type', 'widgetOptions', 'visibleCol', 'untieColIdFromLabel', 'isFormula']);
         }
         if (!doc[nom]) throw new Error('Table inconnue: ' + nom);
         return versColonnaire(doc[nom].records, Object.keys(doc[nom].columns));
@@ -112,6 +113,18 @@ function createFakeGrist(documentInitial, options) {
         return idDemande;
     }
 
+    // Grist refuse une action qui vise une colonne absente ou calculee, et emporte le lot entier.
+    // Sans cette verification le simulacre acceptait tout, et une ecriture impossible en production
+    // passait au vert ici : c'est ce qui a laisse la creation de chantier casser sur le document du
+    // metier alors que la suite e2e la couvrait.
+    function verifierColonnes(tableId, t, valeurs) {
+        for (const colId of Object.keys(valeurs || {})) {
+            const colonne = t.columns[colId];
+            if (!colonne) throw new Error('Colonne inconnue: ' + tableId + '.' + colId);
+            if (colonne.isFormula) throw new Error('Colonne calculee, non modifiable: ' + tableId + '.' + colId);
+        }
+    }
+
     function appliquer(action) {
         const type = action[0];
 
@@ -139,6 +152,7 @@ function createFakeGrist(documentInitial, options) {
         }
         if (type === 'AddRecord') {
             const t = table(action[1]);
+            verifierColonnes(action[1], t, action[3]);
             const id = attribuerId(action[1], t, action[2]);
             t.records.push(Object.assign({ id: id }, action[3] || {}));
             return id;
@@ -146,6 +160,7 @@ function createFakeGrist(documentInitial, options) {
         if (type === 'BulkAddRecord') {
             const t = table(action[1]);
             const valeurs = action[3] || {};
+            verifierColonnes(action[1], t, valeurs);
             const colIds = Object.keys(valeurs);
             const idsDemandes = action[2] || [];
             const n = colIds.length ? valeurs[colIds[0]].length : idsDemandes.length;
@@ -178,6 +193,7 @@ function createFakeGrist(documentInitial, options) {
             const t = table(action[1]);
             const rec = t.records.find((r) => r.id === action[2]);
             if (!rec) throw new Error('Enregistrement inconnu: ' + action[1] + '#' + action[2]);
+            verifierColonnes(action[1], t, action[3]);
             Object.assign(rec, action[3] || {});
             return null;
         }
