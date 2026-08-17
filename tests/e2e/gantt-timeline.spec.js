@@ -11,6 +11,8 @@ const VUES = ['week', 'month', 'quarter', 'semester', 'year'];
 async function choisirVue(page, vue) {
     await page.locator('.view-controls .btn[data-view="' + vue + '"]').click();
     await page.waitForSelector('.view-controls .btn[data-view="' + vue + '"].active');
+    // La classe active est posée avant le rendu, qui lui est reporté au relâchement du clic.
+    await D.attendreRendu(page);
 }
 
 // Écart, en colonnes, entre le défilement obtenu et celui visé : le début de la sur-colonne qui

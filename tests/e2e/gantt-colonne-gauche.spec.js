@@ -9,12 +9,17 @@ const largeurColonne = (page) => page.locator('#taskList').evaluate((el) => el.g
 const largeurVolet = (page) => page.locator('#panel').evaluate((el) => el.getBoundingClientRect().width);
 const pastilles = (page, titre) => D.ligne(page, titre).locator('.task-avatar').allTextContents();
 
+// Le survol amène la souris sur la poignée après s'être assuré qu'elle est immobile et qu'elle
+// reçoit bien les événements. Viser une boîte relevée d'avance laisse le clic tomber à côté dès
+// que quelque chose bouge encore, sans que rien ne le signale.
 async function tirerPoignee(page, id, dx) {
-    const boite = await page.locator('#' + id).boundingBox();
-    await page.mouse.move(boite.x + boite.width / 2, boite.y + boite.height / 2);
+    const poignee = page.locator('#' + id);
+    await poignee.hover();
+    const boite = await poignee.boundingBox();
     await page.mouse.down();
     await page.mouse.move(boite.x + boite.width / 2 + dx, boite.y + boite.height / 2, { steps: 10 });
     await page.mouse.up();
+    await D.attendreRendu(page);
 }
 
 test('la colonne s ouvre à 310 px', async ({ page }) => {
