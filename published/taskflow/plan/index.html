@@ -708,12 +708,16 @@ const TF = (function () {
 
     /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
      * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
-     * Entrée : { start:Date, depEnd:Date, tStart:Date, depIdx, tIdx, pxPerDay }
+     * Entrée : { start:Date, depEnd:Date, depStart:Date, tStart:Date, depIdx, tIdx, pxPerDay, lien }
+     * `lien` vaut 'fin' (défaut, fin du prédécesseur) ou 'debut' (son début) : les deux arrivent
+     * sur le début du successeur, seule l'origine change.
      * Sortie : { x1, y1, x2, y2, midX, pathD, arrowPoints }
      */
     function computeDependencyPath(o) {
         const daysDiff = (a, b) => Math.round((b - a) / 86400000);
-        const x1 = daysDiff(o.start, o.depEnd) * o.pxPerDay + o.pxPerDay;
+        const debut = o.lien === 'debut';
+        const origine = debut ? o.depStart : o.depEnd;
+        const x1 = daysDiff(o.start, origine) * o.pxPerDay + (debut ? 0 : o.pxPerDay);
         const y1 = o.depIdx * 44 + 22;
         const x2 = daysDiff(o.start, o.tStart) * o.pxPerDay;
         const y2 = o.tIdx * 44 + 22;
