@@ -1333,10 +1333,11 @@
             };
         }
 
-        // Le domaine d'une personne, c'est son équipe : la colonne `Team.role`.
+        // Le domaine d'une personne, c'est son équipe : la colonne `Team.Domaine`, facultative comme celles
+        // du Plan. Sans elle, il n'y a pas de domaine à proposer et le groupe de filtre disparaît.
         function domainesConnus() {
             const vus = [];
-            for (const m of team) if (m.role && !vus.includes(m.role)) vus.push(m.role);
+            for (const m of team) if (m.Domaine && !vus.includes(m.Domaine)) vus.push(m.Domaine);
             return vus.sort();
         }
         // Les domaines sont désignés par leur rang, pour n'avoir rien à échapper dans un attribut onclick.
@@ -2188,23 +2189,44 @@
             return true;
         }
 
-        const personnesDeLigne = (t) => (t && t.Responsable ? [t.Responsable] : []).concat(getAssigneesArray(t));
+        // Les colonnes qui désignent une personne ne sont pas connues d'avance : la structure appartient au
+        // métier, qui pose les siennes (sponsor, contributeurs clés). On les reconnaît à leur type, comme le
+        // rattachement au chantier, plutôt que d'en figer la liste.
+        function colonnesVersTeam(tableId) {
+            const t = schemaMeta && (schemaMeta.tables || []).find(x => x.tableId === tableId);
+            if (!t) return [];
+            return (schemaMeta.cols || [])
+                .filter(c => c.parentId === t.id && (c.type === 'Ref:Team' || c.type === 'RefList:Team'))
+                .map(c => c.colId);
+        }
+        function personnesDe(rec, tableId) {
+            const ids = [];
+            if (!rec) return ids;
+            for (const col of colonnesVersTeam(tableId)) {
+                const v = rec[col];
+                if (Array.isArray(v)) ids.push(...getRefListArray(v));
+                else if (v) ids.push(v);
+            }
+            return ids;
+        }
+        // Une ligne chantier a été remise à plat par chantierEnLigne : ses colonnes de personnes y sont
+        // arrivées sous les noms du volet.
+        const personnesDeChantier = (c) => (c && c.Responsable ? [c.Responsable] : []).concat(getAssigneesArray(c));
 
-        // Une ligne appartient à tous les domaines qui la touchent : les siens, ceux de son chantier, celui
-        // du responsable de son projet. Un directeur de domaine veut voir ce qui occupe son équipe, pas
-        // seulement ce qu'elle pilote.
+        // Une ligne appartient à tous les domaines qui la touchent : les siens, ceux de son chantier, ceux
+        // de son projet. Un directeur de domaine veut voir ce qui occupe son équipe, pas seulement ce
+        // qu'elle pilote.
         function domainesDeLigne(t) {
-            const ids = personnesDeLigne(t);
+            const ids = estChantier(t) ? personnesDeChantier(t) : personnesDe(t, 'Tasks');
             if (!estChantier(t) && t.chantier) {
                 const c = tasks.find(x => estChantier(x) && x.idChantier === t.chantier);
-                if (c) ids.push(...personnesDeLigne(c));
+                if (c) ids.push(...personnesDeChantier(c));
             }
-            const projet = projects.find(p => p.id === t.projet);
-            if (projet && projet.responsable) ids.push(projet.responsable);
+            ids.push(...personnesDe(projects.find(p => p.id === t.projet), 'Projects'));
             const domaines = [];
             for (const id of ids) {
                 const m = team.find(x => x.id === id);
-                if (m && m.role && !domaines.includes(m.role)) domaines.push(m.role);
+                if (m && m.Domaine && !domaines.includes(m.Domaine)) domaines.push(m.Domaine);
             }
             return domaines;
         }
