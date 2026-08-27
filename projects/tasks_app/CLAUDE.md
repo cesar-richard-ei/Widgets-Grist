@@ -748,8 +748,15 @@ typé, donc les laisser ouvrirait une écriture sans destination.
 
 `donneesChantier()` prépare les données du volet : les dates absentes sont préremplies depuis les
 tâches tout en restant modifiables, les assignés et les charges sont des **remontées** des tâches.
-`saveChantierToGrist()` écrit dans `Chantiers` (`Nom_du_chantier`, `Description`, `Date_debut`,
-`Date_fin`), en retranchant `ID_CHANTIER` de l'identifiant affiché.
+`saveChantierToGrist()` écrit dans `Chantiers` (`Nom_du_chantier`, `Description` et les deux dates),
+en retranchant `ID_CHANTIER` de l'identifiant affiché.
+
+Les **dates d'un chantier** ne portent pas le même nom partout : le document du métier les appelle
+`Debut` et `Fin`, le modèle de référence `Date_debut` et `Date_fin`. `colonneDateChantier()` retient
+la première qui existe et qui est bien de type `Date`, comme `colonneChantier()` le fait pour le
+rattachement. Écrire un nom en dur revenait à faire élaguer les deux colonnes par
+`pruneChantierRecord()` : aucune date de chantier ne partait en base, et la lecture retombait sur les
+bornes des tâches, ce qui masquait la panne à l'affichage.
 
 > `Chantiers.Contributeurs` n'est pas écrite. La colonne est stockée, mais le volet n'affiche que la
 > remontée des tâches : l'écrire remplaçait la saisie faite dans Grist à chaque enregistrement, et la

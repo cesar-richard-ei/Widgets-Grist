@@ -227,6 +227,16 @@ function typeColonne(tableId, colId) {
     return c ? c.type : null;
 }
 
+// Les dates d'un chantier ne portent pas le même nom partout : le document du métier les appelle
+// Debut et Fin. On retient la première qui existe et qui est bien une date, sans quoi
+// pruneChantierRecord les élague et aucune date de chantier ne part en base.
+const NOMS_DATE_CHANTIER = { debut: ['Date_debut', 'Debut'], fin: ['Date_fin', 'Fin'] };
+function colonneDateChantier(borne) {
+    const noms = NOMS_DATE_CHANTIER[borne];
+    if (!schemaMeta) return noms[0];
+    return noms.find(n => typeColonne('Chantiers', n) === 'Date') || noms[0];
+}
+
 // Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents où
 // parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est parentTask qui
 // le porte : on se fie au type déclaré, jamais à la valeur.
@@ -275,7 +285,7 @@ function chantierEnLigne(c) {
     return {
         id: ID_CHANTIER + c.id, idChantier: c.id, estChantier: true,
         titre: c.Nom_du_chantier || '', description: c.Description || '',
-        dateDebut: c.Date_debut || null, dateEcheance: c.Date_fin || null,
+        dateDebut: c[colonneDateChantier('debut')] || null, dateEcheance: c[colonneDateChantier('fin')] || null,
         projet: projets.length ? projets[0] : 0,
         assignees: c.Contributeurs || null, Responsable: c.Responsable || null,
         type: 'tache', statut: '', priorite: null, parentTask: null
@@ -1687,9 +1697,10 @@ async function createChantier() {
     }
     const record = {
         Nom_du_chantier: data.titre, Description: data.description || '',
-        Date_debut: data.dateDebut || null, Date_fin: data.dateEcheance || null,
         Projets: toGristRefList(data.projet ? [data.projet] : [])
     };
+    record[colonneDateChantier('debut')] = data.dateDebut || null;
+    record[colonneDateChantier('fin')] = data.dateEcheance || null;
     try {
         await grist.docApi.applyUserActions([['AddRecord', 'Chantiers', null, pruneChantierRecord(record)]]);
         closePanel();
@@ -2411,17 +2422,19 @@ async function saveTaskToGrist() {
 async function saveChantierToGrist(data) {
     const idChantier = panelState.taskId - ID_CHANTIER;
     if (idChantier <= 0) return;
-    const record = pruneChantierRecord({
-        Nom_du_chantier: data.titre, Description: data.description,
-        Date_debut: data.dateDebut || null, Date_fin: data.dateEcheance || null
-    });
+    const colDebut = colonneDateChantier('debut');
+    const colFin = colonneDateChantier('fin');
+    const brut = { Nom_du_chantier: data.titre, Description: data.description };
+    brut[colDebut] = data.dateDebut || null;
+    brut[colFin] = data.dateEcheance || null;
+    const record = pruneChantierRecord(brut);
     // La ligne locale ne reprend que ce qui est réellement parti : une colonne élaguée n'a pas été
     // enregistrée, l'afficher comme telle ferait mentir le graphique jusqu'au rechargement.
     const local = {};
     if ('Nom_du_chantier' in record) local.titre = record.Nom_du_chantier;
     if ('Description' in record) local.description = record.Description;
-    if ('Date_debut' in record) local.dateDebut = record.Date_debut;
-    if ('Date_fin' in record) local.dateEcheance = record.Date_fin;
+    if (colDebut in record) local.dateDebut = record[colDebut];
+    if (colFin in record) local.dateEcheance = record[colFin];
     try {
         await grist.docApi.applyUserActions([['UpdateRecord', 'Chantiers', idChantier, record]]);
         showSaveIndicator();

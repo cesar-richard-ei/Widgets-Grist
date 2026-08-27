@@ -127,6 +127,17 @@ function sansColonne(doc, colonne) {
     return copie;
 }
 
+/** Renomme une colonne et la valeur qu'elle porte : le nom appartient à qui tient la structure. */
+function renommerColonne(doc, table, avant, apres) {
+    const copie = clone(doc);
+    copie[table].columns[apres] = copie[table].columns[avant];
+    delete copie[table].columns[avant];
+    copie[table].records.forEach((r) => {
+        if (avant in r) { r[apres] = r[avant]; delete r[avant]; }
+    });
+    return copie;
+}
+
 /**
  * Passe une colonne en calculée : elle reste lisible et refuse l'écriture, comme dans Grist. Le
  * métier remonte volontiers en formule une colonne qu'il veut déduire, et le widget doit continuer
@@ -260,6 +271,6 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
-    documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee, avecLiens,
+    documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee, renommerColonne, avecLiens,
     ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste
 };
