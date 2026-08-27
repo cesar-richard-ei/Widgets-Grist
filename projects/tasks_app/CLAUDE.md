@@ -223,7 +223,7 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 - Vue par défaut Semestre (en mémoire, non persistée entre sessions)
 - Texte hors bande pour barres étroites
 - Tooltip configurable au survol (`TOOLTIP_FIELDS`)
-- Filtre assigné + projet + priorité + domaine. Le **domaine** d'une personne est son équipe (`Team.role`) : une ligne est retenue dès qu'une personne du domaine la touche, par elle-même, par son chantier ou par le responsable de son projet. Le groupe disparaît du menu si aucun membre ne porte de rôle
+- Filtre assigné + projet + priorité + domaine. Le **domaine** d'une personne est son équipe (`Team.Domaine`, colonne facultative que le widget ne crée pas ; `Team.role` est un libellé d'affichage, vide sur le document du métier) : une ligne est retenue dès qu'une personne du domaine la touche, par elle-même, par son chantier ou par le responsable de son projet. Le groupe disparaît du menu si aucun membre ne porte de domaine
 - Sous-tâches dans panel — **FUT-01**
 - Bouton discret « replier toutes les tâches » dans l'en-tête de la colonne (fermeture seule, visible seulement quand une branche est dépliée)
 - Duplication depuis le volet : reprend les champs et le rattachement, la copie s'ouvre pour être renommée. Les sous-tâches ne suivent pas, dupliquer une branche entière n'a pas été demandé. Absent sur un chantier

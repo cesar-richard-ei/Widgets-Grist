@@ -37,10 +37,12 @@ const COLONNES_CHANTIERS = {
 };
 
 const EQUIPE = [
-    { id: 1, nom: 'Alice Martin', role: 'Produit', actif: true, couleur: COULEURS.bleu },
-    { id: 2, nom: 'Bruno Klein', role: 'Dev', actif: true, couleur: COULEURS.vert },
-    { id: 3, nom: 'Chloe Roux', role: 'Design', actif: true, couleur: COULEURS.ocre },
-    { id: 4, nom: 'David Sarr', role: 'Data', actif: true, couleur: COULEURS.rouge }
+    // Le rôle habille le nom dans le volet ; le domaine est l'équipe de rattachement, et les deux
+    // ne portent pas les mêmes valeurs.
+    { id: 1, nom: 'Alice Martin', role: 'Produit', Domaine: 'Pilotage', actif: true, couleur: COULEURS.bleu },
+    { id: 2, nom: 'Bruno Klein', role: 'Dev', Domaine: 'Socle technique', actif: true, couleur: COULEURS.vert },
+    { id: 3, nom: 'Chloe Roux', role: 'Design', Domaine: 'Expérience', actif: true, couleur: COULEURS.ocre },
+    { id: 4, nom: 'David Sarr', role: 'Data', Domaine: 'Données', actif: true, couleur: COULEURS.rouge }
 ];
 
 const PROJETS = [
@@ -71,7 +73,7 @@ function tableProjets() {
 }
 
 function tableEquipe() {
-    return { columns: { nom: { type: 'Text' }, email: { type: 'Text' }, avatar: { type: 'Text' }, role: { type: 'Choice' }, actif: { type: 'Bool' }, couleur: { type: 'Text' } }, records: clone(EQUIPE) };
+    return { columns: { nom: { type: 'Text' }, email: { type: 'Text' }, avatar: { type: 'Text' }, role: { type: 'Choice' }, actif: { type: 'Bool' }, couleur: { type: 'Text' }, Domaine: { type: 'Choice' } }, records: clone(EQUIPE) };
 }
 
 function tableCategories() {
