@@ -1768,9 +1768,17 @@ function adapterVoletChantier(racine) {
         if (bouton.textContent.trim() === '+ Sous-tâche') bouton.textContent = '+ Ajouter une tâche';
     }
 
-    // Assignés et charges sont des remontées des tâches : rien ne s'édite ici.
+    // Assignés et charges sont des remontées des tâches : rien ne s'édite ici. Sans la mention, un
+    // chantier dont les tâches n'ont personne montre un bloc vide qui passe pour une panne.
     const selecteur = racine.querySelector('#assigneesSelect');
-    if (selecteur) selecteur.remove();
+    if (selecteur) {
+        const valeur = selecteur.parentNode;
+        selecteur.remove();
+        const mention = document.createElement('div');
+        mention.className = 'prop-hint';
+        mention.textContent = 'Remontée automatique des contributeurs aux tâches';
+        valeur.appendChild(mention);
+    }
     racine.querySelectorAll('.asg-x').forEach(x => x.remove());
     racine.querySelectorAll('.charge-row input').forEach(i => { i.disabled = true; });
 }
@@ -2337,15 +2345,14 @@ async function saveTaskToGrist() {
 }
 
 // Enregistre un chantier dans sa propre table. L'identifiant affiché est décalé de ID_CHANTIER :
-// seul l'identifiant réel part dans l'écriture. Les contributeurs remontent des tâches, ils ne sont
-// écrits qu'ici, à l'enregistrement, et jamais au chargement du volet.
+// seul l'identifiant réel part dans l'écriture. Les contributeurs remontent des tâches et ne sont
+// pas écrits : le volet réécrirait la colonne avec la remontée à chaque enregistrement.
 async function saveChantierToGrist(data) {
     const idChantier = panelState.taskId - ID_CHANTIER;
     if (idChantier <= 0) return;
     const record = pruneChantierRecord({
         Nom_du_chantier: data.titre, Description: data.description,
-        Date_debut: data.dateDebut || null, Date_fin: data.dateEcheance || null,
-        Contributeurs: toGristRefList(data.assignees)
+        Date_debut: data.dateDebut || null, Date_fin: data.dateEcheance || null
     });
     // La ligne locale ne reprend que ce qui est réellement parti : une colonne élaguée n'a pas été
     // enregistrée, l'afficher comme telle ferait mentir le graphique jusqu'au rechargement.
