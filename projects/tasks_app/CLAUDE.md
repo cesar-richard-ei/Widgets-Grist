@@ -749,12 +749,13 @@ typé, donc les laisser ouvrirait une écriture sans destination.
 `donneesChantier()` prépare les données du volet : les dates absentes sont préremplies depuis les
 tâches tout en restant modifiables, les assignés et les charges sont des **remontées** des tâches.
 `saveChantierToGrist()` écrit dans `Chantiers` (`Nom_du_chantier`, `Description`, `Date_debut`,
-`Date_fin`, `Contributeurs`), en retranchant `ID_CHANTIER` de l'identifiant affiché.
+`Date_fin`), en retranchant `ID_CHANTIER` de l'identifiant affiché.
 
-> `Chantiers.Contributeurs` est une colonne **stockée** alors que le cadrage la décrit comme une
-> remontée. Elle n'est donc écrite qu'à l'enregistrement du volet, jamais au chargement, sinon toute
-> ouverture d'un chantier écraserait la saisie faite dans Grist. La passer en formule côté document
-> rendrait cette écriture inutile.
+> `Chantiers.Contributeurs` n'est pas écrite. La colonne est stockée, mais le volet n'affiche que la
+> remontée des tâches : l'écrire remplaçait la saisie faite dans Grist à chaque enregistrement, et la
+> vidait sur un chantier sans tâche. Le bloc porte la mention « Remontée automatique des contributeurs
+> aux tâches », arbitrage du 27/08/2026 : sans elle, un chantier dont les tâches n'ont personne montre
+> un bloc vide qui passe pour une panne.
 
 #### Création
 

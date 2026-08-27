@@ -174,3 +174,41 @@ for (const nomColonne of ['chantier', 'Chantiers']) {
         }, nomColonne)).toBe(1);
     });
 }
+
+test('le volet d un chantier annonce que ses contributeurs remontent des tâches', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await expect(volet(page).locator('.prop-hint')).toHaveText('Remontée automatique des contributeurs aux tâches');
+});
+
+test('le volet d une tâche ne porte pas cette mention', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    await expect(volet(page).locator('.prop-hint')).toHaveCount(0);
+});
+
+// Les contributeurs d'un chantier sont une remontée de ses tâches : les écrire réécrirait la colonne
+// à chaque enregistrement, et effacerait ce qui a été saisi dans Grist.
+test('enregistrer un chantier laisse ses contributeurs intacts', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Chantiers.records.find((c) => c.id === 2).Contributeurs = ['L', 1];
+    await D.ouvrirGantt(page, doc);
+    await D.ouvrirVolet(page, 'Guides utilisateurs');
+
+    await page.locator('#taskTitle').fill('Guides utilisateurs v2');
+    await page.locator('#taskTitle').blur();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Nom_du_chantier[c.id.indexOf(2)];
+    })).toBe('Guides utilisateurs v2');
+
+    const contributeurs = await page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Contributeurs[c.id.indexOf(2)];
+    });
+    expect(contributeurs).toEqual(['L', 1]);
+});
