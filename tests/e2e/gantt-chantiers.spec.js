@@ -212,3 +212,37 @@ test('enregistrer un chantier laisse ses contributeurs intacts', async ({ page }
     });
     expect(contributeurs).toEqual(['L', 1]);
 });
+
+// Le document du métier nomme les dates d'un chantier Debut et Fin. Le widget écrivait Date_debut et
+// Date_fin : pruneChantierRecord les élaguait, et aucune date de chantier ne partait en base.
+const datesRenommees = () => D.renommerColonne(
+    D.renommerColonne(D.documentCible(), 'Chantiers', 'Date_debut', 'Debut'),
+    'Chantiers', 'Date_fin', 'Fin');
+
+test('les dates d un chantier sont lues sous le nom que porte le document', async ({ page }) => {
+    const doc = datesRenommees();
+    const attendu = (ts) => new Date(ts * 1000).toISOString().slice(0, 10);
+    const chantier = doc.Chantiers.records.find((c) => c.id === 1);
+    await D.ouvrirGantt(page, doc);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    // Le volet préremplit depuis les tâches quand la date manque : c'est la valeur du chantier,
+    // distincte des bornes de ses tâches, qui dit que la colonne a bien été lue.
+    const dates = volet(page).locator('input[type="date"]');
+    await expect(dates.first()).toHaveValue(attendu(chantier.Debut));
+    await expect(dates.nth(1)).toHaveValue(attendu(chantier.Fin));
+});
+
+test('modifier les dates d un chantier les ecrit sous ce meme nom', async ({ page }) => {
+    await D.ouvrirGantt(page, datesRenommees());
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    const dates = volet(page).locator('input[type="date"]');
+    await dates.first().fill('2026-03-02');
+    await dates.first().blur();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Debut[c.id.indexOf(1)];
+    })).toBe(Math.floor(Date.UTC(2026, 2, 2) / 1000));
+});
