@@ -789,6 +789,15 @@ function typeColonne(tableId, colId) {
   const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.colId === colId);
   return c ? c.type : null;
 }
+// Grist refuse d'écrire dans une colonne calculée. Le document du métier déduit la capacité et les
+// indisponibilités : proposer la saisie n'a alors pas de sens, et l'écriture partait sans que son
+// refus ne se voie.
+function colonneEcrivable(tableId, colId) {
+  const t = schemaMeta && (schemaMeta.tables || []).find(x => x.tableId === tableId);
+  if (!t) return true;
+  const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.colId === colId);
+  return !c || !c.isFormula;
+}
 // Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents où
 // parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est parentTask qui
 // le porte : on se fie au type déclaré, jamais à la valeur, les identifiants des deux tables se
@@ -1415,7 +1424,9 @@ function openResource(key) {
   const rows = (S.dispos || []).filter(r => Number(r.membre) === m.id).slice().sort((a, b) => (a.dateDebut || 0) - (b.dateDebut || 0));
   document.getElementById('pTitle').textContent = m.nom;
   document.getElementById('pSub').textContent = 'Capacité & disponibilités';
-  let html = '<div class="rl">Capacité hebdomadaire</div><div class="capedit"><input type="number" min="0" step="1" value="' + capOf(m) + '" onchange="setCapacity(' + m.id + ',parseFloat(this.value)||0)"><span class="u">h / semaine</span></div>';
+  const capEditable = S.demo || colonneEcrivable('Team', 'capaciteHebdo');
+  let html = '<div class="rl">Capacité hebdomadaire</div><div class="capedit"><input type="number" min="0" step="1" value="' + capOf(m) + '"' + (capEditable ? ' onchange="setCapacity(' + m.id + ',parseFloat(this.value)||0)"' : ' disabled') + '><span class="u">h / semaine</span></div>';
+  if (!capEditable) html += '<div style="color:var(--text-muted);font-size:.78rem;margin-top:4px">Calculée sur ce document, elle se modifie dans Grist.</div>';
   html += '<div class="rl" style="margin-top:16px">Indisponibilités (congés, fériés, temps partiel)</div>';
   html += rows.length ? rows.map(r => { const dv = (r.dispo == null || r.dispo === '') ? 0 : Number(r.dispo); const tag = dv > 0 ? ' (' + Math.round(dv * 100) + '% dispo)' : ''; return '<div class="indispo"><span class="il">' + esc(r.type || 'Indispo') + tag + '</span><span class="id">' + esc(secToISO(r.dateDebut)) + ' → ' + esc(secToISO(r.dateFin)) + '</span><button class="ix" title="Retirer" onclick="removeIndispo(' + m.id + ',' + r.id + ')">×</button></div>'; }).join('') : '<div style="color:var(--text-muted);font-size:.8rem;margin:6px 0">Aucune indisponibilité.</div>';
   html += '<div class="indispo-add"><input type="text" id="indLabel" placeholder="Libellé (ex. Congés)"><div class="dd"><input type="date" id="indStart"><span>→</span><input type="date" id="indEnd"></div><div class="dd"><input type="number" id="indDispo" min="0" max="100" step="10" value="0" title="Disponibilité pendant la période (0 = absent, 50 = mi-temps)"><span class="u">% dispo</span></div><button class="btn" onclick="addIndispo(' + m.id + ')">+ Ajouter</button></div>';
@@ -1426,7 +1437,10 @@ function openResource(key) {
 async function setCapacity(memberId, val) {
   const m = teamById(memberId); if (!m) return;
   m.capaciteHebdo = val > 0 ? val : null;
-  if (!S.demo) { try { await grist.docApi.applyUserActions([['UpdateRecord', 'Team', memberId, { capaciteHebdo: m.capaciteHebdo }]]); } catch (e) {} }
+  if (!S.demo) {
+    try { await grist.docApi.applyUserActions([['UpdateRecord', 'Team', memberId, { capaciteHebdo: m.capaciteHebdo }]]); }
+    catch (e) { console.error('[plan] capacite refusee', e); toast('Capacité non enregistrée : ' + (e && e.message ? e.message : 'refus de Grist')); }
+  }
   render();
 }
 async function reloadDispos() {
