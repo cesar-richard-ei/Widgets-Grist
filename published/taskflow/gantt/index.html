@@ -1341,6 +1341,13 @@
             return vus.sort();
         }
         // Les domaines sont désignés par leur rang, pour n'avoir rien à échapper dans un attribut onclick.
+        // Un domaine n'a pas de couleur a lui : la table des effectifs ne porte que celle des personnes.
+        // On prend celle du premier membre qui le porte, l'ordre des effectifs faisant foi.
+        function couleurDeDomaine(d) {
+            const membre = team.find(m => m.Domaine === d);
+            return membre ? getTeamMemberColor(membre.id) : '#6366f1';
+        }
+
         function basculerDomaine(rang) {
             const d = domainesConnus()[rang];
             if (d) toggleFilter('domaine', d);
@@ -2199,10 +2206,10 @@
             const team2 = team.filter(m => m.actif !== false);
             const assHtml = team2.length ? team2.map(m => `<div class="filter-option" data-filtre="assignee" data-valeur="${m.id}" onclick="toggleFilter('assignee', ${m.id})"><input type="checkbox" ${filters.assignee.includes(m.id)?'checked':''}>${escapeHtml(m.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun membre</div>';
             const domaines = domainesConnus();
-            const domHtml = domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeHtml(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}>${escapeHtml(d)}</div>`).join('');
+            const domHtml = domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeHtml(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}><span class="dot" style="background:${couleurDeDomaine(d)}"></span>${escapeHtml(d)}</div>`).join('');
             const total = filters.project.length + filters.priority.length + filters.assignee.length + filters.domaine.length;
             const menu = document.getElementById('filterAllMenu');
-            if (menu) menu.innerHTML = grp('Projets', projHtml, true) + grp('Priorités', prioHtml) + grp('Assignés', assHtml) + (domaines.length ? grp('Domaines', domHtml) : '') + '<div class="fm-foot"><span class="fm-clear" onclick="clearAllGanttFilters()">Tout effacer</span></div>';
+            if (menu) menu.innerHTML = grp('Projets', projHtml, true) + (domaines.length ? grp('Domaines', domHtml) : '') + grp('Priorités', prioHtml) + grp('Assignés', assHtml) + '<div class="fm-foot"><span class="fm-clear" onclick="clearAllGanttFilters()">Tout effacer</span></div>';
             synchroniserCochesFiltres();
             updateFilterUI();
         }
