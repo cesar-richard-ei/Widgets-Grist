@@ -1816,15 +1816,31 @@
 
         // Une tâche appartient toujours à un chantier : le rattachement s'édite dans sa propre section, sur
         // un document qui porte la table. Le nom réel de la colonne est résolu à l'écriture.
-        function sectionChantier(data) {
+        function sectionChantier(data, recherche, sansResultat) {
             if (!colonneChantier()) return '';
             const chantiers = tasks.filter(estChantier);
             if (!chantiers.length) return '';
-            const options = chantiers.map(c => '<option value="' + c.idChantier + '"' + (data.chantier === c.idChantier ? ' selected' : '') + '>' + escapeHtml(c.titre || 'Sans titre') + '</option>').join('');
+            // Ordre alphabétique et champ de recherche, comme les autres sélecteurs du volet : la liste
+            // suivait l'ordre d'affichage du Gantt, où retrouver un chantier parmi des dizaines se fait à
+            // l'oeil.
+            const tries = chantiers.slice().sort((a, b) => (a.titre || '').localeCompare(b.titre || '', 'fr'));
+            const options = tries.map(c => '<div class="multi-select-option ' + (data.chantier === c.idChantier ? 'selected' : '') + '" onclick="choisirChantier(' + c.idChantier + ')">' + escapeHtml(c.titre || 'Sans titre') + '</div>').join('');
+            const courant = chantiers.find(c => c.idChantier === data.chantier);
+            const choisi = courant
+                ? '<span class="multi-select-chip">' + escapeHtml(courant.titre || 'Sans titre') + '<span class="remove" onclick="event.stopPropagation();choisirChantier(null)">×</span></span>'
+                : '';
             return '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Chantier</span></div>' +
-                '<div class="form-group"><select class="form-select" id="chantierSelect" onchange="updateField(\'chantier\', parseInt(this.value, 10) || null)">' +
-                    '<option value=""' + (data.chantier ? '' : ' selected') + '>Sans chantier</option>' + options +
-                '</select></div></div>';
+                '<div class="form-group">' + choisi +
+                '<div class="multi-select" id="chantierSelect"><button class="addbtn" onclick="toggleMultiSelect(\'chantierSelect\')"><span style="font-size:1rem;line-height:1">+</span> ' +
+                (courant ? 'Changer de chantier' : 'Choisir un chantier') + '</button>' +
+                '<div class="multi-select-dropdown">' + recherche + options + sansResultat + '</div></div>' +
+            '</div></div>';
+        }
+
+        function choisirChantier(id) {
+            updateField('chantier', id || null);
+            const menu = document.getElementById('chantierSelect');
+            if (menu) menu.classList.remove('open');
         }
 
         // Deux têtes par ligne, le responsable puis un contributeur, le reste de l'équipe passe dans le
@@ -3336,7 +3352,7 @@
                     '</div></div></div>'
                 ) +
 
-                (data.type !== 'jalon' && !chantier ? sectionChantier(data) : '') +
+                (data.type !== 'jalon' && !chantier ? sectionChantier(data, msSearch, msNoResult) : '') +
 
                 groupeDeProps(
                     (data.type !== 'reunion' && !chantier ?

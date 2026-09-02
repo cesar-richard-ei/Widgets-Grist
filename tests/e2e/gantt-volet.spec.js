@@ -100,17 +100,46 @@ test('le volet d un chantier ne montre que ce qui le concerne', async ({ page })
     await expect(page.locator('#chantierSelect')).toHaveCount(0);
 });
 
+const optionsChantier = (page) => page.locator('#chantierSelect .multi-select-option')
+    .evaluateAll((options) => options.filter((o) => o.style.display !== 'none').map((o) => o.textContent.trim()));
+
 test('le rattachement au chantier se change depuis la fiche', async ({ page }) => {
     await ouvrirTache(page);
 
-    await expect(page.locator('#chantierSelect')).toHaveValue('1');
-    expect((await page.locator('#chantierSelect option').allTextContents()).join(' ')).toContain('Guides utilisateurs');
+    await expect(page.locator('#chantierSelect').locator('..')).toContainText('Socle technique');
 
-    await page.locator('#chantierSelect').selectOption('2');
+    await page.locator('#chantierSelect .addbtn').click();
+    await page.locator('#chantierSelect .multi-select-option', { hasText: 'Guides utilisateurs' }).click();
 
     await expect.poll(() => D.champTache(page, 1, 'chantier')).toBe(2);
     await D.deplier(page, 'Guides utilisateurs', 'Cadrage des outils');
     await expect(D.ligne(page, 'Cadrage des outils')).toHaveAttribute('data-depth', '1');
+});
+
+// La liste suit l'ordre d'affichage du Gantt, qui n'a rien d'alphabetique : sur un document qui
+// porte des dizaines de chantiers, retrouver le bon a l'oeil devient long.
+test('les chantiers sont proposes en ordre alphabetique', async ({ page }) => {
+    await ouvrirTache(page);
+    await page.locator('#chantierSelect .addbtn').click();
+
+    expect(await optionsChantier(page)).toEqual(['Guides utilisateurs', 'Socle technique']);
+});
+
+test('la liste des chantiers se filtre au clavier', async ({ page }) => {
+    await ouvrirTache(page);
+    await page.locator('#chantierSelect .addbtn').click();
+
+    await page.locator('#chantierSelect .multi-select-search').fill('guide');
+
+    expect(await optionsChantier(page)).toEqual(['Guides utilisateurs']);
+});
+
+test('le rattachement se retire depuis la fiche', async ({ page }) => {
+    await ouvrirTache(page);
+
+    await page.locator('#chantierSelect').locator('..').locator('.multi-select-chip .remove').click();
+
+    await expect.poll(() => D.champTache(page, 1, 'chantier')).toBeFalsy();
 });
 
 test('le responsable se choisit, se remplace et se retire', async ({ page }) => {
