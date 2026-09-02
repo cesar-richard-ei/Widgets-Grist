@@ -1740,7 +1740,15 @@ if (window.self === window.top) {
       return;
     }
     grist.onRecords(() => loadGrist());
-    try { grist.onOptions((o) => { S.extFilters = (o && o.filters) || null; S.filtresIgnores = false; render(); }); } catch (e) { console.warn(LOG, 'filtres partages indisponibles :', (e && e.message) || e); }
+    // Grist rejoue les options de la section a l'ouverture : le premier appel n'est pas un filtre
+    // qu'on vient de poser, c'est ce que la section a garde d'une session passee. Le Gantt l'ignore
+    // deja pour la meme raison ; l'appliquer ici laissait un filtre fantome, invisible chez lui et
+    // impossible a retirer.
+    let sectionRejouee = false;
+    try { grist.onOptions((o) => {
+      if (!sectionRejouee) { sectionRejouee = true; return; }
+      S.extFilters = (o && o.filters) || null; S.filtresIgnores = false; render();
+    }); } catch (e) { console.warn(LOG, 'filtres partages indisponibles :', (e && e.message) || e); }
     loadGrist();
   })();
   // Filet : Grist n'a pas répondu au handshake (aperçu / hors-ligne). Des lectures lentes
