@@ -81,3 +81,14 @@ test('un filtre projet partage reste appliqué', async ({ page }) => {
 
     await expect(page.frameLocator('#f').locator('#gridwrap .empty')).toBeVisible();
 });
+
+// Un plan vide sans explication a coûté plusieurs allers-retours : il dit maintenant ce qu'il a lu.
+test('le plan vide dit ce qu il a lu', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Tasks.records.forEach((t) => { t.charges = ''; });
+    await ouvrirPlanAvecOptions(page, doc, {});
+
+    const vide = page.frameLocator('#f').locator('#gridwrap .empty');
+    await expect(vide).toContainText('tâches lues');
+    await expect(vide).toContainText('0 avec charge');
+});

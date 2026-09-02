@@ -1043,7 +1043,21 @@ function render() {
   if (!S.team.length) { wrap.innerHTML = '<div class="empty"><div class="ic">▦</div><div>Aucun membre dans la table Team</div></div>'; renderAlerts(matrix, []); return; }
   const hasData = Object.keys(matrix).length > 0;
   const undated = tasks.filter(t => effCharges(t).length && (t.dateDebut == null || t.dateEcheance == null)).length;
-  if (!hasData && !undated) { wrap.innerHTML = '<div class="empty"><div class="ic">▦</div><div>Aucune charge datée à planifier</div><div style="font-size:.78rem">Renseignez la charge par personne + des dates sur les tâches.</div></div>'; renderAlerts(matrix, periods); return; }
+  if (!hasData && !undated) {
+    // Dire ce qui a ete lu plutot qu'un message generique : sur le document du metier, un plan vide
+    // a coute plusieurs allers-retours faute de savoir a quelle etape les taches se perdaient.
+    const avecCharge = tasks.filter(t => effCharges(t).length).length;
+    const datees = tasks.filter(t => effCharges(t).length && t.dateDebut != null && t.dateEcheance != null).length;
+    const exclues = S.tasks.length - tasks.length;
+    const detail = esc(S.tasks.length + ' tâche' + (S.tasks.length > 1 ? 's' : '') + ' lue' + (S.tasks.length > 1 ? 's' : '')
+      + (exclues > 0 ? ', ' + exclues + ' écartée' + (exclues > 1 ? 's' : '') + ' (terminées ou filtrées)' : '')
+      + ', ' + avecCharge + ' avec charge, ' + datees + ' datée' + (datees > 1 ? 's' : ''));
+    console.warn(LOG, 'aucune charge exploitable —', detail);
+    wrap.innerHTML = '<div class="empty"><div class="ic">▦</div><div>Aucune charge datée à planifier</div>'
+      + '<div style="font-size:.78rem">Renseignez la charge par personne + des dates sur les tâches.</div>'
+      + '<div style="font-size:.72rem;opacity:.7;margin-top:6px">' + detail + '</div></div>';
+    renderAlerts(matrix, periods); return;
+  }
 
   const starts = periodStarts(TF.shiftPeriods(new Date(), S.granularity, S.offset), S.granularity, S.horizon);
   let h = '<table class="grid"><thead><tr><th class="colres">Ressource</th>';
