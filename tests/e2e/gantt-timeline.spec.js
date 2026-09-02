@@ -156,3 +156,32 @@ test('un jalon se déplace à la souris et garde une date unique', async ({ page
     await expect.poll(() => D.champTache(page, 4, 'dateDebut')).toBeGreaterThan(avant);
     expect(await D.champTache(page, 4, 'dateEcheance')).toBe(await D.champTache(page, 4, 'dateDebut'));
 });
+
+// Naviguer réarmait le calage sur aujourd'hui : la fenêtre glissait bien, puis le défilement
+// revenait se poser sur la sur-colonne du jour, et l'écran ne bougeait pas. Le besoin d'un
+// réalignement portait sur le changement de vue temporelle, pas sur les flèches.
+const jourAuBordGauche = (page) => page.evaluate(() => {
+    const sc = document.getElementById('timelineScroll');
+    const jours = sc.scrollLeft / effectivePxPerDay;
+    return Math.round((effectiveStart.getTime() + jours * 86400000) / 86400000);
+});
+
+test('les fleches deplacent ce que la timeline montre', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await choisirVue(page, 'semester');
+    const depart = await jourAuBordGauche(page);
+
+    await page.locator('.btn-nav').last().click();
+    await D.attendreRendu(page);
+
+    expect(await jourAuBordGauche(page)).toBeGreaterThan(depart + 20);
+});
+
+test('changer de vue temporelle recale sur le jour', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await choisirVue(page, 'year');
+
+    await choisirVue(page, 'semester');
+
+    await expect.poll(() => ecartAuCalage(page)).toBeCloseTo(0, 0);
+});
