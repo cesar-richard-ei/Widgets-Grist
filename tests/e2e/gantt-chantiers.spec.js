@@ -323,3 +323,41 @@ test('le tri par date reste celui des dates propres quand elles sont saisies', a
     const ordre = await racines(page);
     expect(ordre.indexOf('Socle technique')).toBeLessThan(ordre.indexOf('Guides utilisateurs'));
 });
+
+// La suppression visait toujours Tasks avec l'identifiant affiché : sur un chantier, celui-ci est
+// décalé de ID_CHANTIER et l'enregistrement vit dans sa propre table, donc rien n'était supprimé.
+const supprimer = async (page) => {
+    await volet(page).locator('.panel-btn.danger').click();
+    await volet(page).locator('.delete-confirm-btn.confirm').click();
+};
+
+const identifiants = (page, table) => page.evaluate(async (t) => (await window.grist.docApi.fetchTable(t)).id, table);
+
+test('supprimer un chantier depuis le volet le retire de sa table', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Guides utilisateurs');
+
+    await supprimer(page);
+
+    await expect.poll(() => identifiants(page, 'Chantiers')).toEqual([1]);
+});
+
+test('supprimer un chantier laisse ses tâches, détachées', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Guides utilisateurs');
+
+    await supprimer(page);
+
+    await expect.poll(() => identifiants(page, 'Tasks')).toContain(5);
+    expect(await D.champTache(page, 5, 'chantier') || 0).toBe(0);
+});
+
+test('supprimer une tâche depuis le volet la retire de Tasks', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Guides utilisateurs', 'Guide de prise en main');
+    await D.ouvrirVolet(page, 'Guide de prise en main');
+
+    await supprimer(page);
+
+    await expect.poll(() => identifiants(page, 'Tasks')).not.toContain(5);
+});

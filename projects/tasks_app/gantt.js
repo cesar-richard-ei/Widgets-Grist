@@ -1873,6 +1873,7 @@ function adapterVoletChantier(racine) {
 
     for (const bouton of racine.querySelectorAll('button')) {
         if (bouton.textContent.trim() === '+ Sous-tâche') bouton.textContent = '+ Ajouter une tâche';
+        if (bouton.textContent.trim() === 'Supprimer la tâche') bouton.textContent = 'Supprimer le chantier';
     }
 
     // Assignés et charges sont des remontées des tâches : rien ne s'édite ici. Sans la mention, un
@@ -2557,8 +2558,36 @@ async function createTask() {
     }
 }
 
+// Un chantier vit dans sa propre table, sous son identifiant réel : le volet en affiche un décalé
+// de ID_CHANTIER. Ses tâches lui survivent et perdent seulement leur rattachement.
+async function supprimerChantier() {
+    const idChantier = panelState.taskId - ID_CHANTIER;
+    if (idChantier <= 0) return;
+    const rattachees = tasks.filter(t => !estChantier(t) && t.chantier === idChantier);
+    if (!gristReady) {
+        for (const t of rattachees) { t.chantier = null; t.parentTask = null; }
+        tasks = tasks.filter(t => t.id !== panelState.taskId);
+        showToast('Chantier supprimé', 'success');
+        closePanel(); render();
+        return;
+    }
+    const detachements = rattachees
+        .map(t => ['UpdateRecord', 'Tasks', t.id, pruneTaskRecord({ chantier: null })])
+        .filter(a => Object.keys(a[3]).length);
+    try {
+        await grist.docApi.applyUserActions(detachements.concat([['RemoveRecord', 'Chantiers', idChantier]]));
+        showToast('Chantier supprimé', 'success');
+        closePanel();
+        await loadAllData();
+    } catch (e) {
+        console.error('Suppression du chantier refusée', e);
+        showToast('Erreur suppression : ' + messageErreur(e), 'error');
+    }
+}
+
 async function confirmDelete() {
     if (panelState.isNew || !panelState.taskId) return;
+    if (panelState.estChantier) { await supprimerChantier(); return; }
 
     // WBS-05: si la tâche a des descendants, demander cascade ou détachement
     const descendants = getAllDescendants(panelState.taskId);
