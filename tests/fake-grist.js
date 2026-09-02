@@ -233,7 +233,7 @@ function createFakeGrist(documentInitial, options) {
     }
 
     const abonnes = { records: [], record: [], options: [] };
-    let optionsWidget = {};
+    let optionsWidget = Object.assign({}, config.options || {});
 
     async function emettreRecords() {
         if (!doc[tableLiee] || !abonnes.records.length) return;  // sans abonne, rien a emettre (evite un fetchTable fantome)
@@ -248,7 +248,13 @@ function createFakeGrist(documentInitial, options) {
 
     function onRecords(cb) { abonnes.records.push(cb); }
     function onRecord(cb) { abonnes.record.push(cb); }
-    function onOptions(cb) { abonnes.options.push(cb); }
+    // Grist rejoue les options de la section a l'abonnement : c'est ce que le Gantt neutralise avec
+    // son garde « premier onOptions ». Sans ce rejeu, un widget qui lit des filtres partages n'etait
+    // jamais exerce sur ce chemin.
+    function onOptions(cb) {
+        abonnes.options.push(cb);
+        if (Object.keys(optionsWidget).length) setTimeout(() => cb(optionsWidget, { source: 'section' }), 0);
+    }
 
     // Divergence potentielle avec grist.numerique.gouv.fr : la forme exacte de ce second
     // argument n'a pas ete verifiee sur le produit reel. Elle est deduite de la lecture du
