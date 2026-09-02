@@ -41,7 +41,7 @@ const EQUIPE = [
     // ne portent pas les mêmes valeurs.
     { id: 1, nom: 'Alice Martin', role: 'Produit', Domaine: 'Pilotage', actif: true, couleur: COULEURS.bleu },
     { id: 2, nom: 'Bruno Klein', role: 'Dev', Domaine: 'Socle technique', actif: true, couleur: COULEURS.vert },
-    { id: 3, nom: 'Chloe Roux', role: 'Design', Domaine: 'Expérience', actif: true, couleur: COULEURS.ocre },
+    { id: 3, nom: 'Chloé Roux', role: 'Design', Domaine: 'Expérience', actif: true, couleur: COULEURS.ocre },
     { id: 4, nom: 'David Sarr', role: 'Data', Domaine: 'Données', actif: true, couleur: COULEURS.rouge }
 ];
 

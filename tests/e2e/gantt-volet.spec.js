@@ -136,3 +136,26 @@ test('sans colonne Responsable, sa ligne disparaît du volet', async ({ page }) 
 
     await expect(page.locator('#panel .prop-label', { hasText: 'Responsable' })).toHaveCount(0);
 });
+
+// Le champ de recherche des sélecteurs comparait les libellés tels quels : « Chloé » ne sortait
+// qu'en tapant l'accent, que le clavier de la personne le donne facilement ou non.
+const optionsVisibles = (page, selecteur) => page.locator('#' + selecteur + ' .multi-select-option')
+    .evaluateAll((options) => options.filter((o) => o.style.display !== 'none').map((o) => o.textContent.trim()));
+
+test('la recherche dans une liste ignore les accents', async ({ page }) => {
+    await ouvrirTache(page);
+    await page.locator('#responsableSelect .addbtn').click();
+
+    await page.locator('#responsableSelect .multi-select-search').fill('chloe');
+
+    expect(await optionsVisibles(page, 'responsableSelect')).toEqual(['Chloé Roux']);
+});
+
+test('la recherche accentuée trouve toujours', async ({ page }) => {
+    await ouvrirTache(page);
+    await page.locator('#responsableSelect .addbtn').click();
+
+    await page.locator('#responsableSelect .multi-select-search').fill('chloé');
+
+    expect(await optionsVisibles(page, 'responsableSelect')).toEqual(['Chloé Roux']);
+});
