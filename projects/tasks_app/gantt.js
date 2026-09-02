@@ -1058,6 +1058,25 @@ function libelleDeMois(mois, largeur) {
     return largeur >= complet.length * 7 + 12 ? complet : MONTHS_SHORT[mois];
 }
 
+// Abscisse du début de la sur-colonne d'en-tête qui contient aujourd'hui. Elle ne suit le
+// calendrier qu'en vues Semaine, Mois et Année ; en Trimestre et Semestre l'en-tête regroupe des
+// blocs de sept jours comptés depuis le début de la plage et rattache chaque bloc au mois de son
+// premier jour. Viser le 1er du mois y calait au milieu d'une sur-colonne dès que ce jour-là
+// tombait en cours de semaine.
+function debutSurColonneDuJour(start, todayOffset, pxPerDay) {
+    const today = addDays(start, todayOffset);
+    const unit = VIEW_CONFIG[currentView].unit;
+    if (unit === 'month') return getDaysDiff(start, new Date(today.getFullYear(), 0, 1)) * pxPerDay;
+    if (unit !== 'week') return getDaysDiff(start, new Date(today.getFullYear(), today.getMonth(), 1)) * pxPerDay;
+    // L'en-tête empile une cellule de largeur fixe par bloc : compter en jours dérive de sa
+    // position, la plage ne comptant pas un nombre entier de semaines.
+    const moisDuBloc = (i) => { const d = addDays(start, i * 7); return d.getFullYear() * 100 + d.getMonth(); };
+    let bloc = Math.floor(todayOffset / 7);
+    const mois = moisDuBloc(bloc);
+    while (bloc > 0 && moisDuBloc(bloc - 1) === mois) bloc--;
+    return bloc * effectiveCellWidth;
+}
+
 function renderTimelineHeader() {
     const start = effectiveStart;
     const totalDays = effectiveDays;
@@ -1313,11 +1332,8 @@ function renderTimeline() {
         if (!ganttNowAligned) {
             const sc = document.getElementById('timelineScroll');
             if (sc && sc.scrollWidth > sc.clientWidth) {
-                const colStart = VIEW_CONFIG[currentView].unit === 'month'
-                    ? new Date(today.getFullYear(), 0, 1)
-                    : new Date(today.getFullYear(), today.getMonth(), 1);
                 sc.scrollLeft = TF.computeTodayScroll({
-                    colPx: getDaysDiff(start, colStart) * pxPerDay,
+                    colPx: debutSurColonneDuJour(start, todayOffset, pxPerDay),
                     todayPx: todayOffset * pxPerDay,
                     visibleWidth: sc.clientWidth
                 });
