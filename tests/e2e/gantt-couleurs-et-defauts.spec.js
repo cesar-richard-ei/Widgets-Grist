@@ -21,7 +21,7 @@ const fondDeLaBarre = (page, titre) => page.evaluate((t) => {
 test('à l ouverture : tri par date, vue semestre, couleur par responsable', async ({ page }) => {
     await D.ouvrirGantt(page);
 
-    await expect(page.locator('#sortSelect')).toHaveValue('date');
+    expect(await D.triCourant(page)).toBe('date');
     await expect(page.locator('.view-controls .btn.active')).toHaveAttribute('data-view', 'semester');
     await expect(page.locator('#colorSelect')).toHaveValue('responsable');
     expect(await page.locator('#colorSelect option').first().getAttribute('value')).toBe('responsable');
@@ -33,17 +33,17 @@ test('les réglages d affichage ne survivent pas au rechargement', async ({ page
         reglages: { taskflow_gantt_colormode: 'status', taskflow_gantt_sort: 'priority', taskflow_gantt_view: 'week' }
     });
 
-    await expect(page.locator('#sortSelect')).toHaveValue('date');
+    expect(await D.triCourant(page)).toBe('date');
     await expect(page.locator('#colorSelect')).toHaveValue('responsable');
     await expect(page.locator('.view-controls .btn.active')).toHaveAttribute('data-view', 'semester');
 
-    await page.selectOption('#sortSelect', 'priority');
-    await expect(page.locator('#sortSelect')).toHaveValue('priority');
+    await D.trier(page, 'priority');
+    expect(await D.triCourant(page)).toBe('priority');
 
     await page.reload();
     await page.waitForSelector('#taskList .task-row');
 
-    await expect(page.locator('#sortSelect')).toHaveValue('date');
+    expect(await D.triCourant(page)).toBe('date');
 });
 
 test('sans colonne Responsable, le mode par projet reprend la main', async ({ page }) => {

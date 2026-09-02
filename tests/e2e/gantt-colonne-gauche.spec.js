@@ -123,7 +123,7 @@ test('la poignée de glisser ne paraît qu en tri manuel', async ({ page }) => {
 
     await expect(page.locator('#taskList .drag-handle')).toHaveCount(0);
 
-    await page.selectOption('#sortSelect', 'manual');
+    await D.trier(page, 'manual');
 
     await expect(page.locator('#taskList .drag-handle').first()).toBeVisible();
 });

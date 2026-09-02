@@ -254,6 +254,15 @@ async function ouvrirVolet(page, titre) {
  */
 const attendreRendu = (page) => page.waitForFunction(() => !gesteSourisEnCours && !renduEnAttente);
 
+/** Change le tri : le mode existe toujours, la barre d'outils ne l'expose plus. */
+const trier = async (page, mode) => {
+    await page.evaluate((m) => changeSortMode(m), mode);
+    await attendreRendu(page);
+};
+
+/** Mode de tri courant, lu dans le widget. */
+const triCourant = (page) => page.evaluate(() => sortMode);
+
 /** Valeur d'une colonne de Tasks pour un enregistrement, lue dans le document. */
 const champTache = (page, id, colonne) => page.evaluate(({ id, colonne }) => {
     return window.grist.docApi.fetchTable('Tasks').then((t) => t[colonne][t.id.indexOf(id)]);
@@ -273,5 +282,6 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
     documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee, renommerColonne, avecLiens,
-    ouvrir, ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste
+    ouvrir, ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste,
+    trier, triCourant
 };

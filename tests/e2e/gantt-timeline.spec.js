@@ -6,7 +6,7 @@ const D = require('./documents.js');
 // La timeline : où elle se cale à l'ouverture, jusqu'où elle laisse remonter, comment elle libelle
 // ses mois, et le déplacement d'un jalon à la souris.
 
-const VUES = ['week', 'month', 'quarter', 'semester', 'year'];
+const VUES = ['month', 'quarter', 'semester', 'year'];
 
 async function choisirVue(page, vue) {
     await page.locator('.view-controls .btn[data-view="' + vue + '"]').click();
