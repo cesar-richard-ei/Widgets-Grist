@@ -2156,17 +2156,20 @@
         }
         function toggleFilterMenu(id) { const m = document.querySelector('#' + id + ' .filter-menu'); const open = m.classList.contains('open'); document.querySelectorAll('.filter-menu').forEach(x => x.classList.remove('open')); if (!open) m.classList.add('open'); }
         // GEN-02: Gestion des filtres avec arrays et synchronisation
+        // Le menu est redessine a chaque bascule : l'etat des cases venait sinon du seul clic natif sur la
+        // case, et cliquer le libelle posait le filtre sans cocher.
         function toggleFilter(key, val) { 
             const arr = filters[key]; 
             const idx = arr.indexOf(val);
             if (idx === -1) arr.push(val);
             else arr.splice(idx, 1);
+            synchroniserCochesFiltres();
             updateFilterUI();
             broadcastFilters();
             persistFilters();
             render();
         }
-        function clearFilter(key) { filters[key] = []; updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
+        function clearFilter(key) { filters[key] = []; synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
         function broadcastFilters() {
             if (gristReady && typeof grist !== 'undefined' && grist.setOption) {
                 try { grist.setOption('filters', { project: filters.project, priority: filters.priority, assignee: filters.assignee, domaine: filters.domaine }); } 
@@ -2175,17 +2178,34 @@
         }
         function updateFilterMenus() {
             const grp = (label, html, first) => '<div class="fm-group-label'+(first?' first':'')+'">'+label+'</div>'+html;
-            const projHtml = projects.length ? projects.map(p => `<div class="filter-option" onclick="toggleFilter('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span class="dot" style="background:${p.couleur||'#6366f1'}"></span>${escapeHtml(p.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun projet</div>';
-            const prioHtml = [1,2,3,4].map(p => `<div class="filter-option" onclick="toggleFilter('priority', ${p})"><input type="checkbox" ${filters.priority.includes(p)?'checked':''}><span class="dot" style="background:${PRIORITY_COLORS[p]}"></span>${PRIORITY_LABELS[p]}</div>`).join('');
+            const projHtml = projects.length ? projects.map(p => `<div class="filter-option" data-filtre="project" data-valeur="${p.id}" onclick="toggleFilter('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span class="dot" style="background:${p.couleur||'#6366f1'}"></span>${escapeHtml(p.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun projet</div>';
+            const prioHtml = [1,2,3,4].map(p => `<div class="filter-option" data-filtre="priority" data-valeur="${p}" onclick="toggleFilter('priority', ${p})"><input type="checkbox" ${filters.priority.includes(p)?'checked':''}><span class="dot" style="background:${PRIORITY_COLORS[p]}"></span>${PRIORITY_LABELS[p]}</div>`).join('');
             const team2 = team.filter(m => m.actif !== false);
-            const assHtml = team2.length ? team2.map(m => `<div class="filter-option" onclick="toggleFilter('assignee', ${m.id})"><input type="checkbox" ${filters.assignee.includes(m.id)?'checked':''}>${escapeHtml(m.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun membre</div>';
+            const assHtml = team2.length ? team2.map(m => `<div class="filter-option" data-filtre="assignee" data-valeur="${m.id}" onclick="toggleFilter('assignee', ${m.id})"><input type="checkbox" ${filters.assignee.includes(m.id)?'checked':''}>${escapeHtml(m.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun membre</div>';
             const domaines = domainesConnus();
-            const domHtml = domaines.map((d, rang) => `<div class="filter-option" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}>${escapeHtml(d)}</div>`).join('');
+            const domHtml = domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeHtml(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}>${escapeHtml(d)}</div>`).join('');
             const total = filters.project.length + filters.priority.length + filters.assignee.length + filters.domaine.length;
             const menu = document.getElementById('filterAllMenu');
-            if (menu) menu.innerHTML = grp('Projets', projHtml, true) + grp('Priorités', prioHtml) + grp('Assignés', assHtml) + (domaines.length ? grp('Domaines', domHtml) : '') + (total ? '<div class="fm-foot"><span class="fm-clear" onclick="clearAllGanttFilters()">Tout effacer</span></div>' : '');
+            if (menu) menu.innerHTML = grp('Projets', projHtml, true) + grp('Priorités', prioHtml) + grp('Assignés', assHtml) + (domaines.length ? grp('Domaines', domHtml) : '') + '<div class="fm-foot"><span class="fm-clear" onclick="clearAllGanttFilters()">Tout effacer</span></div>';
+            synchroniserCochesFiltres();
             updateFilterUI();
         }
+
+        // Reconstruire le menu pendant la propagation du clic detache l'element vise, et le listener qui
+        // ferme les menus ne le retrouve plus dans un .filter-dropdown : il referme tout. On remet donc
+        // seulement les cases et le pied en phase avec les filtres.
+        function synchroniserCochesFiltres() {
+            document.querySelectorAll('#filterAllMenu .filter-option[data-filtre]').forEach(opt => {
+                const cle = opt.dataset.filtre;
+                const valeur = cle === 'domaine' ? opt.dataset.valeur : Number(opt.dataset.valeur);
+                const coche = opt.querySelector('input[type="checkbox"]');
+                if (coche) coche.checked = filters[cle].includes(valeur);
+            });
+            const pied = document.querySelector('#filterAllMenu .fm-foot');
+            const actifs = filters.project.length + filters.priority.length + filters.assignee.length + filters.domaine.length;
+            if (pied) pied.style.display = actifs ? '' : 'none';
+        }
+
         function updateFilterUI() {
             const eff = effectiveFilters();
             const total = eff.project.length + eff.priority.length + eff.assignee.length + eff.domaine.length;
@@ -2285,7 +2305,7 @@
             ov.innerHTML = '<div class="tf-gskel">'+rows+'</div>';
             ov.style.display = "flex";
         }
-        function clearAllGanttFilters() { filters = { project: [], assignee: [], priority: [], domaine: [] }; updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
+        function clearAllGanttFilters() { filters = { project: [], assignee: [], priority: [], domaine: [] }; synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
         function updateGanttOverlay() {
             const ov = document.getElementById("ganttOverlay"); if (!ov) return;
             if (currentVisible && currentVisible.length > 0) { ov.style.display = "none"; ov.innerHTML = ""; return; }
