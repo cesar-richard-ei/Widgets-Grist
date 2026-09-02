@@ -1023,7 +1023,18 @@ function personnesDe(rec, tableId) {
 }
 // Une ligne chantier a été remise à plat par chantierEnLigne : ses colonnes de personnes y sont
 // arrivées sous les noms du volet.
-const personnesDeChantier = (c) => (c && c.Responsable ? [c.Responsable] : []).concat(getAssigneesArray(c));
+// Un chantier ne tient pas sa propre liste de contributeurs : elle remonte de ses tâches, comme
+// dans son volet. La colonne Chantiers.Contributeurs existe dans la structure du document, mais le
+// widget ne l'écrit pas, et la lire ici montrait des pastilles en face d'un volet vide.
+function personnesDeChantier(c) {
+    if (!c) return [];
+    const ids = c.Responsable ? [c.Responsable] : [];
+    for (const t of getAllDescendants(c.id)) {
+        if (estChantier(t)) continue;
+        for (const id of getAssigneesArray(t)) if (!ids.includes(id)) ids.push(id);
+    }
+    return ids;
+}
 
 // Une ligne appartient à tous les domaines qui la touchent : les siens, ceux de son chantier, ceux
 // de son projet. Un directeur de domaine veut voir ce qui occupe son équipe, pas seulement ce
@@ -1034,7 +1045,6 @@ function domainesDeLigne(t) {
         const c = tasks.find(x => estChantier(x) && x.idChantier === t.chantier);
         if (c) ids.push(...personnesDeChantier(c));
     }
-    ids.push(...personnesDe(projects.find(p => p.id === t.projet), 'Projects'));
     const domaines = [];
     for (const id of ids) {
         const m = team.find(x => x.id === id);
@@ -1240,7 +1250,7 @@ function renderTaskList() {
         const jalon = isJalon(t);
         const progress = isParent ? aggregateProgress(t) : (t.progression || 0);
         const selected = t.id === selectedTaskId;
-        const assignees = getAssigneesArray(t);
+        const assignees = estChantier(t) ? personnesDeChantier(t).filter(id => id !== t.Responsable) : getAssigneesArray(t);
         const avatarsHtml = pastillesDeLigne(t, assignees);
         const subs = getSubtasks(t);
         const subsDone = subs.filter(s => s.done).length;

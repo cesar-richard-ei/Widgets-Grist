@@ -35,27 +35,18 @@ test('une ligne sans personne est retenue par le responsable de son chantier', a
     await expect(D.ligne(page, 'Recette')).toBeVisible();
 });
 
-test('une ligne sans chantier est retenue par le responsable de son projet', async ({ page }) => {
-    await D.ouvrirGantt(page, D.documentSansChantiers());
-    await D.toutDeplier(page);
-    await filtrer(page, 'Expérience');
-
-    // Chloé pilote « Datalab », qui porte « Guide de prise en main ».
-    await expect(D.ligne(page, 'Guide de prise en main')).toBeVisible();
-});
-
-// Le métier pose ses propres colonnes de personnes sur un projet, un sponsor par exemple. Elles se
-// reconnaissent à leur type, la liste n'en est pas figée dans le widget.
-test('une colonne de personnes ajoutee sur un projet compte aussi', async ({ page }) => {
-    const doc = D.documentSansChantiers();
-    doc.Projects.columns.Sponsor = { type: 'RefList:Team' };
-    doc.Projects.records.find((p) => p.id === 1).Sponsor = ['L', 4];
+// Le métier pose ses propres colonnes de personnes, un sponsor par exemple. Elles se reconnaissent
+// à leur type, la liste n'en est pas figée dans le widget.
+test('une colonne de personnes ajoutee sur un chantier compte aussi', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Chantiers.columns.Sponsor = { type: 'RefList:Team' };
+    doc.Chantiers.records.find((c) => c.id === 1).Sponsor = ['L', 4];
     await D.ouvrirGantt(page, doc);
     await D.toutDeplier(page);
     await filtrer(page, 'Données');
 
-    // « Recette » ne tient au domaine que par le sponsor de son projet.
-    await expect(D.ligne(page, 'Recette')).toBeVisible();
+    // « Cadrage des outils » ne tient au domaine que par le sponsor de son chantier.
+    await expect(D.ligne(page, 'Cadrage des outils')).toBeVisible();
 });
 
 test('le filtre par domaine s efface avec les autres', async ({ page }) => {
@@ -127,4 +118,20 @@ test('un domaine ne peut pas sortir de son attribut', async ({ page }) => {
     // Le libellé garde le texte saisi, sans qu'il ait été interprété.
     await expect(option).toContainText('onmouseover');
     expect(await page.evaluate(() => window.__injecte)).toBeUndefined();
+});
+
+// Le domaine d'une personne posée sur le projet faisait entrer tout ce qui s'y rattache, chantiers
+// et tâches sans lien direct compris. Une ligne n'est plus retenue que par ses propres personnes et
+// celles de son chantier.
+test('une personne du domaine sur le seul projet ne fait plus entrer ses lignes', async ({ page }) => {
+    const doc = D.documentCible();
+    // Personne du domaine « Données » sur les tâches ni sur les chantiers ; David pilote le projet.
+    doc.Projects.records.find((p) => p.id === 1).responsable = 4;
+    doc.Chantiers.records.forEach((c) => { delete c.Responsable; delete c.Contributeurs; });
+    doc.Tasks.records.forEach((t) => { delete t.Responsable; t.assignees = ['L']; });
+    await D.ouvrirGantt(page, doc);
+
+    await page.evaluate(() => toggleFilter('domaine', 'Données'));
+
+    await expect(page.locator('#taskList .task-row')).toHaveCount(0);
 });
