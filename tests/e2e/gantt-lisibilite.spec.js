@@ -133,3 +133,20 @@ test('la bulle nomme le responsable de la ligne', async ({ page }) => {
     await expect(bulle(page)).toContainText('Responsable');
     await expect(bulle(page)).toContainText('Bruno Klein');
 });
+
+// Les boutons de navigation fixent leur largeur et retirent leur remplissage : sans consigne
+// d'alignement, la flèche se posait au bord gauche du bouton plutôt qu'en son milieu.
+test('la fleche est centree dans son bouton de navigation', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    const ecarts = await page.locator('.btn-nav').evaluateAll((boutons) => boutons.map((bouton) => {
+        const plage = document.createRange();
+        plage.selectNodeContents(bouton);
+        const glyphe = plage.getBoundingClientRect();
+        const boite = bouton.getBoundingClientRect();
+        return Math.abs((glyphe.left + glyphe.width / 2) - (boite.left + boite.width / 2));
+    }));
+
+    expect(ecarts).toHaveLength(2);
+    expect(ecarts.every((e) => e < 1)).toBe(true);
+});
