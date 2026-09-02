@@ -187,3 +187,21 @@ test('la liste des tâches parentes se filtre à la saisie', async ({ page }) =>
     await page.click('#parentSelect .addbtn');
     await verifierRecherche(page, 'parentSelect');
 });
+
+// Le volet de création propose le responsable, mais createTask ne le mettait pas dans son record :
+// la saisie disparaissait à l'enregistrement, comme elle le faisait sur un chantier.
+test('un responsable saisi a la creation est enregistre', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Socle technique');
+    await page.locator('#panel button', { hasText: 'Ajouter une tâche' }).click();
+    await page.locator('#taskTitle').fill('Recette technique');
+
+    await page.locator('#responsableSelect .addbtn').click();
+    await page.locator('#responsableSelect .multi-select-option', { hasText: 'David Sarr' }).click();
+    await page.locator('#panel .panel-btn.success').click();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const t = await window.grist.docApi.fetchTable('Tasks');
+        return t.Responsable[t.titre.indexOf('Recette technique')];
+    })).toBe(4);
+});

@@ -1797,7 +1797,7 @@ function openCreateTaskWithParent(parentId) {
             dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 7)),
             projet: parent?.projet || (projects.length > 0 ? projects[0].id : null),
             assignees: [], dependDe: [], dependDebutDe: [], tags: [], estimationH: null, tempsPasse: null, subtasks: [],
-            couleur: null, parentTask: estChantier(parent) ? null : (parentId || null),
+            couleur: null, Responsable: null, parentTask: estChantier(parent) ? null : (parentId || null),
             chantier: chantierParent, charges: []
         }
     };
@@ -2575,6 +2575,7 @@ async function createTask() {
         tags: toGristChoiceList(data.tags), estimationH: data.estimationH, tempsPasse: data.tempsPasse,
         subtasks: subtasksToJson(data.subtasks), couleur: data.couleur || null,
         parentTask: data.parentTask || null, chantier: data.chantier || null,
+        Responsable: data.Responsable || null,
         charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))), dateCloture: data.dateCloture || null
     };
 
