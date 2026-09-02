@@ -636,13 +636,6 @@
         <div class="header-left">
             <span class="badge-version" id="badgeVersion" hidden></span>
             <div class="sort-selector">
-                <select id="sortSelect" onchange="changeSortMode(this.value)">
-                    <option value="priority">Tri: Priorité</option>
-                    <option value="date">Tri: Date</option>
-                    <option value="manual">Tri: Manuel</option>
-                </select>
-            </div>
-            <div class="sort-selector">
                 <select id="colorSelect" onchange="changeColorMode(this.value)" title="Couleur des barres">
                     <option value="responsable">Couleur: Responsable</option>
                     <option value="priority">Couleur: Priorité</option>
@@ -655,11 +648,9 @@
         <div class="header-center">
             <button class="btn btn-nav" onclick="navigate(-1)">◀</button>
             <button class="btn" onclick="goToToday()">Aujourd'hui</button>
-            <button class="btn" onclick="fitToTasks()" title="Ajuster la vue aux tâches">Ajuster</button>
             <button class="btn btn-nav" onclick="navigate(1)">▶</button>
             <span class="current-period" id="currentPeriod"></span>
             <div class="view-controls">
-                <button class="btn" data-view="week" onclick="setView('week')">Sem</button>
                 <button class="btn active" data-view="month" onclick="setView('month')">Mois</button>
                 <button class="btn" data-view="quarter" onclick="setView('quarter')">Trim</button>
                 <button class="btn" data-view="semester" onclick="setView('semester')">6M</button>
@@ -670,13 +661,6 @@
             <div class="filter-dropdown" id="filterGantt">
                 <button class="filter-btn" onclick="toggleFilterMenu('filterGantt')"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg> Filtres<span class="filter-count" id="filterCount" style="display:none">0</span></button>
                 <div class="filter-menu wide" id="filterAllMenu"></div>
-            </div>
-            <div class="filter-dropdown" id="moreDropdown">
-                <button class="btn icon-btn" onclick="toggleFilterMenu('moreDropdown')" title="Plus d'actions"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.7"></circle><circle cx="12" cy="12" r="1.7"></circle><circle cx="19" cy="12" r="1.7"></circle></svg></button>
-                <div class="filter-menu" id="moreDropdownMenu" style="right:0;left:auto;min-width:200px">
-                    <div class="filter-option" onclick="exportPrint()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg> Imprimer / PDF</div>
-                    <div class="filter-option" onclick="exportPNG()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg> Image PNG</div>
-                </div>
             </div>
             <div class="zone-ajout">
                 <button class="btn primary" id="btnAjouter" onclick="ouvrirMenuAjout(event)">+ Ajouter</button>
