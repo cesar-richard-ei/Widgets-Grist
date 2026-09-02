@@ -791,6 +791,17 @@
             // Repli libelle + couleur pour les CODES par defaut. Permet d'afficher un libelle
             // FR (et la bonne couleur) meme quand la colonne Choice stocke le code brut
             // (todo/inprogress/...). Une valeur renommee par l'utilisateur garde SON libelle.
+            /* Statuts qui valent cloture. La convention « le dernier de la liste » ne tient pas : le metier
+             * declare ses choix dans son ordre a lui et en ajoute apres la cloture, ce qui designait « En
+             * attente externe » comme terminal et laissait « done » ouvert. La liste est figee ici en
+             * attendant de la rendre configurable cote document ; plusieurs statuts peuvent fermer. La
+             * comparaison ignore casse, accents et separateurs, les libelles etant saisis a la main. */
+            const VALEURS_TERMINALES = ['done', 'termine', 'cloture', 'ferme', 'annule', 'abandonne'];
+            const normaliserStatut = (v) => String(v == null ? '' : v)
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .toLowerCase().replace(/[^a-z0-9]/g, '');
+            const estValeurTerminale = (v) => VALEURS_TERMINALES.indexOf(normaliserStatut(v)) !== -1;
+
             const DEFAULTS_BY_VALUE = {};
             for (var _i = 0; _i < DEFAULT_STATUSES.length; _i++) DEFAULTS_BY_VALUE[DEFAULT_STATUSES[_i].value] = DEFAULT_STATUSES[_i];
 
@@ -840,13 +851,17 @@
                     };
                 });
                 const final = clean.length ? clean : DEFAULT_STATUSES.slice();
+                // Sans aucune valeur reconnue, la convention historique vaut mieux que pas de cloture.
+                const reconnus = final.filter(s => estValeurTerminale(s.value)).map(s => s.value);
+                const terminaux = reconnus.length ? reconnus : [final[final.length - 1].value];
                 const byValue = {};
                 for (const s of final) byValue[s.value] = s;
                 return {
                     list: final,
                     byValue,
                     values: final.map(s => s.value),
-                    terminalValue: final[final.length - 1].value, // convention "dernier = termine"
+                    terminalValues: terminaux,
+                    terminalValue: terminaux[0],
                     firstValue: final[0].value,
                     source: clean.length ? source : 'default'
                 };
@@ -894,7 +909,11 @@
                 if (cfg && cfg.byValue && cfg.byValue[value]) return cfg.byValue[value];
                 return { value: value, label: value || '', fillColor: '#94a3b8', textColor: '#ffffff' };
             }
-            function isTerminal(cfg, value) { return !!cfg && value === cfg.terminalValue; }
+            function isTerminal(cfg, value) {
+                if (!cfg) return false;
+                const liste = cfg.terminalValues || (cfg.terminalValue ? [cfg.terminalValue] : []);
+                return liste.indexOf(value) !== -1;
+            }
 
             /* Seme les options (choix + couleurs) sur une colonne Choice si elle n'en a
              * pas encore. Defensif. A appeler depuis ensureSchema apres creation.

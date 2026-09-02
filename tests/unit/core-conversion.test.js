@@ -39,9 +39,34 @@ test('buildStatusConfig respecte un libelle explicite', () => {
     assert.equal(cfg.byValue.todo.label, 'A traiter');
 });
 
-test('buildStatusConfig tient le dernier statut pour terminal', () => {
+// Le document du metier declare ses statuts dans l'ordre de son choix, et en ajoute apres la
+// cloture : « todo, inprogress, review, done, Pre-cadrage, Cadrage, En attente externe ». Tenir le
+// dernier pour terminal y designe « En attente externe » et laisse « done » ouvert.
+test('buildStatusConfig reconnait les statuts de cloture, ou qu ils soient dans la liste', () => {
+    const cfg = TF.buildStatusConfig(
+        [{ value: 'todo' }, { value: 'inprogress' }, { value: 'review' }, { value: 'done' },
+         { value: 'Pre-cadrage' }, { value: 'Cadrage' }, { value: 'En attente externe' }], 'choice');
+    assert.equal(cfg.terminalValue, 'done');
+    assert.deepEqual(cfg.terminalValues, ['done']);
+    assert.equal(cfg.firstValue, 'todo');
+    assert.equal(TF.isTerminal(cfg, 'done'), true);
+    assert.equal(TF.isTerminal(cfg, 'En attente externe'), false);
+});
+
+test('buildStatusConfig retient plusieurs statuts de cloture', () => {
+    const cfg = TF.buildStatusConfig(
+        [{ value: 'todo' }, { value: 'Termine' }, { value: 'Annule' }, { value: 'inprogress' }], 'choice');
+    assert.deepEqual(cfg.terminalValues, ['Termine', 'Annule']);
+    assert.equal(cfg.terminalValue, 'Termine');
+    assert.equal(TF.isTerminal(cfg, 'Annule'), true);
+    assert.equal(TF.isTerminal(cfg, 'inprogress'), false);
+});
+
+// Sans aucune valeur reconnue, mieux vaut la convention historique que pas de cloture du tout.
+test('buildStatusConfig retombe sur le dernier statut quand aucun n est reconnu', () => {
     const cfg = TF.buildStatusConfig([{ value: 'a' }, { value: 'b' }, { value: 'c' }], 'choice');
     assert.equal(cfg.terminalValue, 'c');
+    assert.deepEqual(cfg.terminalValues, ['c']);
     assert.equal(cfg.firstValue, 'a');
 });
 
