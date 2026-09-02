@@ -15,6 +15,7 @@ Guide de développement pour la suite de widgets **TaskFlow** (Grist).
 | Calendar | `calendar.html` | v15 | Calendrier mensuel/hebdo/compact avec barres adaptatives |
 | Dashboard | `dashboard.html` | v16 | Dashboard composable avec composants configurables |
 | **Plan** | `plan.html` | v16 | **Plan de charge** : heatmap capacité/charge par personne, prévu/réalisé/reste/dispo, timeline, allocation éditable (**opt-in**, voir plus bas) |
+| **Fiche** | `fiche.html` | v16 | **Fiche d'un projet** : cadrage (responsable, sponsors, contributeurs clés, description, budget, commanditaires) puis feuille de route de ses chantiers sur six mois. Lecture seule, lié à `Projects` |
 
 Chaque widget est un **fichier HTML autonome** avec CSS et JS inline. Pas de framework — vanilla JS/HTML5/CSS3.
 
@@ -253,6 +254,29 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 - Filtres locaux (période, projet, assigné, statut) — **non persistés**
 - Config layout persistée via `grist.widgetApi.setOptions({ dash: dashConfig })`
 - Garde `_saving` flag pour éviter boucle `onOptions` ↔ `setOptions`
+
+### Fiche (v16) — fiche d'un projet
+
+Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistrement sélectionné, reçu par
+`onRecord`. Lecture seule de bout en bout, aucune écriture, aucun volet, aucune poignée.
+
+- **Périmètre.** Seule une ligne de catégorie `Projet` ouvre une fiche ; un produit ou une offre de
+  service affiche un message qui nomme sa catégorie. La catégorie se porte tantôt en `Ref` vers une
+  table, tantôt en `Choice` selon les documents : la valeur suffit à trancher, un identifiant étant
+  un nombre et un choix une chaîne.
+- **Cadrage.** Responsable, sponsors et contributeurs clés en pastilles, description, budget alloué,
+  commanditaires et deadline. Une colonne vide se dit « Non renseigné » plutôt que de laisser un blanc.
+- **Feuille de route.** Les chantiers du projet, chacun suivi de ses tâches, sur une fenêtre fixe de
+  six mois qui va du premier du mois précédent au dernier du cinquième suivant. Les chantiers se
+  replient.
+- **Fenêtre et colonnes.** Les colonnes sont des semaines : la fenêtre s'ouvre donc au lundi de la
+  première et se ferme au dimanche de la dernière. Mesurer les positions depuis le premier du mois
+  les décalerait d'une colonne, la ligne du jour comprise.
+- **Positions en pourcentage.** `TF.computeBarGeometry` sert un Gantt qui défile et travaille en
+  pixels ; ici la fenêtre est fixe et suit la largeur de l'écran, une position relative la rend
+  responsive sans recalcul au redimensionnement.
+- La ligne du jour est portée par un calque qui ne couvre que la piste, jamais par le corps entier :
+  la colonne des libellés la décalerait de plusieurs semaines.
 
 ### Plan (v16) — plan de charge
 

@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>TaskFlow — Fiche projet</title>
+    <script src="https://docs.getgrist.com/grist-plugin-api.js"></script>
+    <style>
+        :root {
+            --fond: #ffffff;
+            --fond-doux: #f1f5f9;
+            --texte: #0f172a;
+            --texte-doux: #64748b;
+            --trait: #e2e8f0;
+            --accent: #1552cc;
+            --accent-texte: #ffffff;
+            --aujourdhui: #ef4444;
+            --rayon: 8px;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --fond: #0b1220; --fond-doux: #16213a; --texte: #e2e8f0; --texte-doux: #94a3b8;
+                --trait: #1e293b; --accent: #1552cc; --accent-texte: #ffffff;
+            }
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0; background: var(--fond); color: var(--texte);
+            font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+        .fiche { padding: 16px; max-width: 1400px; margin: 0 auto; }
+
+        .fiche-entete {
+            background: var(--accent); color: var(--accent-texte); border-radius: var(--rayon);
+            padding: 18px 22px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+        }
+        .fiche-titre { margin: 0; font-size: clamp(1.1rem, 2.4vw, 1.8rem); font-weight: 700; }
+        .fiche-type {
+            margin-left: auto; background: var(--accent-texte); color: var(--accent);
+            border-radius: 999px; padding: 4px 14px; font-weight: 600; font-size: 0.85rem; white-space: nowrap;
+        }
+
+        .fiche-cadrage { display: flex; gap: 24px; flex-wrap: wrap; margin: 22px 0 8px; }
+        .fiche-colonne { display: flex; flex-direction: column; gap: 16px; min-width: 220px; flex: 1; }
+        .fiche-colonne.large { flex: 2.2; min-width: 280px; }
+        .fiche-trio { display: flex; gap: 16px; flex-wrap: wrap; }
+        .fiche-trio .fiche-bloc { flex: 1; min-width: 150px; }
+        .fiche-label { color: var(--texte-doux); font-size: 0.82rem; margin-bottom: 6px; }
+        .fiche-valeur {
+            background: var(--fond-doux); border-radius: var(--rayon); padding: 10px 12px;
+            display: flex; flex-wrap: wrap; gap: 6px; min-height: 40px; align-items: flex-start;
+            white-space: pre-wrap;
+        }
+        .fiche-valeur .vide { color: var(--texte-doux); font-style: italic; }
+        .bloc-description .fiche-valeur { display: block; }
+
+        .fiche-personne {
+            display: inline-flex; align-items: center; gap: 6px; background: var(--fond);
+            border: 1px solid var(--trait); border-radius: 999px; padding: 3px 10px 3px 3px; font-size: 0.85rem;
+        }
+        .fiche-initiales {
+            width: 22px; height: 22px; border-radius: 50%; background: var(--teinte, var(--accent));
+            color: #fff; font-size: 0.7rem; font-weight: 700; display: inline-flex;
+            align-items: center; justify-content: center;
+        }
+
+        .fiche-route { margin-top: 26px; }
+        .fiche-route h2 { font-size: 1rem; margin: 0 0 10px; }
+        .fiche-grille { border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden; --colonne: clamp(180px, 38%, 420px); }
+        .fiche-entetes, .fiche-rang { display: flex; align-items: stretch; }
+        .fiche-entetes { background: var(--fond-doux); border-bottom: 1px solid var(--trait); }
+        .fiche-corps { position: relative; max-height: 60vh; overflow-y: auto; }
+        .fiche-ligne {
+            flex: 0 0 var(--colonne); display: flex; align-items: center;
+            gap: 6px; padding: 8px 10px; border-right: 1px solid var(--trait); overflow: hidden;
+        }
+        .fiche-ligne-tete { font-weight: 600; color: var(--texte-doux); }
+        .fiche-nom { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .est-chantier .fiche-nom { font-weight: 600; }
+        .fiche-rang:not(.est-chantier) .fiche-ligne { padding-left: 26px; }
+        .fiche-dates { margin-left: auto; color: var(--texte-doux); font-size: 0.78rem; white-space: nowrap; }
+        .fiche-chevron {
+            background: none; border: 0; cursor: pointer; color: var(--texte-doux);
+            font-size: 0.7rem; padding: 0 2px; line-height: 1;
+        }
+        .fiche-chevron-vide { width: 12px; display: inline-block; }
+        .fiche-rang { border-bottom: 1px solid var(--trait); min-height: 34px; }
+        .fiche-rang:last-child { border-bottom: 0; }
+        .fiche-piste { position: relative; flex: 1; }
+        .fiche-piste-tete { display: flex; flex-direction: column; }
+        .fiche-mois-ligne, .fiche-semaines { display: flex; }
+        .fiche-mois, .fiche-semaine {
+            text-align: center; font-size: 0.72rem; color: var(--texte-doux);
+            padding: 3px 0; border-left: 1px solid var(--trait); overflow: hidden;
+        }
+        .fiche-mois { font-weight: 600; text-transform: capitalize; }
+        .fiche-semaine { flex: 1; }
+        .fiche-barre {
+            position: absolute; top: 50%; transform: translateY(-50%); height: 14px; border-radius: 7px;
+            background: var(--teinte, #94a3b8);
+        }
+        .est-chantier .fiche-barre { height: 18px; border-radius: 9px; }
+        /* Le trait du jour se mesure sur la piste seule : porte par le corps entier, la colonne
+           des libelles le decalerait de plusieurs semaines. */
+        .fiche-overlay { position: absolute; top: 0; bottom: 0; left: var(--colonne); right: 0; pointer-events: none; }
+        .fiche-aujourdhui { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--aujourdhui); }
+        .fiche-avatars { display: inline-flex; margin-left: auto; }
+        .fiche-avatar {
+            width: 20px; height: 20px; border-radius: 50%; background: var(--teinte, #94a3b8); color: #fff;
+            font-size: 0.62rem; font-weight: 700; display: inline-flex; align-items: center;
+            justify-content: center; border: 2px solid var(--fond); margin-left: -6px;
+        }
+        .fiche-progression { color: var(--texte-doux); font-size: 0.75rem; margin-left: 6px; white-space: nowrap; }
+        .fiche-message { color: var(--texte-doux); padding: 14px 2px; }
+        .fiche-hors-perimetre { margin-top: 18px; }
+
+        @media (max-width: 720px) {
+            .fiche-cadrage { flex-direction: column; }
+            .fiche-grille { --colonne: clamp(130px, 46%, 240px); }
+            .fiche-dates { display: none; }
+        }
+    </style>
+</head>
+<body>
+    <div class="fiche" id="fiche"><p class="fiche-message">Chargement…</p></div>
+    <script>
+        // <inline:core/taskflow-core.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
+        /* ============================================================================
+         * taskflow-core.js — Module commun aux widgets TaskFlow
+         * ----------------------------------------------------------------------------
+         * SOURCE UNIQUE. Inline dans chaque widget par scripts/build-inline.js entre
+         * les marqueurs de generation prevus a cet effet.
+         * NE PAS editer la copie inlinee dans les .html : editer CE fichier puis lancer
+         *   npm run build:inline
+         *
+         * Expose un objet `TF` (namespace) pour ne jamais entrer en collision avec les
+         * helpers locaux existants des widgets. Toutes les fonctions qui ecrivent dans
+         * Grist sont DEFENSIVES : en cas d'echec elles n'interrompent jamais le widget
+         * (au pire, comportement actuel inchange).
+         * ========================================================================== */
+        const TF = (function () {
+            'use strict';
+
+            /* ----- Statuts ---------------------------------------------------------
+             * Convention : l'ORDRE fait foi. Le DERNIER statut de la liste est l'etat
+             * terminal ("termine") utilise par la logique de completion des widgets.
+             * Les statuts reels proviennent de la colonne Choice `statut` (editable par
+             * l'utilisateur dans Grist). DEFAULT_STATUSES n'est qu'un repli.
+             * --------------------------------------------------------------------- */
+            const DEFAULT_STATUSES = [
+                { value: 'todo',       label: 'À faire',  fillColor: '#94a3b8', textColor: '#ffffff' },
+                { value: 'inprogress', label: 'En cours', fillColor: '#f59e0b', textColor: '#ffffff' },
+                { value: 'review',     label: 'En revue', fillColor: '#3b82f6', textColor: '#ffffff' },
+                { value: 'done',       label: 'Terminé',  fillColor: '#10b981', textColor: '#ffffff' }
+            ];
+            // Repli libelle + couleur pour les CODES par defaut. Permet d'afficher un libelle
+            // FR (et la bonne couleur) meme quand la colonne Choice stocke le code brut
+            // (todo/inprogress/...). Une valeur renommee par l'utilisateur garde SON libelle.
+            /* Statuts qui valent cloture. La convention « le dernier de la liste » ne tient pas : le metier
+             * declare ses choix dans son ordre a lui et en ajoute apres la cloture, ce qui designait « En
+             * attente externe » comme terminal et laissait « done » ouvert. La liste est figee ici en
+             * attendant de la rendre configurable cote document ; plusieurs statuts peuvent fermer. La
+             * comparaison ignore casse, accents et separateurs, les libelles etant saisis a la main. */
+            const VALEURS_TERMINALES = ['done', 'termine', 'cloture', 'ferme', 'annule', 'abandonne'];
+            const normaliserStatut = (v) => String(v == null ? '' : v)
+                .normalize('NFD').replace(/[̀-ͯ]/g, '')
+                .toLowerCase().replace(/[^a-z0-9]/g, '');
+            const estValeurTerminale = (v) => VALEURS_TERMINALES.indexOf(normaliserStatut(v)) !== -1;
+
+            const DEFAULTS_BY_VALUE = {};
+            for (var _i = 0; _i < DEFAULT_STATUSES.length; _i++) DEFAULTS_BY_VALUE[DEFAULT_STATUSES[_i].value] = DEFAULT_STATUSES[_i];
+
+            // Convertit un tableau Grist colonnaire en tableau d'objets lignes.
+            function columnarToRows(data) {
+                if (!data || Array.isArray(data)) return data || [];
+                const cols = Object.keys(data);
+                if (!cols.length) return [];
+                const n = (data[cols[0]] && data[cols[0]].length) || 0;
+                const rows = [];
+                for (let i = 0; i < n; i++) {
+                    const rec = {};
+                    for (const k of cols) rec[k] = data[k][i];
+                    rows.push(rec);
+                }
+                return rows;
+            }
+
+            // Resout le rowId d'une table depuis son tableId via _grist_Tables.
+            // `meta` (optionnel) = { tables, cols } deja lus : evite un fetchTable de plus.
+            async function tableRowId(grist, tableId, meta) {
+                const rows = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                const row = rows.find(r => r.tableId === tableId);
+                return row ? row.id : null;
+            }
+
+            // Lit les deux tables de metadonnees en une passe (parallele), a partager entre helpers.
+            async function fetchSchemaMeta(grist) {
+                const [t, c] = await Promise.all([
+                    grist.docApi.fetchTable('_grist_Tables'),
+                    grist.docApi.fetchTable('_grist_Tables_column')
+                ]);
+                return { tables: columnarToRows(t), cols: columnarToRows(c) };
+            }
+
+            // Construit une config de statuts normalisee depuis une liste brute.
+            function buildStatusConfig(list, source) {
+                const clean = (list || []).filter(s => s && s.value != null).map(s => {
+                    const v = String(s.value);
+                    const d = DEFAULTS_BY_VALUE[v];
+                    const hasExplicitLabel = s.label != null && s.label !== '' && String(s.label) !== v;
+                    return {
+                        value: v,
+                        label: hasExplicitLabel ? String(s.label) : (d ? d.label : v),
+                        fillColor: s.fillColor || (d ? d.fillColor : '#94a3b8'),
+                        textColor: s.textColor || (d ? d.textColor : '#ffffff')
+                    };
+                });
+                const final = clean.length ? clean : DEFAULT_STATUSES.slice();
+                // Sans aucune valeur reconnue, la convention historique vaut mieux que pas de cloture.
+                const reconnus = final.filter(s => estValeurTerminale(s.value)).map(s => s.value);
+                const terminaux = reconnus.length ? reconnus : [final[final.length - 1].value];
+                const byValue = {};
+                for (const s of final) byValue[s.value] = s;
+                return {
+                    list: final,
+                    byValue,
+                    values: final.map(s => s.value),
+                    terminalValues: terminaux,
+                    terminalValue: terminaux[0],
+                    firstValue: final[0].value,
+                    source: clean.length ? source : 'default'
+                };
+            }
+
+            /* Lit les statuts (libelles + couleurs + ordre) depuis la colonne Choice
+             * indiquee, via les metadonnees Grist. Repli en cascade :
+             *   1. options de la colonne Choice (cas ideal)
+             *   2. valeurs distinctes presentes dans les donnees (colonne Text)
+             *   3. DEFAULT_STATUSES
+             * Ne jette jamais : retourne toujours une config exploitable.
+             */
+            async function loadStatusConfig(grist, table, column, distinctFallback, meta) {
+                try {
+                    const tid = await tableRowId(grist, table, meta);
+                    if (tid != null) {
+                        const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                        const col = cols.find(c => c.parentId === tid && c.colId === column);
+                        if (col && col.widgetOptions) {
+                            let opt = {};
+                            try { opt = JSON.parse(col.widgetOptions) || {}; } catch (e) { opt = {}; }
+                            const choices = Array.isArray(opt.choices) ? opt.choices : [];
+                            const co = opt.choiceOptions || {};
+                            if (choices.length) {
+                                return buildStatusConfig(choices.map(ch => ({
+                                    value: ch,
+                                    label: ch,
+                                    fillColor: co[ch] && co[ch].fillColor,
+                                    textColor: co[ch] && co[ch].textColor
+                                })), 'choice');
+                            }
+                        }
+                    }
+                } catch (e) { /* repli silencieux */ }
+
+                if (Array.isArray(distinctFallback) && distinctFallback.length) {
+                    const seen = [];
+                    for (const v of distinctFallback) { if (v != null && v !== '' && seen.indexOf(v) === -1) seen.push(v); }
+                    if (seen.length) return buildStatusConfig(seen.map(v => ({ value: v, label: v })), 'data');
+                }
+                return buildStatusConfig(DEFAULT_STATUSES.slice(), 'default');
+            }
+
+            function getStatus(cfg, value) {
+                if (cfg && cfg.byValue && cfg.byValue[value]) return cfg.byValue[value];
+                return { value: value, label: value || '', fillColor: '#94a3b8', textColor: '#ffffff' };
+            }
+            function isTerminal(cfg, value) {
+                if (!cfg) return false;
+                const liste = cfg.terminalValues || (cfg.terminalValue ? [cfg.terminalValue] : []);
+                return liste.indexOf(value) !== -1;
+            }
+
+            /* Seme les options (choix + couleurs) sur une colonne Choice si elle n'en a
+             * pas encore. Defensif. A appeler depuis ensureSchema apres creation.
+             */
+            async function seedStatusChoices(grist, table, column, statuses, meta) {
+                try {
+                    const tid = await tableRowId(grist, table, meta);
+                    if (tid == null) return;
+                    const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const col = cols.find(c => c.parentId === tid && c.colId === column);
+                    if (!col) return;
+                    let opt = {};
+                    try { opt = JSON.parse(col.widgetOptions || '{}') || {}; } catch (e) { opt = {}; }
+                    if (Array.isArray(opt.choices) && opt.choices.length) return; // deja configure : on respecte
+                    const list = statuses && statuses.length ? statuses : DEFAULT_STATUSES;
+                    const choiceOptions = {};
+                    for (const s of list) choiceOptions[s.value] = { fillColor: s.fillColor, textColor: s.textColor };
+                    const widgetOptions = JSON.stringify({ choices: list.map(s => s.value), choiceOptions: choiceOptions });
+                    await grist.docApi.applyUserActions([['ModifyColumn', table, column, { widgetOptions: widgetOptions }]]);
+                } catch (e) { console.warn('TF.seedStatusChoices:', e && e.message); }
+            }
+
+            /* ----- #2 : colonnes d'affichage des Ref (noms au lieu des IDs) ---------
+             * Pose le visibleCol + la display formula sur des colonnes Ref pour que les
+             * VUES NATIVES Grist affichent un libelle plutot que l'ID de ligne.
+             * specs : [{ table:'Tasks', column:'projet', visibleColId:'nom' }, ...]
+             * DEFENSIF : si Grist refuse une action, on log et on continue ; au pire
+             * l'affichage reste en IDs (comportement actuel), jamais de casse.
+             * --------------------------------------------------------------------- */
+            async function setRefDisplayColumns(grist, specs, meta) {
+                if (!Array.isArray(specs) || !specs.length) return;
+                try {
+                    const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                    const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+                    const colOf = (tableRow, colId) => cols.find(c => c.parentId === tableRow && c.colId === colId);
+
+                    const actions = [];
+                    for (const s of specs) {
+                        const srcTid = tidOf(s.table);
+                        if (srcTid == null) continue;
+                        const refCol = colOf(srcTid, s.column);
+                        if (!refCol) continue;
+                        // Table cible deduite du type "Ref:Target" / "RefList:Target".
+                        const m = /^(?:Ref|RefList):(.+)$/.exec(refCol.type || '');
+                        if (!m) continue;
+                        const targetTid = tidOf(m[1]);
+                        if (targetTid == null) continue;
+                        const visCol = colOf(targetTid, s.visibleColId);
+                        if (!visCol) continue;
+                        // Eviter de re-poser si deja correct.
+                        if (refCol.visibleCol === visCol.id) continue;
+                        actions.push(['SetDisplayFormula', s.table, null, refCol.id, '$' + s.column + '.' + s.visibleColId]);
+                        actions.push(['UpdateRecord', '_grist_Tables_column', refCol.id, { visibleCol: visCol.id }]);
+                    }
+                    if (actions.length) await grist.docApi.applyUserActions(actions);
+                } catch (e) { console.warn('TF.setRefDisplayColumns:', e && e.message); }
+            }
+
+            /* ----- #2bis : delier colId <-> label (renommage libre des libelles) ----
+             * Pose untieColIdFromLabel=true sur les colonnes du widget. Sans ca, Grist
+             * regenere le colId a chaque changement de libelle, et le widget (qui lit et
+             * ecrit tout par colId) perd ses colonnes. Idempotent (saute les colonnes
+             * deja deliees) et defensif (jamais de casse), applique aux docs neufs comme
+             * existants a chaque ouverture.
+             * tableColumns : { Tasks:['titre',...], Team:[...], Projects:[...] }
+             * --------------------------------------------------------------------- */
+            async function ensureUntiedLabels(grist, tableColumns, meta) {
+                if (!tableColumns) return;
+                try {
+                    const tables = meta && meta.tables ? meta.tables : columnarToRows(await grist.docApi.fetchTable('_grist_Tables'));
+                    const cols = meta && meta.cols ? meta.cols : columnarToRows(await grist.docApi.fetchTable('_grist_Tables_column'));
+                    const tidOf = (tableId) => { const r = tables.find(t => t.tableId === tableId); return r ? r.id : null; };
+                    const actions = [];
+                    for (const tableName of Object.keys(tableColumns)) {
+                        const tid = tidOf(tableName);
+                        if (tid == null) continue;
+                        for (const colId of tableColumns[tableName] || []) {
+                            const col = cols.find(c => c.parentId === tid && c.colId === colId);
+                            if (!col) continue;
+                            if (col.untieColIdFromLabel === true) continue;
+                            actions.push(['ModifyColumn', tableName, colId, { untieColIdFromLabel: true }]);
+                        }
+                    }
+                    if (actions.length) await grist.docApi.applyUserActions(actions);
+                } catch (e) { console.warn('TF.ensureUntiedLabels:', e && e.message); }
+            }
+
+            /* ----- #3 : plan de charge (heures par personne) ------------------------
+             * Stockage : colonne Text `charges` sur Tasks, JSON [{teamId, heures}].
+             * Parse defensif identique au pattern subtasks.
+             * --------------------------------------------------------------------- */
+            function parseCharges(v) {
+                try {
+                    const a = JSON.parse(v || '[]');
+                    if (!Array.isArray(a)) return [];
+                    return a.filter(x => x && x.teamId != null)
+                            .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+                            .filter(x => !isNaN(x.teamId));
+                } catch (e) { return []; }
+            }
+            function chargesToJson(arr) {
+                return JSON.stringify((arr || [])
+                    .filter(x => x && x.teamId != null)
+                    .map(x => ({ teamId: Number(x.teamId), heures: Number(x.heures) || 0 }))
+                    .filter(x => !isNaN(x.teamId)));
+            }
+            // Heures totales d'une tache (somme des charges par personne).
+            function chargeTotal(charges) { return parseCharges(typeof charges === 'string' ? charges : JSON.stringify(charges || [])).reduce((s, c) => s + c.heures, 0); }
+            // Agrege la charge par membre sur une liste de taches (chaque tache expose .charges).
+            function chargeByMember(tasks) {
+                const by = {};
+                for (const t of (tasks || [])) {
+                    for (const c of parseCharges(t && t.charges)) {
+                        by[c.teamId] = (by[c.teamId] || 0) + c.heures;
+                    }
+                }
+                return by;
+            }
+
+            // Cle de periode : semaine ISO 'YYYY-Www' ou mois 'YYYY-MM'.
+            function periodKey(date, granularity) {
+                if (granularity === 'month') {
+                    return date.getUTCFullYear() + '-' + String(date.getUTCMonth() + 1).padStart(2, '0');
+                }
+                const d = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
+                const day = d.getUTCDay() || 7;
+                d.setUTCDate(d.getUTCDate() + 4 - day);
+                const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+                const week = Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+                return d.getUTCFullYear() + '-W' + String(week).padStart(2, '0');
+            }
+
+            // #3 plan de charge temporel : etale les charges PROPRES de chaque tache sur sa
+            // duree (jours calendaires), agrege par personne et par periode.
+            // dateDebut/dateEcheance = timestamps Unix SECONDES (Grist). Tache sans dates ou
+            // sans charge = ignoree. Retourne { teamId: { periodKey: heures } }.
+            function chargeByMemberPeriod(tasks, granularity) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                const out = {};
+                for (const t of (tasks || [])) {
+                    const charges = parseCharges(t && t.charges);
+                    if (!charges.length) continue;
+                    const s = t.dateDebut, e = t.dateEcheance;
+                    if (s == null || e == null) continue;
+                    const day0 = Math.floor((s * 1000) / 86400000);
+                    const day1 = Math.floor((e * 1000) / 86400000);
+                    const nDays = Math.max(day1 - day0 + 1, 1);
+                    for (const c of charges) {
+                        const perDay = (Number(c.heures) || 0) / nDays;
+                        if (!perDay) continue;
+                        if (!out[c.teamId]) out[c.teamId] = {};
+                        for (let dd = day0; dd <= day1; dd++) {
+                            const key = periodKey(new Date(dd * 86400000), g);
+                            out[c.teamId][key] = (out[c.teamId][key] || 0) + perDay;
+                        }
+                    }
+                }
+                return out;
+            }
+
+            // Decale une date de n periodes (semaine = 7 jours, mois = 1 mois).
+            function shiftPeriods(date, granularity, n) {
+                const d = new Date(date.getTime());
+                if (granularity === 'month') d.setUTCMonth(d.getUTCMonth() + n);
+                else d.setUTCDate(d.getUTCDate() + n * 7);
+                return d;
+            }
+
+            // Liste contigue de cles de periode (semaine ISO ou mois) a partir d'une date,
+            // alignee sur le debut de periode (lundi / 1er du mois). Inclut les periodes vides.
+            function periodRange(startDate, granularity, count) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                let d = new Date(Date.UTC(startDate.getUTCFullYear(), startDate.getUTCMonth(), startDate.getUTCDate()));
+                if (g === 'week') { const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); }
+                else { d = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)); }
+                const out = [];
+                for (let i = 0; i < count; i++) {
+                    out.push(periodKey(d, g));
+                    if (g === 'week') d.setUTCDate(d.getUTCDate() + 7);
+                    else d.setUTCMonth(d.getUTCMonth() + 1);
+                }
+                return out;
+            }
+
+            // chargeMatrix : generalise chargeByMemberPeriod. Etale les charges (via getCharges,
+            // defaut parseCharges) sur la duree, agrege par cle keyFn(t, charge) et periode.
+            function chargeMatrix(tasks, keyFn, granularity, getCharges, workdays) {
+                const g = granularity === 'month' ? 'month' : 'week';
+                const out = {};
+                for (const t of (tasks || [])) {
+                    const charges = getCharges ? getCharges(t) : parseCharges(t && t.charges);
+                    if (!charges.length || t.dateDebut == null || t.dateEcheance == null) continue;
+                    const d0 = Math.floor((t.dateDebut * 1000) / 86400000), d1 = Math.floor((t.dateEcheance * 1000) / 86400000);
+                    const days = [];
+                    for (let dd = d0; dd <= d1; dd++) { if (workdays) { const wd = new Date(dd * 86400000).getUTCDay(); if (wd < 1 || wd > 5) continue; } days.push(dd); }
+                    if (!days.length) days.push(d0);
+                    for (const c of charges) {
+                        const key = keyFn(t, c); if (key == null) continue;
+                        const perDay = c.heures / days.length; if (!perDay) continue;
+                        if (!out[key]) out[key] = {};
+                        for (const dd of days) { const pk = periodKey(new Date(dd * 86400000), g); out[key][pk] = (out[key][pk] || 0) + perDay; }
+                    }
+                }
+                return out;
+            }
+
+            /* ----- Timeline Gantt : calcul pur de l'echelle -------------------------
+             * Extrait de gantt.html (computeEffectiveRange) pour etre partage avec le
+             * Gantt de fiche. Aucun effet de bord (ni etat, ni DOM) : rend les nombres,
+             * l'appelant les applique. Math des dates repliquee a l'identique.
+             * Entree : { tasks:[{start:Date|null,end:Date|null}], unit:'day'|'week'|'month',
+             *   cellWidth:number, viewStart:Date, viewDays:number, availableWidth:number,
+             *   extendLeft?:boolean }
+             * extendLeft a false fige le debut de plage sur viewStart : les vues glissantes s'y
+             * ancrent pour tenir la ligne du jour au bord, les barres anterieures restent tronquees
+             * a gauche par computeBarGeometry.
+             * Sortie : { effectiveStart:Date, effectiveDays, numCells, cellWidth, pxPerDay }
+             * --------------------------------------------------------------------- */
+            function computeTimelineScale(opts) {
+                const addDays = (d, n) => { const r = new Date(d); r.setDate(r.getDate() + n); return r; };
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const startOfWeek = (d) => { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - day + (day === 0 ? -6 : 1)); r.setHours(0, 0, 0, 0); return r; };
+                const startOfMonth = (d) => new Date(d.getFullYear(), d.getMonth(), 1);
+
+                const unit = opts.unit, viewStart = opts.viewStart, viewDays = opts.viewDays;
+                let eStart = new Date(viewStart.getTime());
+                let eEnd = addDays(viewStart, viewDays);
+                const vEnd = new Date(eEnd.getTime());
+                const PADDING = unit === 'day' ? 3 : unit === 'week' ? 7 : 14;
+                // La borne gauche recule jusqu'au début de la tâche la plus ancienne, y compris quand
+                // celle-ci est entièrement derrière la fenêtre : sans quoi la timeline se refuse à remonter
+                // dans le passé, alors que les tâches y sont. La borne droite ne suit que les tâches qui
+                // touchent la fenêtre, une échéance lointaine n'ayant pas à étirer la vue courante.
+                for (const t of (opts.tasks || [])) {
+                    const ts = t.start, te = t.end;
+                    if (!ts || !te) continue;
+                    if (!isPlausibleDate(ts) || !isPlausibleDate(te)) continue;
+                    if (ts < eStart) eStart = addDays(ts, -PADDING);
+                    if (te < viewStart || ts > vEnd) continue;
+                    if (te > eEnd) eEnd = addDays(te, PADDING);
+                }
+                if (unit === 'week') eStart = startOfWeek(eStart);
+                else if (unit === 'month') eStart = startOfMonth(eStart);
+                else eStart = new Date(eStart.getFullYear(), eStart.getMonth(), eStart.getDate());
+
+                const effectiveDays = Math.max(daysDiff(eStart, eEnd), viewDays);
+                let numCells;
+                if (unit === 'month') {
+                    const eEnd2 = addDays(eStart, effectiveDays);
+                    numCells = Math.max(1, (eEnd2.getFullYear() - eStart.getFullYear()) * 12 + (eEnd2.getMonth() - eStart.getMonth()));
+                } else if (unit === 'week') {
+                    numCells = Math.ceil(effectiveDays / 7);
+                } else {
+                    numCells = effectiveDays;
+                }
+                const effCellWidth = Math.max(opts.cellWidth, Math.floor(opts.availableWidth / numCells));
+                const pxPerDay = effectiveDays > 0 ? (numCells * effCellWidth) / effectiveDays : opts.cellWidth;
+                return { effectiveStart: eStart, effectiveDays: effectiveDays, numCells: numCells, cellWidth: effCellWidth, pxPerDay: pxPerDay };
+            }
+
+            /* Géométrie d'une barre / d'un jalon sur la timeline (pur). Reprend le clamping
+             * exact de gantt.html : plancher de largeur, décalage du diamant. Partagé avec le lite.
+             * Entrée : { start:Date, tStart:Date, tEnd:Date, pxPerDay:number }
+             * Sortie : { left, width, barLeft, barWidth, isNarrow, diamondLeft } (px)
+             */
+            function computeBarGeometry(o) {
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const startOffset = daysDiff(o.start, o.tStart);
+                const duration = Math.max(daysDiff(o.tStart, o.tEnd) + 1, 1);
+                const left = Math.round(startOffset * o.pxPerDay);
+                const width = Math.round(duration * o.pxPerDay);
+                const barLeft = Math.max(0, left);
+                const barWidth = Math.max(width - (barLeft - left), 12);
+                const diamondLeft = Math.max(0, left + Math.round(o.pxPerDay / 2) - 7);
+                return { left: left, width: width, barLeft: barLeft, barWidth: barWidth, isNarrow: barWidth < 60, diamondLeft: diamondLeft };
+            }
+
+            /* Une date de tâche hors de ces bornes ne vient pas d'une saisie aboutie : avant 2000
+             * c'est une valeur non renseignée (epoch 0 = 01/01/1970), au-delà de 2200 une frappe en
+             * cours. Un `input type="date"` émet un change à chaque chiffre de l'année, donc saisir
+             * 2027 passe par les années 2, 20 et 202 : laisser filer ces dates étend la plage de la
+             * timeline sur des milliers d'années, soit autant de cellules à construire.
+             */
+            const ANNEE_MIN = 2000;
+            const ANNEE_MAX = 2200;
+
+            function isPlausibleDate(d) {
+                if (!d) return false;
+                const date = d instanceof Date ? d : new Date(d);
+                const annee = date.getFullYear();
+                return !isNaN(annee) && annee >= ANNEE_MIN && annee <= ANNEE_MAX;
+            }
+
+            /* Défilement horizontal à poser à l'ouverture pour amener la ligne « aujourd'hui »
+             * près du bord gauche (pur). On cale le début de la sur-colonne qui contient
+             * aujourd'hui (le mois, ou l'année en vue Année), sauf si cela laisse la ligne
+             * au-delà du premier tiers de la zone visible : au-delà, on décale juste ce qu'il
+             * faut pour l'y ramener, sinon les vues à grosses sur-colonnes envoient aujourd'hui
+             * hors de l'écran sur les fenêtres étroites.
+             * Entrée : { colPx, todayPx, visibleWidth, ecart? }
+             * Sortie : défilement souhaité en px (>= 0), avant clamp du navigateur
+             */
+            function computeTodayScroll(o) {
+                const ecart = o.ecart == null ? 12 : o.ecart;
+                const seuil = Math.max(ecart, o.visibleWidth / 3);
+                let scroll = o.colPx - ecart;
+                if (o.todayPx - scroll > seuil) scroll = o.todayPx - seuil;
+                return Math.max(0, Math.round(scroll));
+            }
+
+            /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
+             * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
+             * Entrée : { start:Date, depEnd:Date, depStart:Date, tStart:Date, depIdx, tIdx, pxPerDay, lien }
+             * `lien` vaut 'fin' (défaut, fin du prédécesseur) ou 'debut' (son début) : les deux arrivent
+             * sur le début du successeur, seule l'origine change.
+             * Sortie : { x1, y1, x2, y2, midX, pathD, arrowPoints }
+             */
+            function computeDependencyPath(o) {
+                const daysDiff = (a, b) => Math.round((b - a) / 86400000);
+                const debut = o.lien === 'debut';
+                const origine = debut ? o.depStart : o.depEnd;
+                const x1 = daysDiff(o.start, origine) * o.pxPerDay + (debut ? 0 : o.pxPerDay);
+                const y1 = o.depIdx * 44 + 22;
+                const x2 = daysDiff(o.start, o.tStart) * o.pxPerDay;
+                const y2 = o.tIdx * 44 + 22;
+                const midX = (x1 + x2) / 2;
+                return {
+                    x1: x1, y1: y1, x2: x2, y2: y2, midX: midX,
+                    pathD: 'M' + x1 + ',' + y1 + ' C' + midX + ',' + y1 + ' ' + midX + ',' + y2 + ' ' + x2 + ',' + y2,
+                    arrowPoints: x2 + ',' + y2 + ' ' + (x2 - 6) + ',' + (y2 - 4) + ' ' + (x2 - 6) + ',' + (y2 + 4)
+                };
+            }
+
+            return {
+                DEFAULT_STATUSES: DEFAULT_STATUSES,
+                computeTimelineScale: computeTimelineScale,
+                computeBarGeometry: computeBarGeometry,
+                computeDependencyPath: computeDependencyPath,
+                computeTodayScroll: computeTodayScroll,
+                isPlausibleDate: isPlausibleDate,
+                columnarToRows: columnarToRows,
+                fetchSchemaMeta: fetchSchemaMeta,
+                loadStatusConfig: loadStatusConfig,
+                buildStatusConfig: buildStatusConfig,
+                getStatus: getStatus,
+                isTerminal: isTerminal,
+                seedStatusChoices: seedStatusChoices,
+                setRefDisplayColumns: setRefDisplayColumns,
+                ensureUntiedLabels: ensureUntiedLabels,
+                parseCharges: parseCharges,
+                chargesToJson: chargesToJson,
+                chargeTotal: chargeTotal,
+                chargeByMember: chargeByMember,
+                periodKey: periodKey,
+                chargeByMemberPeriod: chargeByMemberPeriod,
+                shiftPeriods: shiftPeriods,
+                periodRange: periodRange,
+                chargeMatrix: chargeMatrix
+            };
+        })();
+
+        // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
+        if (typeof module !== 'undefined' && module.exports) module.exports = TF;
+        // </inline>
+
+        // <inline:fiche.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
+        'use strict';
+
+        // Fiche d'un projet : son cadrage, puis la feuille de route de ses chantiers.
+        // Le widget est lié à la table Projects et ne travaille que sur l'enregistrement sélectionné.
+        // Lecture seule : rien ne s'y crée, ne s'y modifie ni ne s'y supprime.
+
+        const CATEGORIE_FICHE = 'Projet';
+        const NOMS_DATE_CHANTIER = { debut: ['Debut', 'Date_debut'], fin: ['Fin', 'Date_fin'] };
+        const MOIS_AVANT = 1;   // la fenêtre s'ouvre au premier jour du mois précédent
+        const MOIS_TOTAL = 6;
+
+        let schemaMeta = null;
+        let projet = null;
+        let equipe = [];
+        let chantiers = [];
+        let taches = [];
+        let categories = [];
+        const chantiersReplies = new Set();
+
+        const el = (id) => document.getElementById(id);
+        const echapper = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        const gristVersDate = (ts) => (ts ? new Date(ts * 1000) : null);
+        const listeRefs = (v) => (Array.isArray(v) && v[0] === 'L' ? v.slice(1).map(Number) : []);
+        const jours = (a, b) => Math.round((b - a) / 86400000);
+
+        function typeColonne(tableId, colId) {
+            if (!schemaMeta) return null;
+            const t = (schemaMeta.tables || []).find((x) => x.tableId === tableId);
+            if (!t) return null;
+            const c = (schemaMeta.cols || []).find((x) => x.parentId === t.id && x.colId === colId);
+            return c ? c.type : null;
+        }
+
+        // Le nom de la colonne appartient à qui tient la structure du document : c'est son type qui la
+        // désigne, comme dans le Gantt.
+        function colonneChantier() {
+            if (typeColonne('Tasks', 'chantier') === 'Ref:Chantiers') return 'chantier';
+            if (typeColonne('Tasks', 'parentTask') === 'Ref:Chantiers') return 'parentTask';
+            const t = schemaMeta && (schemaMeta.tables || []).find((x) => x.tableId === 'Tasks');
+            if (!t) return null;
+            const c = (schemaMeta.cols || []).find((x) => x.parentId === t.id && x.type === 'Ref:Chantiers');
+            return c ? c.colId : null;
+        }
+
+        function colonneDateChantier(borne) {
+            const noms = NOMS_DATE_CHANTIER[borne];
+            if (!schemaMeta) return noms[0];
+            return noms.find((n) => typeColonne('Chantiers', n) === 'Date') || noms[0];
+        }
+
+        // La catégorie se porte tantôt en référence vers une table, tantôt en liste de choix : la valeur
+        // suffit à trancher, un identifiant étant un nombre et un choix une chaîne.
+        function categorieDuProjet(p) {
+            const v = p && p.Categorie;
+            if (typeof v === 'number' && v > 0) {
+                const c = categories.find((x) => x.id === v);
+                return c ? (c.Categorie || '') : '';
+            }
+            return typeof v === 'string' ? v : '';
+        }
+
+        const membre = (id) => equipe.find((m) => m.id === id) || null;
+        const nomMembre = (id) => { const m = membre(id); return m ? (m.nom || '') : ''; };
+        const initiales = (nom) => String(nom || '').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
+
+        const lundiDe = (d) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); r.setHours(0, 0, 0, 0); return r; };
+
+        /**
+         * Fenêtre de six mois, du mois précédent au cinquième suivant. Les colonnes étant des semaines,
+         * la fenêtre s'ouvre au lundi de la première et se ferme au dimanche de la dernière : sans cela
+         * les positions se mesurent depuis le premier du mois et se décalent d'une colonne.
+         */
+        function fenetre() {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const premier = new Date(today.getFullYear(), today.getMonth() - MOIS_AVANT, 1);
+            const dernier = new Date(today.getFullYear(), today.getMonth() - MOIS_AVANT + MOIS_TOTAL, 0);
+            const debut = lundiDe(premier);
+            const fin = lundiDe(dernier);
+            fin.setDate(fin.getDate() + 6);
+            return { premier: premier, debut: debut, fin: fin, duree: jours(debut, fin) + 1, today: today };
+        }
+
+        /** Colonnes hebdomadaires de la fenêtre, chacune rattachée à un des six mois affichés. */
+        function colonnes(f) {
+            const out = [];
+            for (let d = new Date(f.debut); d <= f.fin; d.setDate(d.getDate() + 7)) {
+                const debutSemaine = new Date(d);
+                const index = Math.min(Math.max((debutSemaine.getFullYear() - f.premier.getFullYear()) * 12 + debutSemaine.getMonth() - f.premier.getMonth(), 0), MOIS_TOTAL - 1);
+                out.push({ debut: debutSemaine, mois: index, semaine: numeroSemaine(debutSemaine) });
+            }
+            return out;
+        }
+
+        function numeroSemaine(d) {
+            const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+            t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+            const debutAnnee = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+            return Math.ceil(((t - debutAnnee) / 86400000 + 1) / 7);
+        }
+
+        /**
+         * Position d'une barre, en pourcentage de la fenêtre. La brique px du core sert un Gantt qui
+         * défile ; ici la fenêtre est fixe et suit la largeur de l'écran, une position relative la rend
+         * responsive sans recalcul au redimensionnement.
+         */
+        function barre(f, debut, fin) {
+            if (!debut || !fin) return null;
+            const d = Math.max(jours(f.debut, debut), 0);
+            const t = Math.min(jours(f.debut, fin) + 1, f.duree);
+            if (t <= 0 || d >= f.duree) return null;
+            return { gauche: (d / f.duree) * 100, largeur: Math.max(((t - d) / f.duree) * 100, 0.6) };
+        }
+
+        /** Chantiers du projet, chacun suivi de ses tâches. */
+        function lignes() {
+            const colChantier = colonneChantier();
+            const colDebut = colonneDateChantier('debut');
+            const colFin = colonneDateChantier('fin');
+            const duProjet = chantiers.filter((c) => listeRefs(c.Projets).indexOf(projet.id) !== -1);
+            const out = [];
+            duProjet.forEach((c) => {
+                const filles = colChantier ? taches.filter((t) => t[colChantier] === c.id) : [];
+                const debuts = filles.map((t) => t.dateDebut).filter(Boolean);
+                const fins = filles.map((t) => t.dateEcheance).filter(Boolean);
+                out.push({
+                    id: 'c' + c.id, chantier: true, titre: c.Nom_du_chantier || 'Sans titre',
+                    debut: gristVersDate(c[colDebut] || (debuts.length ? Math.min.apply(null, debuts) : null)),
+                    fin: gristVersDate(c[colFin] || (fins.length ? Math.max.apply(null, fins) : null)),
+                    responsable: c.Responsable || null, filles: filles.length
+                });
+                if (chantiersReplies.has(c.id)) return;
+                filles.forEach((t) => out.push({
+                    id: 't' + t.id, chantier: false, titre: t.titre || 'Sans titre',
+                    debut: gristVersDate(t.dateDebut), fin: gristVersDate(t.dateEcheance),
+                    responsable: t.Responsable || null, progression: t.progression || 0,
+                    personnes: listeRefs(t.assignees), parent: c.id
+                }));
+            });
+            return out;
+        }
+
+        function bloc(classe, libelle, contenu) {
+            return '<div class="fiche-bloc ' + classe + '"><div class="fiche-label">' + echapper(libelle) + '</div>'
+                + '<div class="fiche-valeur">' + (contenu || '<span class="vide">Non renseigné</span>') + '</div></div>';
+        }
+
+        function pastilles(ids) {
+            if (!ids.length) return '';
+            return ids.map((id) => {
+                const m = membre(id);
+                if (!m) return '';
+                return '<span class="fiche-personne" style="--teinte:' + echapper(m.couleur || '#3e5de7') + '">'
+                    + '<span class="fiche-initiales">' + echapper(initiales(m.nom)) + '</span>' + echapper(m.nom) + '</span>';
+            }).join('');
+        }
+
+        /** Les personnes posees sur une ligne, en pastilles rondes ; au-dela de trois, un compteur. */
+        function avatars(r) {
+            const ids = (r.personnes || []).slice();
+            if (r.responsable && ids.indexOf(r.responsable) === -1) ids.unshift(r.responsable);
+            if (!ids.length) return '';
+            const montres = ids.slice(0, 3).map((id) => {
+                const m = membre(id);
+                if (!m) return '';
+                return '<span class="fiche-avatar" style="--teinte:' + echapper(m.couleur || '#3e5de7') + '" title="' + echapper(m.nom || '') + '">'
+                    + echapper(initiales(m.nom)) + '</span>';
+            }).join('');
+            const reste = ids.length > 3 ? '<span class="fiche-avatar" style="--teinte:#64748b">+' + (ids.length - 3) + '</span>' : '';
+            return '<span class="fiche-avatars">' + montres + reste + '</span>';
+        }
+
+        function texteOuVide(v) {
+            const s = v == null ? '' : String(v).trim();
+            return s ? echapper(s) : '';
+        }
+
+        function dateCourte(ts) {
+            const d = gristVersDate(ts);
+            return d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+        }
+
+        function enTete() {
+            const type = texteOuVide(projet.Type);
+            return '<header class="fiche-entete">'
+                + '<h1 class="fiche-titre">' + echapper(projet.nom || 'Sans titre') + '</h1>'
+                + (type ? '<span class="fiche-type">' + type + '</span>' : '')
+                + '</header>';
+        }
+
+        function cadrage() {
+            return '<section class="fiche-cadrage">'
+                + '<div class="fiche-colonne">'
+                + bloc('bloc-responsable', 'Responsable', pastilles(projet.responsable ? [projet.responsable] : []))
+                + bloc('bloc-sponsors', 'Sponsors', pastilles(listeRefs(projet.Sponsor)))
+                + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(listeRefs(projet.Contributeurs_cles)))
+                + '</div>'
+                + '<div class="fiche-colonne large">'
+                + bloc('bloc-description', 'Description', texteOuVide(projet.Description))
+                + '<div class="fiche-trio">'
+                + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
+                + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
+                + bloc('bloc-deadline', 'Deadline commanditaires', texteOuVide(dateCourte(projet.Deadline_commanditaire)))
+                + '</div></div></section>';
+        }
+
+        function feuilleDeRoute() {
+            const f = fenetre();
+            const cols = colonnes(f);
+            const rangs = lignes();
+            const nbChantiers = rangs.filter((r) => r.chantier).length;
+
+            if (!nbChantiers) {
+                return '<section class="fiche-route"><h2>Feuille de route</h2>'
+                    + '<p class="fiche-message">Aucun chantier n\'est rattaché à ce projet.</p></section>';
+            }
+
+            const mois = [];
+            for (let i = 0; i < MOIS_TOTAL; i++) {
+                const d = new Date(f.premier.getFullYear(), f.premier.getMonth() + i, 1);
+                const largeur = cols.filter((c) => c.mois === i).length;
+                mois.push('<div class="fiche-mois" style="flex:' + largeur + '">' + echapper(d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')) + '</div>');
+            }
+
+            const semaines = cols.map((c) => '<div class="fiche-semaine">S' + c.semaine + '</div>').join('');
+            const aujourdhui = (jours(f.debut, f.today) / f.duree) * 100;
+
+            const corps = rangs.map((r) => {
+                const b = barre(f, r.debut, r.fin);
+                const chevron = r.chantier && r.filles
+                    ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (chantiersReplies.has(Number(r.id.slice(1))) ? '▶' : '▼') + '</button>'
+                    : '<span class="fiche-chevron-vide"></span>';
+                const teinte = r.responsable && membre(r.responsable) ? (membre(r.responsable).couleur || '#3e5de7') : '#94a3b8';
+                return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + '">'
+                    + '<div class="fiche-ligne">' + chevron
+                    + '<span class="fiche-nom">' + echapper(r.titre) + '</span>'
+                    + (r.chantier ? '' : '<span class="fiche-dates">' + (r.debut ? r.debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '') + '</span>')
+                    + (r.progression ? '<span class="fiche-progression">' + Math.round(r.progression) + '%</span>' : '')
+                    + avatars(r)
+                    + '</div>'
+                    + '<div class="fiche-piste">'
+                    + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '"></span>' : '')
+                    + '</div></div>';
+            }).join('');
+
+            return '<section class="fiche-route">'
+                + '<h2>Feuille de route ' + (nbChantiers > 1 ? 'des ' + nbChantiers + ' chantiers associés' : 'du chantier associé') + '</h2>'
+                + '<div class="fiche-grille">'
+                + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Tâches</div>'
+                + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div><div class="fiche-semaines">' + semaines + '</div></div></div>'
+                + '<div class="fiche-corps">' + corps
+                + '<div class="fiche-overlay"><div class="fiche-aujourdhui" style="left:' + aujourdhui.toFixed(2) + '%"></div></div>'
+                + '</div></div></section>';
+        }
+
+        function rendre() {
+            const racine = el('fiche');
+            if (!projet) {
+                racine.innerHTML = '<p class="fiche-message">Sélectionnez un projet pour afficher sa fiche.</p>';
+                return;
+            }
+            const categorie = categorieDuProjet(projet);
+            if (categorie && categorie !== CATEGORIE_FICHE) {
+                racine.innerHTML = enTete()
+                    + '<p class="fiche-message fiche-hors-perimetre">Cette fiche ne concerne que les projets. '
+                    + echapper(projet.nom || 'Cette ligne') + ' est de catégorie ' + echapper(categorie) + '.</p>';
+                return;
+            }
+            racine.innerHTML = enTete() + cadrage() + feuilleDeRoute();
+            racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
+                const id = Number(b.dataset.chantier);
+                if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
+                rendre();
+            }));
+        }
+
+        async function charger() {
+            const lire = async (table) => {
+                try { return TF.columnarToRows(await grist.docApi.fetchTable(table)); } catch (e) { return []; }
+            };
+            try { schemaMeta = await TF.fetchSchemaMeta(grist); } catch (e) { schemaMeta = null; }
+            equipe = await lire('Team');
+            chantiers = await lire('Chantiers');
+            taches = await lire('Tasks');
+            categories = await lire('Categorie_de_projet');
+            rendre();
+        }
+
+        function demarrer() {
+            try {
+                grist.ready({ requiredAccess: 'full' });
+                grist.onRecord(async (record) => { projet = record; await charger(); });
+            } catch (e) {
+                el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s\'ouvre depuis un document Grist.</p>';
+            }
+        }
+
+        demarrer();
+        // </inline>
+    </script>
+</body>
+</html>
