@@ -125,7 +125,7 @@ for (const [valeur, visible] of [['true', true], ['oui', false], [null, false]])
         await expect(badge).toHaveText('local');
         const enTete = await page.evaluate(() => {
             const b = document.getElementById('badgeVersion').getBoundingClientRect();
-            return b.left < document.getElementById('sortSelect').getBoundingClientRect().left && b.top < 80;
+            return b.left < document.getElementById('colorSelect').getBoundingClientRect().left && b.top < 80;
         });
         expect(enTete).toBe(true);
     });

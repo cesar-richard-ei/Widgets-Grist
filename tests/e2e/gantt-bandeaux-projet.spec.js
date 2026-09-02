@@ -136,7 +136,7 @@ test('aucun trait ne double la rupture entre deux projets', async ({ page }) => 
 
 test('le tri s applique à l intérieur de chaque projet', async ({ page }) => {
     await D.ouvrirGantt(page);
-    await page.selectOption('#sortSelect', 'date');
+    await D.trier(page, 'date');
 
     const titres = await page.$$eval('#taskList .task-row', (l) => l.map((x) => x.textContent));
     const rang = (t) => titres.findIndex((x) => x.includes(t));

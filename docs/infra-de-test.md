@@ -8,6 +8,7 @@ comportement attendu aujourd'hui, pas ce qui a changé. Proscrire les titres du 
 
 | Fichier | Domaine |
 |---|---|
+| `gantt-barre-outils.spec.js` | composition de la barre d'outils : ce qu'elle propose et ce qu'elle ne propose plus |
 | `gantt-timeline.spec.js` | calage sur le jour, navigation, profondeur historique, en-tête des mois, jalon déplaçable |
 | `gantt-bandeaux-projet.spec.js` | bandeaux de projet, teintes, repli, alignement des deux colonnes |
 | `gantt-colonne-gauche.spec.js` | largeurs, pastilles, contenu d'une ligne, repli, barre étroite |
