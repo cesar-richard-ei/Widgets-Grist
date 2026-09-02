@@ -1371,6 +1371,11 @@
         // UTILITIES
         // ═══════════════════════════════════════════════════════════════════════
         const escapeHtml = (t) => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+        // textContent puis innerHTML ne touche pas aux guillemets : une valeur du document placée dans un
+        // attribut peut en sortir et poser son propre gestionnaire d'événement.
+        const escapeAttr = (t) => escapeHtml(t).replace(/"/g, '&quot;');
+        // Les couleurs viennent aussi du document, et partent dans un attribut style.
+        const couleurSure = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : '#6366f1';
         const gristToDate = (ts) => { if (ts == null || ts === '') return null; const n = Number(ts); return isNaN(n) ? null : new Date(n * 1000); };
         const dateToGrist = (d) => d ? Math.floor(d.getTime() / 1000) : null;
         const formatDate = (d) => d ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(d) : '-';
@@ -2201,12 +2206,12 @@
         }
         function updateFilterMenus() {
             const grp = (label, html, first) => '<div class="fm-group-label'+(first?' first':'')+'">'+label+'</div>'+html;
-            const projHtml = projects.length ? projects.map(p => `<div class="filter-option" data-filtre="project" data-valeur="${p.id}" onclick="toggleFilter('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span class="dot" style="background:${p.couleur||'#6366f1'}"></span>${escapeHtml(p.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun projet</div>';
+            const projHtml = projects.length ? projects.map(p => `<div class="filter-option" data-filtre="project" data-valeur="${p.id}" onclick="toggleFilter('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span class="dot" style="background:${couleurSure(p.couleur)}"></span>${escapeHtml(p.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun projet</div>';
             const prioHtml = [1,2,3,4].map(p => `<div class="filter-option" data-filtre="priority" data-valeur="${p}" onclick="toggleFilter('priority', ${p})"><input type="checkbox" ${filters.priority.includes(p)?'checked':''}><span class="dot" style="background:${PRIORITY_COLORS[p]}"></span>${PRIORITY_LABELS[p]}</div>`).join('');
             const team2 = team.filter(m => m.actif !== false);
             const assHtml = team2.length ? team2.map(m => `<div class="filter-option" data-filtre="assignee" data-valeur="${m.id}" onclick="toggleFilter('assignee', ${m.id})"><input type="checkbox" ${filters.assignee.includes(m.id)?'checked':''}>${escapeHtml(m.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun membre</div>';
             const domaines = domainesConnus();
-            const domHtml = domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeHtml(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}><span class="dot" style="background:${couleurDeDomaine(d)}"></span>${escapeHtml(d)}</div>`).join('');
+            const domHtml = domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeAttr(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}><span class="dot" style="background:${couleurSure(couleurDeDomaine(d))}"></span>${escapeHtml(d)}</div>`).join('');
             const total = filters.project.length + filters.priority.length + filters.assignee.length + filters.domaine.length;
             const menu = document.getElementById('filterAllMenu');
             if (menu) menu.innerHTML = grp('Projets', projHtml, true) + (domaines.length ? grp('Domaines', domHtml) : '') + grp('Priorités', prioHtml) + grp('Assignés', assHtml) + '<div class="fm-foot"><span class="fm-clear" onclick="clearAllGanttFilters()">Tout effacer</span></div>';
@@ -2239,7 +2244,7 @@
         function renderFilterChips() {
             const bar = document.getElementById('filterChips'); if (!bar) return;
             const X = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-            const chip = (key, val, label, color) => { const dot = color ? `<span class="fc-dot" style="background:${color}"></span>` : ''; return `<span class="fc-chip">${dot}${label}<span class="fc-x" title="Retirer" onclick="toggleFilter('${key}', ${val})">${X}</span></span>`; };
+            const chip = (key, val, label, color) => { const dot = color ? `<span class="fc-dot" style="background:${couleurSure(color)}"></span>` : ''; return `<span class="fc-chip">${dot}${label}<span class="fc-x" title="Retirer" onclick="toggleFilter('${key}', ${val})">${X}</span></span>`; };
             const eff = effectiveFilters();
             const chips = [];
             eff.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', p&&p.couleur)); });
@@ -3329,7 +3334,7 @@
                             '<div class="dates-inline"><input type="date" value="' + formatDateISO(s) + '" onchange="updateField(\'dateDebut\', this.value)"><span class="dates-arrow">→</span><input type="date" value="' + formatDateISO(e) + '" onchange="updateField(\'dateEcheance\', this.value)"><button class="today-btn" onclick="setTodayDate()">Auj.</button></div>') +
                     '</div></div>' +
                     '<div class="prop-row pr-status"><span class="prop-label">Statut</span><div class="prop-value"><div class="status-selector">' +
-                        (data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => '<div class="status-pill ' + (data.statut === s.value ? 'selected' : '') + '" data-status="' + escapeHtml(s.value) + '" onclick="updateField(\'statut\', this.dataset.status)"><span class="panel-pill-dot" style="background:' + s.fillColor + '"></span>' + escapeHtml(s.label) + '</div>').join('') +
+                        (data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => '<div class="status-pill ' + (data.statut === s.value ? 'selected' : '') + '" data-status="' + escapeAttr(s.value) + '" onclick="updateField(\'statut\', this.dataset.status)"><span class="panel-pill-dot" style="background:' + couleurSure(s.fillColor) + '"></span>' + escapeHtml(s.label) + '</div>').join('') +
                     '</div></div></div>' +
                     (data.type === 'tache' ?
                         '<div class="prop-row pr-prog"><span class="prop-label">Progression</span><div class="prop-value">' +
