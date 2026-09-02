@@ -273,5 +273,5 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
     documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee, renommerColonne, avecLiens,
-    ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste
+    ouvrir, ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste
 };

@@ -1304,6 +1304,10 @@
         }
         const showSaveIndicator = () => { const el = document.getElementById('saveIndicator'); el.classList.add('visible'); clearTimeout(saveTimeout); saveTimeout = setTimeout(() => el.classList.remove('visible'), 1500); };
         const escapeHtml = (t) => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+const escapeAttr = (t) => escapeHtml(t).replace(/"/g, '&quot;');
+// Les couleurs viennent du document et partent dans un attribut style : n'accepter qu'une notation
+// hexadecimale, sinon une valeur peut fermer l'attribut et en ouvrir un autre.
+const couleurSure = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : '#6366f1';
 
         const gristToDate = (ts) => ts ? new Date(ts * 1000) : null;
         const dateToGrist = (d) => d ? Math.floor(d.getTime() / 1000) : null;
@@ -1552,7 +1556,7 @@
         
         function updateFilterMenus() {
             const grp = (label, html, first) => '<div class="fm-group-label'+(first?' first':'')+'">'+label+'</div>'+html;
-            const projHtml = projects.length ? projects.map(p => `<div class="filter-option" onclick="toggleFilterValue('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span style="color:${p.couleur||'#6366f1'}">●</span> ${escapeHtml(p.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun projet</div>';
+            const projHtml = projects.length ? projects.map(p => `<div class="filter-option" onclick="toggleFilterValue('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span style="color:${couleurSure(p.couleur)}">●</span> ${escapeHtml(p.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun projet</div>';
             const prioHtml = [1,2,3,4].map(p => `<div class="filter-option" onclick="toggleFilterValue('priority', ${p})"><input type="checkbox" ${filters.priority.includes(p)?'checked':''}><span style="color:${PRIORITY_COLORS[p]}">●</span> ${PRIORITY_LABELS[p]}</div>`).join('');
             const team2 = team.filter(m => m.actif !== false);
             const assHtml = team2.length ? team2.map(m => `<div class="filter-option" onclick="toggleFilterValue('assignee', ${m.id})"><input type="checkbox" ${filters.assignee.includes(m.id)?'checked':''}>${escapeHtml(m.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun membre</div>';
@@ -1568,7 +1572,7 @@
         function renderFilterChips() {
             const bar = document.getElementById('filterChips'); if (!bar) return;
             const X = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
-            const chip = (type, val, label, color) => { const dot = color ? `<span class="fc-dot" style="background:${color}"></span>` : ''; return `<span class="fc-chip">${dot}${label}<span class="fc-x" title="Retirer" onclick="toggleFilterValue('${type}', ${val})">${X}</span></span>`; };
+            const chip = (type, val, label, color) => { const dot = color ? `<span class="fc-dot" style="background:${couleurSure(color)}"></span>` : ''; return `<span class="fc-chip">${dot}${label}<span class="fc-x" title="Retirer" onclick="toggleFilterValue('${type}', ${val})">${X}</span></span>`; };
             const chips = [];
             filters.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', p&&p.couleur)); });
             filters.priority.forEach(v => chips.push(chip('priority', v, PRIORITY_LABELS[v], PRIORITY_COLORS[v])));
@@ -1857,7 +1861,7 @@
                             continuesNext ? 'continues-right' : ''
                         ].filter(Boolean).join(' ');
                         const projectColor = task.projet ? getProjectColor(task.projet) : null;
-                        bar.style.cssText = `left:${startDay / 7 * 100}%; width:${(endDay - startDay + 1) / 7 * 100}%; top:${top}px; height:${barH}px;${projectColor ? ` border-left-color:${projectColor};` : ''}`;
+                        bar.style.cssText = `left:${startDay / 7 * 100}%; width:${(endDay - startDay + 1) / 7 * 100}%; top:${top}px; height:${barH}px;${projectColor ? ` border-left-color:${couleurSure(projectColor)};` : ''}`;
                         if (!isMilestone) bar.style.background = getTaskBarGradient(task);
 
                         buildBarContent(bar, task, level, continuedFromPrev, continuesNext, isMilestone);
@@ -2004,7 +2008,7 @@
                         continuesNext ? 'continues-right' : ''
                     ].filter(Boolean).join(' ');
                     const projectColor = task.projet ? getProjectColor(task.projet) : null;
-                    bar.style.cssText = `left:${startDay / numDays * 100}%; width:${(endDay - startDay + 1) / numDays * 100}%; top:${lane * 22}px;${projectColor ? ` border-left-color:${projectColor};` : ''}`;
+                    bar.style.cssText = `left:${startDay / numDays * 100}%; width:${(endDay - startDay + 1) / numDays * 100}%; top:${lane * 22}px;${projectColor ? ` border-left-color:${couleurSure(projectColor)};` : ''}`;
                     if (!isMilestone) bar.style.background = getTaskBarGradient(task);
 
                     // B: Chevrons de continuation
@@ -2213,7 +2217,7 @@
                             bar.className = 'mini-event-bar';
                             const color = PRIORITY_COLORS[getPriority(task)] || '#64748b';
                             const cL = start < weekStart, cR = end > weekEnd;
-                            bar.style.cssText = `left:${startDay / 7 * 100}%; width:${(endDay - startDay + 1) / 7 * 100}%; top:${1 + lane * 5}px; background:${color}; height:4px; border-radius:${cL?'0':'2px'} ${cR?'0':'2px'} ${cR?'0':'2px'} ${cL?'0':'2px'};`;
+                            bar.style.cssText = `left:${startDay / 7 * 100}%; width:${(endDay - startDay + 1) / 7 * 100}%; top:${1 + lane * 5}px; background:${couleurSure(color)}; height:4px; border-radius:${cL?'0':'2px'} ${cR?'0':'2px'} ${cR?'0':'2px'} ${cL?'0':'2px'};`;
                             bar.title = task.titre || 'Sans titre';
                             bar.addEventListener('click', (e) => { e.stopPropagation(); openTaskPanel(task.id); });
                             barsEl.appendChild(bar);
@@ -2334,7 +2338,7 @@
                             const color = PRIORITY_COLORS[getPriority(task)] || '#64748b';
                             const continuedLeft = start < weekStart;
                             const continuesRight = end > weekEnd;
-                            bar.style.cssText = `left:${startDay / 7 * 100}%; width:${(endDay - startDay + 1) / 7 * 100}%; top:${2 + lane * 7}px; background:${color}; height:5px; border-radius:${continuedLeft ? '0' : '2px'} ${continuesRight ? '0' : '2px'} ${continuesRight ? '0' : '2px'} ${continuedLeft ? '0' : '2px'};`;
+                            bar.style.cssText = `left:${startDay / 7 * 100}%; width:${(endDay - startDay + 1) / 7 * 100}%; top:${2 + lane * 7}px; background:${couleurSure(color)}; height:5px; border-radius:${continuedLeft ? '0' : '2px'} ${continuesRight ? '0' : '2px'} ${continuesRight ? '0' : '2px'} ${continuedLeft ? '0' : '2px'};`;
                             bar.title = task.titre || 'Sans titre';
                             bar.addEventListener('click', (e) => { e.stopPropagation(); openTaskPanel(task.id); });
                             barsEl.appendChild(bar);
@@ -2593,7 +2597,7 @@
             
             return `<div class="panel-task-card p${p} ${t.id === selectedTaskId ? 'selected' : ''}" onclick="openTaskPanel(${t.id})">
                 <div class="panel-task-title">${t.type === 'jalon' ? '◆ ' : ''}${escapeHtml(t.titre) || 'Sans titre'}</div>
-                <div class="panel-task-meta"><span>${ds}</span>${projectName ? `<span style="color:${projectColor}">● ${escapeHtml(projectName)}</span>` : ''}</div>
+                <div class="panel-task-meta"><span>${ds}</span>${projectName ? `<span style="color:${couleurSure(projectColor)}">● ${escapeHtml(projectName)}</span>` : ''}</div>
                 ${t.type !== 'jalon' ? `<div class="panel-task-progress"><div class="panel-task-progress-bar p${p}" style="width:${t.progression || 0}%"></div></div>` : ''}
             </div>`;
         }
@@ -2638,10 +2642,10 @@
             // Assignés
             const assigneesChips = data.assignees.map(id => `<span class="multi-select-chip">${escapeHtml(getTeamMemberName(id))}<span class="remove" onclick="event.stopPropagation();removeAssignee(${id})">×</span></span>`).join('');
             const assigneesOptions = team.filter(m => m.actif !== false).map(m => {
-                const swatches = COLOR_PRESETS.map(c => `<span class="color-swatch" style="background:${c}" onclick="event.stopPropagation();setMemberColor(${m.id},'${c}')"></span>`).join('');
+                const swatches = COLOR_PRESETS.map(c => `<span class="color-swatch" style="background:${couleurSure(c)}" onclick="event.stopPropagation();setMemberColor(${m.id},'${couleurSure(c)}')"></span>`).join('');
                 return `<div class="multi-select-option ${data.assignees.includes(m.id) ? 'selected' : ''}" onclick="toggleAssignee(${m.id})">
                     <div class="member-color-wrap">
-                        <span class="member-color-dot" style="background:${getTeamMemberColor(m.id)}" title="Changer la couleur du membre" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')"></span>
+                        <span class="member-color-dot" style="background:${couleurSure(getTeamMemberColor(m.id))}" title="Changer la couleur du membre" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')"></span>
                         <div class="member-color-picker">${swatches}</div>
                     </div>
                     <input type="checkbox" ${data.assignees.includes(m.id) ? 'checked' : ''} onclick="event.stopPropagation();toggleAssignee(${m.id})">
@@ -2688,24 +2692,24 @@
                 const t = tasks.find(x => x.id === id);
                 if (!t) return '';
                 const st = t.statut || 'todo';
-                return `<div class="prereq-item ${TF.isTerminal(statusCfg, st) ? 'done' : ''}" onclick="openTaskPanel(${id})"><span class="prereq-item-icon">${TF.isTerminal(statusCfg, st) ? '✓' : '○'}</span><span class="prereq-item-title">${escapeHtml(t.titre)}</span><span class="prereq-badge" style="background:${TF.getStatus(statusCfg, st).fillColor};color:${TF.getStatus(statusCfg, st).textColor}">${escapeHtml(TF.getStatus(statusCfg, st).label)}</span></div>`;
+                return `<div class="prereq-item ${TF.isTerminal(statusCfg, st) ? 'done' : ''}" onclick="openTaskPanel(${id})"><span class="prereq-item-icon">${TF.isTerminal(statusCfg, st) ? '✓' : '○'}</span><span class="prereq-item-title">${escapeHtml(t.titre)}</span><span class="prereq-badge" style="background:${couleurSure(TF.getStatus(statusCfg, st).fillColor)};color:${couleurSure(TF.getStatus(statusCfg, st).textColor)}">${escapeHtml(TF.getStatus(statusCfg, st).label)}</span></div>`;
             }).join('');
 
             content.innerHTML = `
-                <div class="panel-accent-bar" style="background:${priorityColor}"></div>
+                <div class="panel-accent-bar" style="background:${couleurSure(priorityColor)}"></div>
                 <div class="panel-type-row">
                     <span class="type-pill ${data.type === 'tache' ? 'selected' : ''}" onclick="updateField('type','tache')">Tâche</span>
                     <span class="type-pill ${data.type === 'jalon' ? 'selected' : ''}" onclick="updateField('type','jalon')">◆ Jalon</span>
                     <span class="type-pill ${data.type === 'reunion' ? 'selected' : ''}" onclick="updateField('type','reunion')" > Réunion</span>
                 </div>
-                ${currentProject ? `<div class="panel-crumb"><span class="pd" style="background:${projectColor}"></span>${escapeHtml(currentProject.nom)}</div>` : ''}
+                ${currentProject ? `<div class="panel-crumb"><span class="pd" style="background:${couleurSure(projectColor)}"></span>${escapeHtml(currentProject.nom)}</div>` : ''}
                 <input type="text" class="panel-title-edit" id="taskTitle" placeholder="${titlePlaceholder}" value="${escapeHtml(data.titre)}" oninput="updateField('titre', this.value, true)">
 
                 <div class="props-list">
                     <div class="prop-row pr-status">
                         <span class="prop-label">Statut</span>
                         <div class="prop-value"><div class="status-selector">
-                            ${(data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => `<div class="status-pill ${data.statut === s.value ? 'selected' : ''}" data-status="${escapeHtml(s.value)}" onclick="updateField('statut', this.dataset.status)"><span class="panel-pill-dot" style="background:${s.fillColor}"></span>${escapeHtml(s.label)}</div>`).join('')}
+                            ${(data.type !== 'jalon' ? statusCfg.list : statusCfg.list.filter(s => s.value === statusCfg.firstValue || s.value === statusCfg.terminalValue)).map(s => `<div class="status-pill ${data.statut === s.value ? 'selected' : ''}" data-status="${escapeHtml(s.value)}" onclick="updateField('statut', this.dataset.status)"><span class="panel-pill-dot" style="background:${couleurSure(s.fillColor)}"></span>${escapeHtml(s.label)}</div>`).join('')}
                         </div></div>
                     </div>
                     ${data.type !== 'reunion' ? `
@@ -2729,8 +2733,8 @@
                         <span class="prop-label">Projet</span>
                         <div class="prop-value"><div class="project-select-wrap">
                             ${currentProject
-                                ? `<span class="project-color-dot" style="background:${projectColor}" title="Changer la couleur du projet" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')"></span><div class="color-picker-pop">${COLOR_PRESETS.map(c => `<span class="color-swatch" style="background:${c}" onclick="event.stopPropagation();setProjectColor(${currentProject.id},'${c}')"></span>`).join('')}</div>`
-                                : `<span class="project-color-dot" style="background:${projectColor}"></span>`}
+                                ? `<span class="project-color-dot" style="background:${couleurSure(projectColor)}" title="Changer la couleur du projet" onclick="event.stopPropagation();this.nextElementSibling.classList.toggle('open')"></span><div class="color-picker-pop">${COLOR_PRESETS.map(c => `<span class="color-swatch" style="background:${couleurSure(c)}" onclick="event.stopPropagation();setProjectColor(${currentProject.id},'${couleurSure(c)}')"></span>`).join('')}</div>`
+                                : `<span class="project-color-dot" style="background:${couleurSure(projectColor)}"></span>`}
                             <select class="form-select" onchange="updateField('projet', parseInt(this.value) || null)"><option value="">Aucun projet</option>${projectOptions}</select>
                         </div></div>
                     </div>
@@ -2758,7 +2762,7 @@
                     <div class="prop-row">
                         <span class="prop-label">${assignLabel}</span>
                         <div class="prop-value">
-                            ${data.assignees.length ? `<div class="asg-list">${data.assignees.map(id => { const nm = getTeamMemberName(id) || '?'; const initials = nm.split(' ').filter(Boolean).map(w => w[0]).slice(0,2).join('').toUpperCase(); const mem = team.find(x => x.id === id); return `<div class="asg"><span class="asg-ava" style="background:${getTeamMemberColor(id)}">${escapeHtml(initials)}</span><span class="an">${escapeHtml(nm)}</span>${mem && mem.role ? `<span class="ar">${escapeHtml(mem.role)}</span>` : ''}<button class="asg-x" title="Retirer" onclick="removeAssignee(${id})">×</button></div>`; }).join('')}</div>` : ''}
+                            ${data.assignees.length ? `<div class="asg-list">${data.assignees.map(id => { const nm = getTeamMemberName(id) || '?'; const initials = nm.split(' ').filter(Boolean).map(w => w[0]).slice(0,2).join('').toUpperCase(); const mem = team.find(x => x.id === id); return `<div class="asg"><span class="asg-ava" style="background:${couleurSure(getTeamMemberColor(id))}">${escapeHtml(initials)}</span><span class="an">${escapeHtml(nm)}</span>${mem && mem.role ? `<span class="ar">${escapeHtml(mem.role)}</span>` : ''}<button class="asg-x" title="Retirer" onclick="removeAssignee(${id})">×</button></div>`; }).join('')}</div>` : ''}
                             <div class="multi-select" id="assigneesSelect"><button class="addbtn" onclick="toggleMultiSelect('assigneesSelect')"><span style="font-size:1rem;line-height:1">+</span> ${data.type === 'reunion' ? 'Ajouter un participant' : 'Assigner un membre'}</button><div class="multi-select-dropdown">${assigneesOptions || '<div class="multi-select-empty">Aucun membre</div>'}</div></div>
                         </div>
                     </div>
