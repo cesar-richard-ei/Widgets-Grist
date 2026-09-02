@@ -50,6 +50,13 @@
       "url": "plan/",
       "accessLevel": "full",
       "description": "Plan de charge : capacité/charge par personne, prévu/réalisé/reste/dispo, disponibilités"
+    },
+    {
+      "widgetId": "taskflow-fiche",
+      "name": "TaskFlow Fiche projet",
+      "url": "fiche/",
+      "accessLevel": "full",
+      "description": "Fiche d'un projet en lecture seule : cadrage et feuille de route de ses chantiers sur six mois"
     }
   ]
 }
