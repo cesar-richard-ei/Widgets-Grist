@@ -1685,6 +1685,14 @@
             }
             return { start: minS, end: maxE };
         }
+        // Date sur laquelle une ligne se trie : la sienne, sinon celle que sa barre affiche, agrégée de ses
+        // enfants. Le document du métier ne saisit pas les dates d'un chantier : les lire brutes les rendait
+        // toutes vides, donc égales, et le tri par date laissait l'ordre d'insertion en place.
+        function dateDeTri(t) {
+            if (t.dateDebut != null) return t.dateDebut;
+            const agrege = aggregateDates(t).start;
+            return agrege != null ? agrege : 0;
+        }
         // WBS-02: toggle expand/collapse d'une branche
         function toggleExpand(id) {
             if (expandedTasks.has(id)) expandedTasks.delete(id); else expandedTasks.add(id);
@@ -1701,10 +1709,10 @@
         // Tri au sein d'une fratrie selon sortMode
         function sortFratrie(arr) {
             if (sortMode === 'priority') {
-                return arr.slice().sort((a, b) => { const pa = getTaskPriority(a), pb = getTaskPriority(b); return pa !== pb ? pa - pb : (a.dateDebut || 0) - (b.dateDebut || 0); });
+                return arr.slice().sort((a, b) => { const pa = getTaskPriority(a), pb = getTaskPriority(b); return pa !== pb ? pa - pb : dateDeTri(a) - dateDeTri(b); });
             }
             if (sortMode === 'date') {
-                return arr.slice().sort((a, b) => (a.dateDebut || 0) - (b.dateDebut || 0));
+                return arr.slice().sort((a, b) => dateDeTri(a) - dateDeTri(b));
             }
             return arr.slice(); // 'manual' — respecte l'ordre dans tasks[]
         }
@@ -2143,8 +2151,8 @@
             renderPanel(); render();
         }
         function sortTasks() {
-            if (sortMode === 'priority') tasks.sort((a, b) => { const pa = getTaskPriority(a), pb = getTaskPriority(b); return pa !== pb ? pa - pb : (a.dateDebut || 0) - (b.dateDebut || 0); });
-            else if (sortMode === 'date') tasks.sort((a, b) => (a.dateDebut || 0) - (b.dateDebut || 0));
+            if (sortMode === 'priority') tasks.sort((a, b) => { const pa = getTaskPriority(a), pb = getTaskPriority(b); return pa !== pb ? pa - pb : dateDeTri(a) - dateDeTri(b); });
+            else if (sortMode === 'date') tasks.sort((a, b) => dateDeTri(a) - dateDeTri(b));
         }
         function toggleFilterMenu(id) { const m = document.querySelector('#' + id + ' .filter-menu'); const open = m.classList.contains('open'); document.querySelectorAll('.filter-menu').forEach(x => x.classList.remove('open')); if (!open) m.classList.add('open'); }
         // GEN-02: Gestion des filtres avec arrays et synchronisation

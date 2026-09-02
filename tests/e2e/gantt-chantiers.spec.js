@@ -296,3 +296,30 @@ test('sans la colonne sur Chantiers, le volet d un chantier ne propose pas de re
     await D.ouvrirVolet(page, 'Cadrage des outils');
     await expect(volet(page).locator('#responsableSelect')).toHaveCount(1);
 });
+
+// Le document du métier ne saisit pas les dates d'un chantier : sa barre se dessine alors sur les
+// bornes de ses tâches, mais le tri lisait la date propre, vide, ce qui rendait tous les chantiers
+// égaux et laissait l'ordre d'insertion en place.
+const chantiersSansDates = () => {
+    const doc = D.documentCible();
+    doc.Chantiers.records.forEach((c) => { delete c.Date_debut; delete c.Date_fin; });
+    // Le chantier 2 démarre alors avant le chantier 1, l'inverse de l'ordre d'insertion.
+    doc.Tasks.records.find((t) => t.id === 5).dateDebut = D.j(-30);
+    return doc;
+};
+
+const racines = (page) => page.locator('#taskList .task-row[data-depth="0"] .task-name').allTextContents();
+
+test('sans dates propres, les chantiers se trient sur celles de leurs tâches', async ({ page }) => {
+    await D.ouvrirGantt(page, chantiersSansDates());
+
+    const ordre = await racines(page);
+    expect(ordre.indexOf('Guides utilisateurs')).toBeLessThan(ordre.indexOf('Socle technique'));
+});
+
+test('le tri par date reste celui des dates propres quand elles sont saisies', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    const ordre = await racines(page);
+    expect(ordre.indexOf('Socle technique')).toBeLessThan(ordre.indexOf('Guides utilisateurs'));
+});
