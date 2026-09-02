@@ -361,3 +361,37 @@ test('supprimer une tâche depuis le volet la retire de Tasks', async ({ page })
 
     await expect.poll(() => identifiants(page, 'Tasks')).not.toContain(5);
 });
+
+// Un chantier ne tient pas sa propre liste de contributeurs : elle remonte de ses tâches. La
+// colonne existe dans la structure du document, mais le widget ne l'écrit pas et ne s'y fie donc
+// pas non plus pour l'affichage. La ligne lisait la colonne quand le volet lisait la remontée : des
+// bulles à gauche, personne dans le volet.
+const chantierAvecColonneRemplie = () => {
+    const doc = D.documentCible();
+    const chantier = doc.Chantiers.records.find((c) => c.id === 2);
+    chantier.Contributeurs = ['L', 1, 3];
+    delete chantier.Responsable;
+    doc.Tasks.records.filter((t) => t.chantier === 2).forEach((t) => { delete t.assignees; delete t.Responsable; });
+    return doc;
+};
+
+test('les contributeurs d un chantier ne viennent pas de sa colonne', async ({ page }) => {
+    await D.ouvrirGantt(page, chantierAvecColonneRemplie());
+
+    await expect(D.ligne(page, 'Guides utilisateurs').locator('.task-avatar')).toHaveCount(0);
+});
+
+test('la ligne d un chantier montre ce que son volet montre', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Chantiers.records.find((c) => c.id === 2).Contributeurs = ['L', 1];
+    await D.ouvrirGantt(page, doc);
+
+    const pastilles = await D.ligne(page, 'Guides utilisateurs').locator('.task-avatar').evaluateAll(
+        (noeuds) => noeuds.map((n) => n.getAttribute('title')));
+    await D.ouvrirVolet(page, 'Guides utilisateurs');
+    const noms = await page.evaluate(() => panelState.editData.assignees.map(getTeamMemberName));
+
+    // La tâche du chantier porte Chloé Roux : c'est elle que les deux doivent montrer.
+    expect(noms).toEqual(['Chloé Roux']);
+    expect(pastilles).toEqual(['Chloé Roux']);
+});

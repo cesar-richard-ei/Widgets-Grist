@@ -223,7 +223,7 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 - Vue par défaut Semestre (en mémoire, non persistée entre sessions)
 - Texte hors bande pour barres étroites
 - Tooltip configurable au survol (`TOOLTIP_FIELDS`)
-- Filtre assigné + projet + priorité + domaine. Le **domaine** d'une personne est son équipe (`Team.Domaine`, colonne facultative que le widget ne crée pas ; `Team.role` est un libellé d'affichage, vide sur le document du métier) : une ligne est retenue dès qu'une personne du domaine la touche, par elle-même, par son chantier ou par le responsable de son projet. Le groupe disparaît du menu si aucun membre ne porte de domaine
+- Filtre assigné + projet + priorité + domaine. Le **domaine** d'une personne est son équipe (`Team.Domaine`, colonne facultative que le widget ne crée pas ; `Team.role` est un libellé d'affichage, vide sur le document du métier) : une ligne est retenue dès qu'une personne du domaine la touche, par elle-même ou par son chantier. Le projet ne fait pas entrer ses lignes : une personne posée dessus suffisait à ramener des chantiers et des tâches sans lien direct. Le groupe disparaît du menu si aucun membre ne porte de domaine
 - Sous-tâches dans panel — **FUT-01**
 - Bouton discret « replier toutes les tâches » dans l'en-tête de la colonne (fermeture seule, visible seulement quand une branche est dépliée)
 - Duplication depuis le volet : reprend les champs et le rattachement, la copie s'ouvre pour être renommée. Les sous-tâches ne suivent pas, dupliquer une branche entière n'a pas été demandé. Absent sur un chantier
@@ -758,7 +758,10 @@ rattachement. Écrire un nom en dur revenait à faire élaguer les deux colonnes
 `pruneChantierRecord()` : aucune date de chantier ne partait en base, et la lecture retombait sur les
 bornes des tâches, ce qui masquait la panne à l'affichage.
 
-> `Chantiers.Contributeurs` n'est pas écrite. La colonne est stockée, mais le volet n'affiche que la
+> `Chantiers.Contributeurs` n'est ni écrite ni lue. La colonne existe dans la structure du document,
+> mais un chantier ne tient pas sa propre liste : elle remonte de ses tâches, dans le volet **comme
+> sur les pastilles de la ligne**. Les lire de deux sources différentes montrait des têtes à gauche
+> en face d'un volet vide. Le volet n'affiche donc que la
 > remontée des tâches : l'écrire remplaçait la saisie faite dans Grist à chaque enregistrement, et la
 > vidait sur un chantier sans tâche. Le bloc porte la mention « Remontée automatique des contributeurs
 > aux tâches », arbitrage du 27/08/2026 : sans elle, un chantier dont les tâches n'ont personne montre
