@@ -985,6 +985,10 @@ let _compIdCounter = 100;
 // ═══════════════════════════════════════════════════════════════════════════════
 const gristToDate  = ts => ts ? new Date(ts * 1000) : null;
 const escapeHtml   = t  => { if (!t) return ''; const d = document.createElement('div'); d.textContent = t; return d.innerHTML; };
+const escapeAttr = (t) => escapeHtml(t).replace(/"/g, '&quot;');
+// Les couleurs viennent du document et partent dans un attribut style : n'accepter qu'une notation
+// hexadecimale, sinon une valeur peut fermer l'attribut et en ouvrir un autre.
+const couleurSure = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : '#6366f1';
 const isSameDay    = (a,b) => a && b && a.getDate()===b.getDate() && a.getMonth()===b.getMonth() && a.getFullYear()===b.getFullYear();
 const addDays      = (d,n) => { const r=new Date(d); r.setDate(r.getDate()+n); return r; };
 const startOfWeek  = d => { const t=new Date(d); const dow=t.getDay(); return addDays(t,-(dow===0?6:dow-1)); };
@@ -1073,7 +1077,7 @@ function renderFilterPanel() {
         <div class="filter-section">
             <div class="filter-section-label">Projet</div>
             <div class="filter-checkboxes">
-                ${projects.filter(p=>p.actif!==false).map(p => `<span class="filter-check ${filters.projets.includes(String(p.id))?'active':''}" onclick="toggleFilterProjet(${p.id})"><span style="color:${p.couleur||'#6366f1'}">●</span> ${escapeHtml(p.nom)}</span>`).join('')}
+                ${projects.filter(p=>p.actif!==false).map(p => `<span class="filter-check ${filters.projets.includes(String(p.id))?'active':''}" onclick="toggleFilterProjet(${p.id})"><span style="color:${couleurSure(p.couleur)}">●</span> ${escapeHtml(p.nom)}</span>`).join('')}
             </div>
         </div>`;
     if (team.length) html += `
@@ -1097,9 +1101,9 @@ function renderFilterPanel() {
 function renderFilterChips() {
     const chips = [];
     if (filters.periode!=='all') { const labels={week:'Semaine',month:'Mois',quarter:'Trimestre'}; chips.push(`<span class="filter-chip">${labels[filters.periode]}<button title="Retirer" onclick="setPeriode('all')">×</button></span>`); }
-    filters.projets.forEach(id => { const p=projects.find(x=>String(x.id)===id); if(p) chips.push(`<span class="filter-chip"><span class="fc-dot" style="background:${p.couleur||'#6366f1'}"></span>${escapeHtml(p.nom)}<button title="Retirer" onclick="toggleFilterProjet(${p.id})">×</button></span>`); });
+    filters.projets.forEach(id => { const p=projects.find(x=>String(x.id)===id); if(p) chips.push(`<span class="filter-chip"><span class="fc-dot" style="background:${couleurSure(p.couleur)}"></span>${escapeHtml(p.nom)}<button title="Retirer" onclick="toggleFilterProjet(${p.id})">×</button></span>`); });
     filters.assignes.forEach(id => { const m=team.find(x=>String(x.id)===id); if(m) chips.push(`<span class="filter-chip">${escapeHtml((m.nom||'').split(' ')[0])}<button title="Retirer" onclick="toggleFilterAssigne(${m.id})">×</button></span>`); });
-    filters.statuts.forEach(v => { const sc=TF.getStatus(statusCfg,v); chips.push(`<span class="filter-chip"><span class="fc-dot" style="background:${sc.fillColor}"></span>${sc.label}<button title="Retirer" onclick="toggleFilterStatut('${v}')">×</button></span>`); });
+    filters.statuts.forEach(v => { const sc=TF.getStatus(statusCfg,v); chips.push(`<span class="filter-chip"><span class="fc-dot" style="background:${couleurSure(sc.fillColor)}"></span>${sc.label}<button title="Retirer" onclick="toggleFilterStatut('${v}')">×</button></span>`); });
     const total = (filters.periode!=='all'?1:0) + filters.projets.length + filters.assignes.length + filters.statuts.length;
     const cnt = document.getElementById('filterCount'); if (cnt) { cnt.textContent = total; cnt.style.display = total ? 'inline-flex' : 'none'; }
     const ftb = document.getElementById('filterToggleBtn'); if (ftb) ftb.classList.toggle('active', total>0);
@@ -1371,9 +1375,9 @@ function renderDonut(comp, ft) {
     let offset=0, paths='', legend='';
     groups.forEach(g => {
         const len=(g.count/total)*C;
-        paths+=`<circle cx="70" cy="70" r="${R}" fill="none" stroke="${g.color}" stroke-width="18" stroke-dasharray="${len} ${C}" stroke-dashoffset="${-offset}"/>`;
+        paths+=`<circle cx="70" cy="70" r="${R}" fill="none" stroke="${couleurSure(g.color)}" stroke-width="18" stroke-dasharray="${len} ${C}" stroke-dashoffset="${-offset}"/>`;
         offset+=len;
-        legend+=`<div class="legend-item"><span class="legend-dot" style="background:${g.color}"></span><span>${escapeHtml(g.label)}</span><span class="legend-value">${g.count}</span></div>`;
+        legend+=`<div class="legend-item"><span class="legend-dot" style="background:${couleurSure(g.color)}"></span><span>${escapeHtml(g.label)}</span><span class="legend-value">${g.count}</span></div>`;
     });
     return `<div class="donut-wrap">
         <div class="donut-chart" style="width:140px;height:140px">
@@ -1390,7 +1394,7 @@ function renderBars(comp, ft) {
     return `<div class="bar-chart">${groups.map(g => `
         <div class="bar-row">
             <div class="bar-label">${escapeHtml(g.label)}</div>
-            <div class="bar-track"><div class="bar-fill" style="width:${Math.round(g.count/max*100)}%;background:${g.color}"><span>${g.count}</span></div></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.round(g.count/max*100)}%;background:${couleurSure(g.color)}"><span>${g.count}</span></div></div>
         </div>`).join('')}</div>`;
 }
 
@@ -1416,7 +1420,7 @@ function renderWorkload(comp, ft) {
         const lvl=d.active>5?'high':d.active>3?'medium':'';
         const ini=(m.nom||'?').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
         return `<div class="workload-item">
-            <div class="workload-avatar" style="background:${m.couleur||'#4f46e5'}">${ini}</div>
+            <div class="workload-avatar" style="background:${couleurSure(m.couleur)}">${ini}</div>
             <div class="workload-info"><div class="workload-name">${escapeHtml(m.nom)}</div><div class="workload-tasks">${d.active} active${d.active>1?'s':''} / ${d.total} total</div></div>
             <div class="workload-bar"><div class="workload-bar-fill ${lvl}" style="width:${pct}%"></div></div>
         </div>`;
@@ -1437,7 +1441,7 @@ function renderCharge(comp, ft) {
         const lvl = h>40?'high':h>20?'medium':'';
         const ini=(m.nom||'?').split(' ').map(n=>n[0]).join('').toUpperCase().slice(0,2);
         return `<div class="workload-item">
-            <div class="workload-avatar" style="background:${m.couleur||'#4f46e5'}">${ini}</div>
+            <div class="workload-avatar" style="background:${couleurSure(m.couleur)}">${ini}</div>
             <div class="workload-info"><div class="workload-name">${escapeHtml(m.nom)}</div><div class="workload-tasks">${h} h allouée${h>1?'s':''}</div></div>
             <div class="workload-bar"><div class="workload-bar-fill ${lvl}" style="width:${pct}%"></div></div>
         </div>`;
@@ -1512,7 +1516,7 @@ function renderUpcoming(comp, ft) {
             <div class="upcoming-info">
                 <div class="upcoming-title">${escapeHtml(t.titre)}</div>
                 <div class="upcoming-meta">
-                    ${proj?`<span style="color:${proj.couleur||'#6366f1'}">● ${escapeHtml(proj.nom)}</span>`:''}
+                    ${proj?`<span style="color:${couleurSure(proj.couleur)}">● ${escapeHtml(proj.nom)}</span>`:''}
                     <span class="${days<0?'text-danger':''}">${days<0?Math.abs(days)+'j retard':days===0?"Aujourd'hui":'Dans '+days+'j'}</span>
                 </div>
             </div>
@@ -1536,7 +1540,7 @@ function renderProjects(comp, ft) {
         const s=stats[p.id]||{total:0,done:0};
         const pct=s.total>0?Math.round(s.done/s.total*100):0;
         return `<div class="project-item">
-            <div class="project-color" style="background:${p.couleur||'#6366f1'}"></div>
+            <div class="project-color" style="background:${couleurSure(p.couleur)}"></div>
             <div class="project-info"><div class="project-name">${escapeHtml(p.nom)}</div><div class="project-stats">${s.done}/${s.total} terminées</div></div>
             <div class="project-progress">
                 <div class="project-progress-bar"><div class="project-progress-fill" style="width:${pct}%"></div></div>
@@ -1566,9 +1570,9 @@ function renderList(comp, ft) {
             <div class="list-info">
                 <div class="list-title">${escapeHtml(t.titre||'')}</div>
                 <div class="list-meta">
-                    ${proj?`<span style="color:${proj.couleur||'#6366f1'}">● ${escapeHtml(proj.nom)}</span>`:''}
+                    ${proj?`<span style="color:${couleurSure(proj.couleur)}">● ${escapeHtml(proj.nom)}</span>`:''}
                     ${d?`<span class="${isLate?'text-danger':''}">${d.getDate()} ${MONTHS_SHORT[d.getMonth()]}</span>`:''}
-                    <span class="status-badge" style="background:${TF.getStatus(statusCfg, s).fillColor};color:${TF.getStatus(statusCfg, s).textColor}">${TF.getStatus(statusCfg, s).label}</span>
+                    <span class="status-badge" style="background:${couleurSure(TF.getStatus(statusCfg, s).fillColor)};color:${couleurSure(TF.getStatus(statusCfg, s).textColor)}">${TF.getStatus(statusCfg, s).label}</span>
                 </div>
             </div>
         </div>`;
