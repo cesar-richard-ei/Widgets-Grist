@@ -247,7 +247,14 @@ function createFakeGrist(documentInitial, options) {
     }
 
     function onRecords(cb) { abonnes.records.push(cb); }
-    function onRecord(cb) { abonnes.record.push(cb); }
+    // Grist rejoue l'enregistrement selectionne a l'abonnement : un widget de fiche, qui ne lit
+    // que cet enregistrement, n'a sinon jamais rien a afficher.
+    function onRecord(cb) {
+        abonnes.record.push(cb);
+        if (config.selection === undefined || !doc[tableLiee]) return;
+        const enregistrement = doc[tableLiee].records.find((r) => r.id === config.selection) || null;
+        Promise.resolve().then(() => cb(enregistrement));
+    }
     // Grist rejoue les options de la section a l'abonnement : c'est ce que le Gantt neutralise avec
     // son garde « premier onOptions ». Sans ce rejeu, un widget qui lit des filtres partages n'etait
     // jamais exerce sur ce chemin.

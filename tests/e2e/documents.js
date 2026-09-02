@@ -45,9 +45,16 @@ const EQUIPE = [
     { id: 4, nom: 'David Sarr', role: 'Data', Domaine: 'Données', actif: true, couleur: COULEURS.rouge }
 ];
 
+// Les colonnes de fiche appartiennent au metier : categorie, type, entourage et cadrage budgetaire.
 const PROJETS = [
-    { id: 1, nom: 'Portail habilitations', couleur: COULEURS.bleu, actif: true, responsable: 2, Categorie: 1 },
-    { id: 2, nom: 'Datalab', couleur: COULEURS.ocre, actif: true, responsable: 3, Categorie: 2 }
+    // Categorie 1 vaut « Produit », 2 vaut « Projet » : seul le second ouvre une fiche.
+    { id: 1, nom: 'Portail habilitations', couleur: COULEURS.bleu, actif: true, responsable: 2, Categorie: 1, Type: 'Par outillage' },
+    {
+        id: 2, nom: 'Datalab', couleur: COULEURS.ocre, actif: true, responsable: 3, Categorie: 2,
+        Type: 'Projet "pré-produit"', Description: 'Mettre un bac à sable à disposition des équipes.',
+        Sponsor: ['L', 1], Contributeurs_cles: ['L', 2, 4], Commanditaires: 'I&D', Budget_alloue: 'Inconnu',
+        Deadline_commanditaire: j(120)
+    }
 ];
 
 const CHANTIERS = [
@@ -69,7 +76,16 @@ const clone = (v) => JSON.parse(JSON.stringify(v));
 function tableProjets() {
     // Le schéma complet attendu par le widget : une colonne manquante le ferait la créer à
     // l'ouverture, puis relire la table, ce qui fausse les mesures de lecture et ralentit les tests.
-    return { columns: { nom: { type: 'Text' }, couleur: { type: 'Text' }, dateDebut: { type: 'Date' }, dateFin: { type: 'Date' }, responsable: { type: 'Ref:Team' }, actif: { type: 'Bool' }, Categorie: { type: 'Ref:Categorie_de_projet' } }, records: clone(PROJETS) };
+    return {
+        columns: {
+            nom: { type: 'Text' }, couleur: { type: 'Text' }, dateDebut: { type: 'Date' }, dateFin: { type: 'Date' },
+            responsable: { type: 'Ref:Team' }, actif: { type: 'Bool' }, Categorie: { type: 'Ref:Categorie_de_projet' },
+            Type: { type: 'Choice' }, Description: { type: 'Text' },
+            Sponsor: { type: 'RefList:Team' }, Contributeurs_cles: { type: 'RefList:Team' },
+            Commanditaires: { type: 'Text' }, Budget_alloue: { type: 'Text' }, Deadline_commanditaire: { type: 'Date' }
+        },
+        records: clone(PROJETS)
+    };
 }
 
 function tableEquipe() {
@@ -173,8 +189,9 @@ async function ouvrir(page, widget, doc, options) {
     // La vraie API Grist écraserait le simulacre.
     await page.route('**/grist-plugin-api.js', (route) => route.abort());
     await page.addInitScript({ path: CHEMIN_SIMULACRE });
-    await page.addInitScript(([document, reglages, refusee, optionsSection]) => {
-        window.grist = window.createFakeGrist(document, optionsSection ? { options: optionsSection } : undefined);
+    await page.addInitScript(([document, reglages, refusee, optionsSection, gristConfig]) => {
+        const config = Object.assign({}, gristConfig || {}, optionsSection ? { options: optionsSection } : {});
+        window.grist = window.createFakeGrist(document, Object.keys(config).length ? config : undefined);
         if (refusee) {
             const vraie = window.grist.docApi.fetchTable.bind(window.grist.docApi);
             window.grist.docApi.fetchTable = (nom) => nom === refusee ? Promise.reject(new Error('Access denied')) : vraie(nom);
@@ -191,12 +208,18 @@ async function ouvrir(page, widget, doc, options) {
                 sessionStorage.setItem('__preparation', '1');
             }
         } catch (e) { /* stockage indisponible */ }
-    }, [doc || documentCible(), o.reglages || {}, o.refuser || null, o.optionsSection || null]);
+    }, [doc || documentCible(), o.reglages || {}, o.refuser || null, o.optionsSection || null, o.grist || null]);
     await page.goto('http://localhost:3001/tasks_app/' + widget + '.html');
     if (o.attendre !== false) await page.waitForSelector(o.attendre || '#taskList .task-row');
 }
 
 const ouvrirGantt = (page, doc, options) => ouvrir(page, 'gantt', doc, options);
+/** Fiche d'un projet : le widget est lie a Projects et ne lit que l'enregistrement selectionne. */
+const ouvrirFiche = (page, doc, projet, options) => ouvrir(page, 'fiche', doc, Object.assign(
+    { attendre: '.fiche', grist: { tableLiee: 'Projects', selection: projet } },
+    options || {}
+));
+
 const ouvrirPlan = (page, doc, options) => ouvrir(page, 'plan', doc, Object.assign({ attendre: '.plan-grid, #grid' }, options || {}));
 
 /** Ligne de la colonne de gauche portant ce libellé. */
@@ -282,6 +305,6 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
     documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee, renommerColonne, avecLiens,
-    ouvrir, ouvrirGantt, ouvrirPlan, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste,
+    ouvrir, ouvrirGantt, ouvrirPlan, ouvrirFiche, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste,
     trier, triCourant
 };
