@@ -77,3 +77,33 @@ test('sans domaine renseigne sur les effectifs, le groupe de filtre disparait', 
 
     await expect(page.locator('#filterAllMenu')).not.toContainText('Domaines');
 });
+
+// Les domaines fermaient le menu, sous les priorités et les assignés, alors qu'ils servent plus
+// souvent. Et leurs options n'avaient pas la pastille que portent projets et priorités.
+const ouvrirMenuFiltres = async (page) => {
+    await page.locator('#filterGantt .filter-btn').click();
+    await page.waitForSelector('#filterAllMenu.open');
+};
+
+test('les domaines sont proposes avant les priorites', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await ouvrirMenuFiltres(page);
+
+    const groupes = await page.locator('#filterAllMenu .fm-group-label').allTextContents();
+    expect(groupes).toEqual(['Projets', 'Domaines', 'Priorités', 'Assignés']);
+});
+
+test('chaque domaine porte la couleur de son equipe', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await ouvrirMenuFiltres(page);
+
+    const pastilles = await page.locator('#filterAllMenu .filter-option[data-filtre="domaine"]')
+        .evaluateAll((options) => options.map((o) => {
+            const dot = o.querySelector('.dot');
+            return [o.textContent.trim(), dot && dot.style.background];
+        }));
+
+    // Bruno Klein porte « Socle technique » et la couleur verte des effectifs.
+    expect(pastilles).toContainEqual(['Socle technique', 'rgb(16, 185, 129)']);
+    expect(pastilles.every(([, couleur]) => !!couleur)).toBe(true);
+});
