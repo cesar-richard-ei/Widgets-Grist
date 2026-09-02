@@ -48,3 +48,47 @@ test('un evenement storage sur la cle re-hydrate les filtres', async ({ page }) 
     });
     expect(await page.evaluate(() => filters.priority)).toEqual([3]);
 });
+
+// La coche d'une option ne venait que du clic natif sur la case elle-même : cliquer le libellé
+// posait bien le filtre, sans cocher. Le menu ne retrouvait son état qu'au prochain rechargement
+// des données, d'où une coche absente pendant que le filtre restait actif.
+const ouvrirMenuFiltres = async (page) => {
+    await page.locator('#filterGantt .filter-btn').click();
+    await page.waitForSelector('#filterAllMenu.open');
+};
+
+const optionProjet = (page, nom) => page.locator('#filterAllMenu .filter-option', { hasText: nom });
+
+test('cliquer le libelle d une option la coche', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await ouvrirMenuFiltres(page);
+
+    await optionProjet(page, 'Datalab').click();
+
+    await expect(optionProjet(page, 'Datalab').locator('input')).toBeChecked();
+    expect(await page.evaluate(() => filters.project)).toEqual([2]);
+});
+
+test('la coche survit a une fermeture et un rendu du gantt', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await ouvrirMenuFiltres(page);
+    await optionProjet(page, 'Datalab').click();
+
+    await page.locator('#filterGantt .filter-btn').click();
+    await expect(page.locator('#filterAllMenu')).not.toHaveClass(/open/);
+    await page.evaluate(() => render());
+    await ouvrirMenuFiltres(page);
+
+    await expect(optionProjet(page, 'Datalab').locator('input')).toBeChecked();
+});
+
+test('decocher retire le filtre et la coche', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await ouvrirMenuFiltres(page);
+    await optionProjet(page, 'Datalab').click();
+
+    await optionProjet(page, 'Datalab').click();
+
+    await expect(optionProjet(page, 'Datalab').locator('input')).not.toBeChecked();
+    expect(await page.evaluate(() => filters.project)).toEqual([]);
+});
