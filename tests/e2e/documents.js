@@ -119,11 +119,12 @@ function documentSansChantiers() {
     };
 }
 
-/** Retire une colonne de Tasks, pour les fonctionnalités qui doivent disparaître avec elle. */
-function sansColonne(doc, colonne) {
+/** Retire une colonne, pour les fonctionnalités qui doivent disparaître avec elle. */
+function sansColonne(doc, colonne, table) {
     const copie = clone(doc);
-    delete copie.Tasks.columns[colonne];
-    copie.Tasks.records.forEach((r) => delete r[colonne]);
+    const cible = copie[table || 'Tasks'];
+    delete cible.columns[colonne];
+    cible.records.forEach((r) => delete r[colonne]);
     return copie;
 }
 
