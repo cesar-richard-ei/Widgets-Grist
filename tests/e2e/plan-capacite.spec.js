@@ -92,3 +92,20 @@ test('le plan vide dit ce qu il a lu', async ({ page }) => {
     await expect(vide).toContainText('tâches lues');
     await expect(vide).toContainText('0 avec charge');
 });
+
+// Le filtre diffusé par le Gantt s'appliquait sans rien afficher : un plan vide restait
+// inexplicable, et rien ne permettait de lever le filtre depuis le Plan.
+test('le plan annonce le filtre herite du gantt', async ({ page }) => {
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: { project: [2] } });
+
+    await expect(page.frameLocator('#f').locator('#alerts')).toContainText('Datalab');
+});
+
+test('le filtre herite se retire depuis le plan', async ({ page }) => {
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: { project: [2] } });
+    await expect(page.frameLocator('#f').locator('#gridwrap .empty')).toBeVisible();
+
+    await page.frameLocator('#f').locator('#alerts .fc-x').click();
+
+    await expect(page.frameLocator('#f').locator('#gridwrap table.grid')).toBeVisible();
+});

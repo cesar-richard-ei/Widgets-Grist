@@ -31,6 +31,8 @@ select.btn{appearance:none;padding-right:24px}
 label.chk{display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;color:var(--text-muted);cursor:pointer}
 .alerts{padding:7px 14px;font-size:0.78rem;color:var(--text-muted);border-bottom:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap}
 .alerts .warn{color:var(--warn)} .alerts .over{color:var(--over)}
+.alerts .fc-x{margin-left:6px;cursor:pointer;opacity:.75;font-weight:600}
+.alerts .fc-x:hover{opacity:1}
 .gridwrap{flex:1;overflow:auto;position:relative}
 :root{--res-col:184px;--sum-col:80px}
 table.grid{border-collapse:separate;border-spacing:0;width:100%;table-layout:fixed;font-size:0.8rem}
@@ -787,7 +789,7 @@ const S = {
   tasks: [], team: [], projects: [], chantiers: [],
   granularity: 'week', offset: 0, horizon: 12,
   groupBy: 'person', unit: 'pct', includeDone: false, derive: false, mode: 'prevu', workdays: false, allocUnit: 'h',
-  demo: false, extFilters: null, timeline: false
+  demo: false, extFilters: null, filtresIgnores: false, timeline: false
 };
 let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques — alimenté par TF.loadStatusConfig en Grist (terminal/libellés depuis les vrais choix)
 let schemaMeta = null; // métadonnées Grist (_grist_Tables[_column]), lues une fois par chargement
@@ -868,7 +870,7 @@ const r1 = (n) => Math.round(n * 10) / 10;
 
 function planTasks() {
   let ts = S.includeDone ? S.tasks : S.tasks.filter(t => !isTerminal(t));
-  const f = S.extFilters;  // filtres partagés diffusés par la suite (onOptions)
+  const f = S.filtresIgnores ? null : S.extFilters;  // filtres partagés diffusés par la suite (onOptions)
   if (f) {
     // Le Gantt diffuse ses filtres en tableaux, y compris vides. Comparer un tableau a un identifiant
     // ne rendait jamais vrai : le plan se vidait entierement des qu'un filtre avait ete diffuse.
@@ -1313,8 +1315,24 @@ function renderAlerts(matrix, periods) {
   parts.push('<span class="' + (over ? 'over' : '') + '">' + (over ? '⚠ ' + over + ' cellule' + (over > 1 ? 's' : '') + ' en surcharge' : '✓ aucune surcharge sur la fenêtre') + '</span>');
   if (undated) parts.push('<span class="warn">⚠ ' + undated + ' tâche' + (undated > 1 ? 's' : '') + ' chargée' + (undated > 1 ? 's' : '') + ' sans dates — non planifiée' + (undated > 1 ? 's' : '') + '</span>');
   if (!S.includeDone) parts.push('<span>tâches terminées exclues</span>');
+  const herite = libelleFiltresHerites();
+  if (herite) parts.push('<span class="warn">filtre du Gantt : ' + herite + '<span class="fc-x" title="Ignorer ce filtre ici" onclick="leverFiltresHerites()">✕</span></span>');
   el.innerHTML = parts.join('');
 }
+
+// Le filtre diffusé par le Gantt s'appliquait sans rien afficher : un plan vide restait
+// inexplicable, et rien ne permettait de le lever depuis le Plan.
+function libelleFiltresHerites() {
+  const f = S.filtresIgnores ? null : S.extFilters;
+  if (!f) return '';
+  const noms = [];
+  const projets = Array.isArray(f.project) ? f.project : (f.project == null || f.project === '' ? [] : [f.project]);
+  for (const id of projets) { const p = S.projects.find(x => String(x.id) === String(id)); noms.push(p ? p.nom : 'projet ' + id); }
+  if (Array.isArray(f.assignee)) for (const id of f.assignee) { const m = teamById(id); noms.push(m ? m.nom : 'personne ' + id); }
+  return noms.length ? esc(noms.join(', ')) : '';
+}
+
+function leverFiltresHerites() { S.filtresIgnores = true; render(); }
 
 function renderSeg(id, opts, cur, cb) {
   const el = document.getElementById(id);
@@ -1722,7 +1740,7 @@ if (window.self === window.top) {
       return;
     }
     grist.onRecords(() => loadGrist());
-    try { grist.onOptions((o) => { S.extFilters = (o && o.filters) || null; render(); }); } catch (e) { console.warn(LOG, 'filtres partages indisponibles :', (e && e.message) || e); }
+    try { grist.onOptions((o) => { S.extFilters = (o && o.filters) || null; S.filtresIgnores = false; render(); }); } catch (e) { console.warn(LOG, 'filtres partages indisponibles :', (e && e.message) || e); }
     loadGrist();
   })();
   // Filet : Grist n'a pas répondu au handshake (aperçu / hors-ligne). Des lectures lentes
