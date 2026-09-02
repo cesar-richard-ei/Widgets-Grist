@@ -205,3 +205,17 @@ test('modifier une allocation n ecrit ni le projet ni le rattachement', async ({
 
     await expect.poll(() => tacheEnBase(page, 1)).toEqual({ projet: 0, chantier: 1, charges: '[{"teamId":1,"heures":12}]' });
 });
+
+// Les couleurs saisies dans le document partent dans un attribut style : sans garde, une valeur
+// peut fermer l'attribut et en ouvrir un autre.
+test('une couleur du document ne peut pas sortir de son attribut', async ({ page }) => {
+    const doc = JSON.parse(JSON.stringify(DOC_CIBLE));
+    doc.Team.records[0].couleur = 'red;" onmouseover="window.__injecte=1';
+    await ouvrirPlan(page, doc);
+
+    const pastille = grille(page).locator('.ava').first();
+    await expect(pastille).toBeVisible();
+    expect(await pastille.getAttribute('onmouseover')).toBeNull();
+    expect(await pastille.evaluate((n) => n.style.background)).toBe('rgb(99, 102, 241)');
+    expect(await cadre(page).evaluate(() => window.__injecte)).toBeUndefined();
+});
