@@ -253,7 +253,7 @@ function createFakeGrist(documentInitial, options) {
     // jamais exerce sur ce chemin.
     function onOptions(cb) {
         abonnes.options.push(cb);
-        if (Object.keys(optionsWidget).length) setTimeout(() => cb(optionsWidget, { source: 'section' }), 0);
+        setTimeout(() => cb(optionsWidget, { source: 'section' }), 0);
     }
 
     // Divergence potentielle avec grist.numerique.gouv.fr : la forme exacte de ce second

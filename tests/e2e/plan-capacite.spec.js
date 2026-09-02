@@ -69,17 +69,13 @@ async function ouvrirPlanAvecOptions(page, doc, optionsSection) {
 }
 
 test('des filtres partages vides ne vident pas le plan', async ({ page }) => {
-    const filtres = { project: [], priority: [], assignee: [], domaine: [] };
-    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: filtres });
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), {});
+    await page.frameLocator('#f').locator('#gridwrap table.grid').waitFor();
+
+    await page.frame({ url: /plan\.html\?shell=1/ })
+        .evaluate(() => window.grist.setOption('filters', { project: [], priority: [], assignee: [], domaine: [] }));
 
     await expect(page.frameLocator('#f').locator('#gridwrap table.grid')).toBeVisible();
-});
-
-test('un filtre projet partage reste appliqué', async ({ page }) => {
-    // Le projet 2 ne porte aucune tâche chargée : le plan doit rester vide.
-    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: { project: [2] } });
-
-    await expect(page.frameLocator('#f').locator('#gridwrap .empty')).toBeVisible();
 });
 
 // Un plan vide sans explication a coûté plusieurs allers-retours : il dit maintenant ce qu'il a lu.
@@ -95,17 +91,45 @@ test('le plan vide dit ce qu il a lu', async ({ page }) => {
 
 // Le filtre diffusé par le Gantt s'appliquait sans rien afficher : un plan vide restait
 // inexplicable, et rien ne permettait de lever le filtre depuis le Plan.
+const diffuserFiltre = (page, filtres) => page.frame({ url: /plan\.html\?shell=1/ })
+    .evaluate((f) => window.grist.setOption('filters', f), filtres);
+
 test('le plan annonce le filtre herite du gantt', async ({ page }) => {
-    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: { project: [2] } });
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), {});
+    await page.frameLocator('#f').locator('#gridwrap table.grid').waitFor();
+
+    await diffuserFiltre(page, { project: [2] });
 
     await expect(page.frameLocator('#f').locator('#alerts')).toContainText('Datalab');
 });
 
 test('le filtre herite se retire depuis le plan', async ({ page }) => {
-    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: { project: [2] } });
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), {});
+    await page.frameLocator('#f').locator('#gridwrap table.grid').waitFor();
+    await diffuserFiltre(page, { project: [2] });
     await expect(page.frameLocator('#f').locator('#gridwrap .empty')).toBeVisible();
 
     await page.frameLocator('#f').locator('#alerts .fc-x').click();
 
     await expect(page.frameLocator('#f').locator('#gridwrap table.grid')).toBeVisible();
+});
+
+// Grist rejoue les options de la section à l'ouverture. Le Gantt les ignore, son localStorage
+// faisant foi : un filtre laissé là par une session passée n'y apparaît plus. Le Plan les
+// appliquait, et subissait donc un filtre que plus personne ne voyait ni ne pouvait retirer.
+test('un filtre laisse dans les options de section ne filtre plus le plan', async ({ page }) => {
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: { project: [2] } });
+
+    await expect(page.frameLocator('#f').locator('#gridwrap table.grid')).toBeVisible();
+    await expect(page.frameLocator('#f').locator('#alerts')).not.toContainText('filtre du Gantt');
+});
+
+test('un filtre diffuse pendant la session s applique', async ({ page }) => {
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), {});
+
+    await page.frameLocator('#f').locator('#gridwrap table.grid').waitFor();
+    await page.frame({ url: /plan\.html\?shell=1/ }).evaluate(() => window.grist.setOption('filters', { project: [2] }));
+
+    await expect(page.frameLocator('#f').locator('#alerts')).toContainText('Datalab');
+    await expect(page.frameLocator('#f').locator('#gridwrap .empty')).toBeVisible();
 });
