@@ -870,7 +870,10 @@ function planTasks() {
   let ts = S.includeDone ? S.tasks : S.tasks.filter(t => !isTerminal(t));
   const f = S.extFilters;  // filtres partagés diffusés par la suite (onOptions)
   if (f) {
-    if (f.project != null && f.project !== '') ts = ts.filter(t => String(projetDeTache(t)) === String(f.project));
+    // Le Gantt diffuse ses filtres en tableaux, y compris vides. Comparer un tableau a un identifiant
+    // ne rendait jamais vrai : le plan se vidait entierement des qu'un filtre avait ete diffuse.
+    const projets = Array.isArray(f.project) ? f.project : (f.project == null || f.project === '' ? [] : [f.project]);
+    if (projets.length) ts = ts.filter(t => projets.map(String).indexOf(String(projetDeTache(t))) !== -1);
     if (Array.isArray(f.assignee) && f.assignee.length) ts = ts.filter(t => getRefList(t.assignees).some(a => f.assignee.map(Number).includes(a)));
     if (Array.isArray(f.statut) && f.statut.length) ts = ts.filter(t => f.statut.includes(t.statut));
   }

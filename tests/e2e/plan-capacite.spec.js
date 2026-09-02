@@ -45,3 +45,39 @@ test('la capacite se saisit quand sa colonne est ordinaire', async ({ page }) =>
 
     await expect(champCapacite(page)).toBeEnabled();
 });
+
+// Le Gantt diffuse ses filtres en tableaux, y compris vides. Le Plan lisait `project` comme une
+// valeur simple : un tableau vide n'est ni null ni chaîne vide, le filtre s'appliquait et comparait
+// chaque projet à String([]), soit ''. Plus aucune tâche ne passait, et le plan se vidait.
+const AVEC_CHARGE = (doc) => {
+    const copie = JSON.parse(JSON.stringify(doc));
+    const t = copie.Tasks.records[0];
+    t.charges = JSON.stringify([{ teamId: 1, heures: 12 }]);
+    t.dateDebut = D.j(0);
+    t.dateEcheance = D.j(10);
+    t.statut = 'todo';
+    return copie;
+};
+
+async function ouvrirPlanAvecOptions(page, doc, optionsSection) {
+    await page.route('**/grist-plugin-api.js', (route) => route.abort());
+    await page.addInitScript({ path: CHEMIN_SIMULACRE });
+    await page.addInitScript(([d, o]) => { window.grist = window.createFakeGrist(d, { options: o }); }, [doc, optionsSection]);
+    await page.goto('http://localhost:3001/tasks_app/plan.html');
+    await page.setContent('<iframe id="f" style="width:1200px;height:700px;border:0" src="http://localhost:3001/tasks_app/plan.html?shell=1"></iframe>');
+    await expect(page.frameLocator('#f').locator('#gridwrap table.grid, #gridwrap .empty')).toBeVisible();
+}
+
+test('des filtres partages vides ne vident pas le plan', async ({ page }) => {
+    const filtres = { project: [], priority: [], assignee: [], domaine: [] };
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: filtres });
+
+    await expect(page.frameLocator('#f').locator('#gridwrap table.grid')).toBeVisible();
+});
+
+test('un filtre projet partage reste appliqué', async ({ page }) => {
+    // Le projet 2 ne porte aucune tâche chargée : le plan doit rester vide.
+    await ouvrirPlanAvecOptions(page, AVEC_CHARGE(D.documentCible()), { filters: { project: [2] } });
+
+    await expect(page.frameLocator('#f').locator('#gridwrap .empty')).toBeVisible();
+});
