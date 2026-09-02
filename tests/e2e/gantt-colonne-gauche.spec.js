@@ -77,7 +77,7 @@ test('une ligne montre le responsable, un contributeur, puis un compteur', async
     await D.ouvrirGantt(page);
     await D.toutDeplier(page);
 
-    // Responsable Bruno, contributeurs Alice, Bruno, Chloe, David : Bruno en tête, Alice ensuite.
+    // Responsable Bruno, contributeurs Alice, Bruno, Chloé, David : Bruno en tête, Alice ensuite.
     expect(await pastilles(page, 'Cadrage des outils')).toEqual(['BK', 'AM', '+2']);
 });
 

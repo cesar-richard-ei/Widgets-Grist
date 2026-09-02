@@ -2319,14 +2319,18 @@ function toggleMultiSelect(id) {
     }
 }
 
+// Les noms saisis dans le document portent leurs accents, pas toujours la recherche : on compare
+// de part et d'autre une forme sans diacritiques.
+const sansAccents = (s) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
 // Filtre les options sans re-render, pour garder le focus dans le champ.
 function filterMultiSelectOptions(input) {
     const dd = input.closest('.multi-select-dropdown');
     if (!dd) return;
-    const q = input.value.trim().toLowerCase();
+    const q = sansAccents(input.value.trim());
     let shown = 0;
     dd.querySelectorAll('.multi-select-option').forEach(opt => {
-        const match = !q || (opt.textContent || '').toLowerCase().indexOf(q) !== -1;
+        const match = !q || sansAccents(opt.textContent).indexOf(q) !== -1;
         opt.style.display = match ? '' : 'none';
         if (match) shown++;
     });

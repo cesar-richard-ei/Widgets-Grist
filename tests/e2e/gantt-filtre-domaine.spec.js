@@ -40,7 +40,7 @@ test('une ligne sans chantier est retenue par le responsable de son projet', asy
     await D.toutDeplier(page);
     await filtrer(page, 'Expérience');
 
-    // Chloe pilote « Datalab », qui porte « Guide de prise en main ».
+    // Chloé pilote « Datalab », qui porte « Guide de prise en main ».
     await expect(D.ligne(page, 'Guide de prise en main')).toBeVisible();
 });
 
