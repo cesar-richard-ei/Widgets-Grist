@@ -107,3 +107,24 @@ test('chaque domaine porte la couleur de son equipe', async ({ page }) => {
     expect(pastilles).toContainEqual(['Socle technique', 'rgb(16, 185, 129)']);
     expect(pastilles.every(([, couleur]) => !!couleur)).toBe(true);
 });
+
+// Le document appartient au métier : ce qu'on y saisit part dans des attributs du menu. Sans
+// échappement des guillemets, un domaine peut en sortir et poser son propre gestionnaire.
+test('un domaine ne peut pas sortir de son attribut', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Team.records[0].Domaine = 'Pilotage" onmouseover="window.__injecte=1';
+    doc.Team.records[0].couleur = 'red;" onmouseover="window.__injecte=1';
+    await D.ouvrirGantt(page, doc);
+    await page.locator('#filterGantt .filter-btn').click();
+    await page.waitForSelector('#filterAllMenu.open');
+
+    const option = page.locator('#filterAllMenu .filter-option[data-filtre="domaine"]', { hasText: 'Pilotage' });
+    await expect(option).toHaveCount(1);
+    expect(await option.getAttribute('onmouseover')).toBeNull();
+    expect(await option.locator('.dot').getAttribute('onmouseover')).toBeNull();
+    // La couleur refusée retombe sur celle de repli, elle ne part pas telle quelle.
+    expect(await option.locator('.dot').evaluate((n) => n.style.background)).toBe('rgb(99, 102, 241)');
+    // Le libellé garde le texte saisi, sans qu'il ait été interprété.
+    await expect(option).toContainText('onmouseover');
+    expect(await page.evaluate(() => window.__injecte)).toBeUndefined();
+});
