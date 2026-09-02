@@ -776,6 +776,9 @@ const LIBELLE_GROUPE = { person: 'Personne', project: 'Projet', chantier: 'Chant
 
 // Utils
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+// Les couleurs viennent du document et partent dans un attribut style : n'accepter qu'une notation
+// hexadécimale, sans quoi une valeur peut fermer l'attribut et en ouvrir un autre.
+const couleurSure = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : '#6366f1';
 const getRefList = (v) => Array.isArray(v) && v[0] === 'L' ? v.slice(1).map(Number) : [];
 const teamById = (id) => S.team.find(m => m.id === id);
 const projById = (id) => S.projects.find(p => p.id === id);
@@ -1030,7 +1033,7 @@ function render() {
       // En-tête de groupe (projet/rôle) : somme des sous-lignes, sans heat (repère de section).
       const hc = {}; for (const gk of row.gkeys) { const mc = matrix[gk] || {}; for (const p in mc) hc[p] = (hc[p] || 0) + mc[p]; }
       let wtot = 0;
-      h += '<tr class="grp"><td class="colres ghead"><div class="res"><span class="gdot" style="background:' + row.color + '"></span><span class="nm">' + esc(row.label) + '</span></div></td>';
+      h += '<tr class="grp"><td class="colres ghead"><div class="res"><span class="gdot" style="background:' + couleurSure(row.color) + '"></span><span class="nm">' + esc(row.label) + '</span></div></td>';
       for (let pi = 0; pi < periods.length; pi++) { const p = periods[pi], hr = r1(hc[p] || 0); wtot += hr; h += '<td class="' + (p === nowKey ? 'nowcol' : '') + '">' + (hr > 0 ? '<span class="gval">' + hr + '</span>' : '<span class="dot">·</span>') + '</td>'; }
       h += '<td class="sum"><div class="sh">' + r1(wtot) + ' h</div></td></tr>';
       continue;
@@ -1039,7 +1042,7 @@ function render() {
     const ini = row.label.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
     const resClk = row.isSub || S.groupBy === 'person';
     const resId = row.isSub ? row.teamId : row.key;
-    h += '<tr' + (row.isSub ? ' class="subr"' : '') + '><td class="colres' + (row.isSub ? ' sub' : '') + (resClk ? ' clk' : '') + '"' + (resClk ? ' data-res="' + esc(resId) + '" title="Capacité & indisponibilités"' : '') + '><div class="res"><span class="ava" style="background:' + row.color + '">' + esc(ini) + '</span><span><span class="nm">' + esc(row.label) + '</span>' + (row.cap > 0 ? ' <span class="cap">(' + Math.round(capPeriod(row.cap)) + 'h)</span>' : '') + '</span></div></td>';
+    h += '<tr' + (row.isSub ? ' class="subr"' : '') + '><td class="colres' + (row.isSub ? ' sub' : '') + (resClk ? ' clk' : '') + '"' + (resClk ? ' data-res="' + esc(resId) + '" title="Capacité & indisponibilités"' : '') + '><div class="res"><span class="ava" style="background:' + couleurSure(row.color) + '">' + esc(ini) + '</span><span><span class="nm">' + esc(row.label) + '</span>' + (row.cap > 0 ? ' <span class="cap">(' + Math.round(capPeriod(row.cap)) + 'h)</span>' : '') + '</span></div></td>';
     let win = 0, peakR = 0;
     for (let pi = 0; pi < periods.length; pi++) {
       const p = periods[pi], hr = r1(cells[p] || 0);
@@ -1126,10 +1129,10 @@ function renderTimeline() {
       .sort((a, b) => a.dateDebut - b.dateDebut);
     if (!mine.length) continue;
     any = true;
-    if (pending) { h += '<div class="tl-sec"><span class="gdot" style="background:' + pending.color + '"></span>' + esc(pending.label) + '</div>'; pending = null; }
+    if (pending) { h += '<div class="tl-sec"><span class="gdot" style="background:' + couleurSure(pending.color) + '"></span>' + esc(pending.label) + '</div>'; pending = null; }
     const isF = fKey != null && laneKey === fKey;
     const ini = row.label.split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
-    h += '<div class="tl-grp' + (grouped ? ' tl-ind' : '') + (isF ? ' tl-focus' : '') + '"' + (isF ? ' id="tlFocus"' : '') + ' data-lane="' + esc(laneKey) + '"><span class="tava" style="background:' + row.color + '">' + esc(ini) + '</span>' + esc(row.label) + ' · ' + mine.length + ' tâche' + (mine.length > 1 ? 's' : '') + '</div>';
+    h += '<div class="tl-grp' + (grouped ? ' tl-ind' : '') + (isF ? ' tl-focus' : '') + '"' + (isF ? ' id="tlFocus"' : '') + ' data-lane="' + esc(laneKey) + '"><span class="tava" style="background:' + couleurSure(row.color) + '">' + esc(ini) + '</span>' + esc(row.label) + ' · ' + mine.length + ' tâche' + (mine.length > 1 ? 's' : '') + '</div>';
     for (const t of mine) {
       const ts = t.dateDebut * 1000, te = t.dateEcheance * 1000;
       const l = Math.max(0, Math.min(1, (ts - winStart) / span)) * 100;
@@ -1139,7 +1142,7 @@ function renderTimeline() {
       const hrs = (effCharges(t).find(c => String(c.teamId) === String(pid)) || {}).heures || 0;
       const hot = isF && fIdx >= 0 && ts < bandE && te > bandS; // tâche dans la période focalisée
       const tp = TF.periodKey(new Date(Math.max(ts, winStart)), S.granularity); // période à ouvrir si "Ajuster"
-      h += '<div class="tl-row' + (grouped ? ' tl-ind' : '') + (isF ? ' tl-focus' : '') + '" data-lane="' + esc(laneKey) + '"><div class="tl-lbl" title="' + esc(t.titre) + '">' + esc(t.titre) + '</div><div class="tl-track">' + (bandStyle ? '<div class="tl-band" style="' + bandStyle + '"></div>' : '') + '<div class="tl-bar' + (hot ? ' hot' : '') + '" style="left:' + l.toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + col + '" data-id="' + t.id + '" data-lane="' + esc(laneKey) + '" data-period="' + tp + '" title="' + esc(t.titre) + ' · ' + r1(hrs) + ' h — cliquer pour l’aperçu">' + esc(t.titre) + '</div></div></div>';
+      h += '<div class="tl-row' + (grouped ? ' tl-ind' : '') + (isF ? ' tl-focus' : '') + '" data-lane="' + esc(laneKey) + '"><div class="tl-lbl" title="' + esc(t.titre) + '">' + esc(t.titre) + '</div><div class="tl-track">' + (bandStyle ? '<div class="tl-band" style="' + bandStyle + '"></div>' : '') + '<div class="tl-bar' + (hot ? ' hot' : '') + '" style="left:' + l.toFixed(1) + '%;width:' + w.toFixed(1) + '%;background:' + couleurSure(col) + '" data-id="' + t.id + '" data-lane="' + esc(laneKey) + '" data-period="' + tp + '" title="' + esc(t.titre) + ' · ' + r1(hrs) + ' h — cliquer pour l’aperçu">' + esc(t.titre) + '</div></div></div>';
     }
   }
   if (!any) h += '<div class="tl-empty">Aucune tâche datée sur cette fenêtre.</div>';
@@ -1218,11 +1221,11 @@ function taskCardHtml(t) {
   const totH = TF.parseCharges(t.charges).reduce((s, c) => s + c.heures, 0) || Number(t.estimationH) || 0;
   const ini = (n) => (n || '?').split(' ').filter(Boolean).map(w => w[0]).slice(0, 2).join('').toUpperCase();
   return '<div class="tpc-badges"><span class="tpc-prio" style="background:' + pr[1] + '22;color:' + pr[1] + '">' + pr[0] + '</span>' +
-    (st.label ? '<span class="tpc-status" style="background:' + (st.fillColor || '#64748b') + '22;color:' + (st.fillColor || '#94a3b8') + '">' + esc(st.label) + '</span>' : '') +
+    (st.label ? '<span class="tpc-status" style="background:' + couleurSure(st.fillColor) + '22;color:' + couleurSure(st.fillColor) + '">' + esc(st.label) + '</span>' : '') +
     (t.type === 'jalon' ? '<span class="tpc-mil">◆ Jalon</span>' : '') + '</div>' +
     '<div class="tpc-title">' + esc(t.titre) + '</div>' +
-    '<div class="tpc-meta">' + (p ? '<span class="tpc-proj"><i style="background:' + p.couleur + '"></i>' + esc(p.nom) + '</span>' : '') + '<span class="tpc-dates">📅 ' + dd + ' → ' + de + '</span></div>' +
-    '<div class="tpc-row"><div class="tpc-ava">' + asg.map(m => '<span class="tpc-av" style="background:' + (m.couleur || '#6366f1') + '" title="' + esc(m.nom) + '">' + esc(ini(m.nom)) + '</span>').join('') + '</div><div class="tpc-prog"><div class="tpc-track"><div style="width:' + prog + '%"></div></div><span>' + prog + '%</span></div></div>' +
+    '<div class="tpc-meta">' + (p ? '<span class="tpc-proj"><i style="background:' + couleurSure(p.couleur) + '"></i>' + esc(p.nom) + '</span>' : '') + '<span class="tpc-dates">📅 ' + dd + ' → ' + de + '</span></div>' +
+    '<div class="tpc-row"><div class="tpc-ava">' + asg.map(m => '<span class="tpc-av" style="background:' + couleurSure(m.couleur) + '" title="' + esc(m.nom) + '">' + esc(ini(m.nom)) + '</span>').join('') + '</div><div class="tpc-prog"><div class="tpc-track"><div style="width:' + prog + '%"></div></div><span>' + prog + '%</span></div></div>' +
     (totH ? '<div class="tpc-hours">' + r1(totH) + ' h alloué' + (asg.length > 1 ? 'es' : '') + '</div>' : '') +
     (t.dateCloture ? '<div class="tpc-cloture" style="color:' + (delaiDays(t) > 0 ? '#ff9094' : '#54d2a4') + '">✓ Clôturée le ' + fmtTLDate(t.dateCloture) + (t.dateEcheance ? ' · ' + delaiTxt(t) : '') + '</div>' : '');
 }
@@ -1367,7 +1370,7 @@ function openCell(key, period) {
       ? '<div class="tkedit"><input type="number" name="alloc" min="0" step="' + (usePct ? 5 : 0.5) + '" value="' + val + '" title="Allocation ' + (usePct ? '(% de la capacité sur la durée)' : '(heures)') + '" onchange="setCharge(' + i.task.id + ',' + tid + ',' + conv + ')"><span class="u">' + (usePct ? '%' : 'h') + '</span><select name="reassign" title="Réaffecter à un membre (sa marge est indiquée)" onchange="if(this.value)reassignCharge(' + i.task.id + ',' + tid + ',parseInt(this.value))"><option value="">⇄</option>' + others.map(m => { const fr = av[m.id] ? av[m.id].free : null; return '<option value="' + m.id + '">→ ' + esc(m.nom) + (fr != null ? ' (' + fr + ' h libres)' : '') + '</option>'; }).join('') + '</select></div>'
       : '<div class="th">' + i.total + ' h</div>';
     const dates = editable ? '<div class="tkdates"><span class="dl">📅 Dates</span><input type="date" name="dateDebut" value="' + gToInput(i.task.dateDebut) + '" title="Début" onchange="setDates(' + i.task.id + ',this.value,null)"><span>→</span><input type="date" name="dateEcheance" value="' + gToInput(i.task.dateEcheance) + '" title="Échéance" onchange="setDates(' + i.task.id + ',null,this.value)"></div>' : '';
-    return '<div class="tk"><div class="tkmain"><span class="pdot" style="background:' + (p ? p.couleur : '#64748b') + '"></span><div class="tinfo"><div class="tt">' + esc(i.task.titre) + '</div><div class="tm">' + sliceTxt + '</div></div>' + right + '</div>' + dates + '</div>';
+    return '<div class="tk"><div class="tkmain"><span class="pdot" style="background:' + couleurSure(p ? p.couleur : '') + '"></span><div class="tinfo"><div class="tt">' + esc(i.task.titre) + '</div><div class="tm">' + sliceTxt + '</div></div>' + right + '</div>' + dates + '</div>';
   }).join('') : '<div style="color:var(--text-muted);font-size:.82rem">Aucune tâche ' + (S.mode === 'realise' ? 'réalisée' : 'planifiée') + ' sur cette période.</div>');
   document.getElementById('overlay').classList.add('show');
   document.getElementById('panel').classList.add('show'); document.body.classList.add('panel-open');
