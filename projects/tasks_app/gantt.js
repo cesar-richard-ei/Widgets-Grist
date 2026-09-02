@@ -32,6 +32,10 @@ let schemaMeta = null; // métadonnées Grist (_grist_Tables[_column]) lues une 
 let currentView = 'semester';
 let viewStartDate = new Date();
 let ganttNowAligned = false;
+// La plage dessinée recule jusqu'à la tâche la plus ancienne : déplacer la fenêtre ne change donc
+// pas ce que la grille couvre, et seul le défilement montre la période demandée. Armé par navigate,
+// consommé au rendu, quand la grille a ses dimensions définitives.
+let calerSurFenetre = false;
 let selectedTaskId = null;
 let sortMode = 'date';
 let colorMode = 'responsable';
@@ -802,7 +806,10 @@ function navigate(dir) {
     // sauter sa largeur entière ferait perdre le contexte affiché.
     else if (cfg.navStep === 'month' || cfg.navStep === 'quarter' || cfg.navStep === 'semester') viewStartDate = new Date(viewStartDate.getFullYear(), viewStartDate.getMonth() + dir, 1);
     else if (cfg.navStep === 'year') viewStartDate = new Date(viewStartDate.getFullYear() + dir, 0, 1);
-    ganttNowAligned = false;
+    // Le calage sur aujourd'hui n'est pas réarmé : il ramènerait le défilement sur la sur-colonne du
+    // jour et annulerait le déplacement demandé. Le réalignement attendu porte sur le changement de
+    // vue temporelle, que setView couvre.
+    calerSurFenetre = true;
     render();
 }
 function goToToday() { viewStartDate = new Date(); ganttNowAligned = false; render(); }
@@ -1381,6 +1388,15 @@ function renderTimeline() {
     grid.innerHTML = gridHtml;
     grid.style.width = totalWidth + 'px';
     grid.style.height = (ft.length * 44) + 'px';
+
+    if (calerSurFenetre) {
+        const sc = document.getElementById('timelineScroll');
+        if (sc) {
+            const vise = getDaysDiff(start, getViewStartDate()) * pxPerDay;
+            sc.scrollLeft = Math.min(Math.max(Math.round(vise), 0), sc.scrollWidth - sc.clientWidth);
+        }
+        calerSurFenetre = false;
+    }
 
     // Ligne aujourd'hui. Ramenée à minuit : getDaysDiff arrondit, donc l'heure courante
     // décalait le trait d'un jour à partir de la mi-journée.
