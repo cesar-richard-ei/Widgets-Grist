@@ -101,7 +101,7 @@
         .tf-grow { display: flex; align-items: center; gap: 12px; height: var(--row-height); border-bottom: 1px solid var(--border); }
         .tf-grow .lbl { width: var(--task-list-width); min-width: var(--task-list-width); display: flex; flex-direction: column; gap: 5px; padding: 0 16px; }
         .tf-grow .track { flex: 1; padding-right: 16px; }
-        .task-row { display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border); height: var(--row-height); gap: 8px; cursor: pointer; transition: background 0.1s; }
+        .task-row { display: flex; align-items: center; padding: 0 12px; border-bottom: 1px solid var(--border); height: var(--row-height); gap: 8px; cursor: pointer; transition: background 0.1s; overflow: hidden; }
         /* Bandeau du sujet de niveau 1. Même hauteur qu'une ligne : la timeline pose ses barres à
            l'index de la ligne, une hauteur différente décalerait le Gantt. */
         .groupe-projet { display: flex; align-items: center; gap: 8px; height: var(--row-height); padding: 0 12px;
@@ -129,10 +129,10 @@
         .task-priority-bar.p4 { background: var(--text-muted); }
         .task-info { flex: 1; min-width: 0; }
         .task-name { font-size: 0.78rem; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-        .task-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-        .task-dates { font-size: 0.65rem; color: var(--text-muted); }
-        .task-progress-badge { font-size: 0.6rem; color: var(--text-muted); background: var(--bg); padding: 1px 4px; border-radius: 3px; }
-        .task-subtask-badge { font-size: 0.6rem; color: var(--text-muted); background: var(--bg); padding: 1px 4px; border-radius: 3px; display: inline-flex; align-items: center; gap: 2px; }
+        .task-meta { display: flex; align-items: center; gap: 6px; margin-top: 2px; min-width: 0; overflow: hidden; }
+        .task-dates { font-size: 0.65rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .task-progress-badge { font-size: 0.6rem; color: var(--text-muted); background: var(--bg); padding: 1px 4px; border-radius: 3px; white-space: nowrap; flex-shrink: 0; }
+        .task-subtask-badge { font-size: 0.6rem; color: var(--text-muted); background: var(--bg); padding: 1px 4px; border-radius: 3px; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; flex-shrink: 0; }
         .task-subtask-badge.complete { color: var(--success); }
         /* WBS-02: hiérarchie */
         .tree-chevron { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; cursor: pointer; color: var(--text-muted); font-size: 0.7rem; transition: transform 0.1s; border-radius: 3px; flex-shrink: 0; }
@@ -152,7 +152,7 @@
         .gantt-bar.parent::before, .gantt-bar.parent::after { content: ''; position: absolute; top: 100%; width: 0; height: 0; border-style: solid; }
         .gantt-bar.parent::before { left: 0; border-width: 4px 0 0 4px; border-color: inherit transparent transparent transparent; filter: brightness(0.7); }
         .gantt-bar.parent::after { right: 0; border-width: 4px 4px 0 0; border-color: inherit transparent transparent transparent; filter: brightness(0.7); }
-        .task-avatars { display: flex; margin-left: auto; }
+        .task-avatars { display: flex; margin-left: auto; flex-shrink: 0; }
         .task-avatar { width: 18px; height: 18px; border-radius: 50%; background: var(--primary); color: white; display: flex; align-items: center; justify-content: center; font-size: 0.5rem; font-weight: 600; margin-left: -4px; border: 1.5px solid var(--card-bg); }
         .task-avatar:first-child { margin-left: 0; }
         .task-avatar.more { background: var(--text-muted); }

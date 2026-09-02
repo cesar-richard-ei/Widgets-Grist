@@ -167,3 +167,21 @@ test('sous 560 px, la barre d outils tient sur une ligne et laisse tomber le log
     expect(surUneLigne).toBe(true);
     await expect(page.locator('.header h1')).toHaveCount(0);
 });
+
+// La colonne descend jusqu'à 140 px, largeur retrouvée d'une session à l'autre. Les badges d'une
+// ligne y passaient à la ligne, le contenu débordait de la hauteur fixe de la ligne, et le panneau
+// se lisait comme un empilement écrasé.
+const colonneEtroite = { reglages: { taskflow_gantt_largeur_liste: '140' } };
+
+test('colonne au minimum, le contenu d une ligne tient dans sa hauteur', async ({ page }) => {
+    await D.ouvrirGantt(page, null, colonneEtroite);
+    await D.toutDeplier(page);
+
+    const debordent = await page.locator('#taskList .task-row').evaluateAll((lignes) => lignes
+        .filter((ligne) => {
+            const info = ligne.querySelector('.task-info');
+            return info && info.scrollHeight > ligne.getBoundingClientRect().height;
+        })
+        .map((ligne) => ligne.querySelector('.task-name').textContent));
+    expect(debordent).toEqual([]);
+});
