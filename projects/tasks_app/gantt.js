@@ -329,6 +329,7 @@ function donneesChantier(c) {
         dateDebut: c.dateDebut || bornes.start || null,
         dateEcheance: c.dateEcheance || bornes.end || null,
         projet: c.projet || null,
+        Responsable: c.Responsable || null,
         assignees: assignes,
         charges: Array.from(cumul, ([teamId, heures]) => ({ teamId: teamId, heures: heures })),
         dependDe: [], dependDebutDe: [], tags: [], subtasks: [], progression: 0, priorite: null,
@@ -490,10 +491,18 @@ function buildVisibleTasks() {
     return avecBandeauxDeProjet(visible);
 }
 
+// Tasks et Chantiers portent chacune leur colonne Responsable, indépendamment : sur un chantier,
+// c'est celle de sa table qui décide, sinon la saisie n'aurait pas de destination.
+function responsableDisponible() {
+    if (!panelState.estChantier) return TASK_COLS.has('Responsable');
+    const colonnes = colonnesEcrivables('Chantiers');
+    return !colonnes || colonnes.has('Responsable');
+}
+
 // Le responsable reprend la présentation des contributeurs, mais n'accepte qu'une personne : c'est
 // lui qui porte la couleur de la ligne. La colonne étant facultative, la ligne disparaît avec elle.
 function ligneResponsable(data, options, recherche, sansResultat) {
-    if (!TASK_COLS.has('Responsable')) return '';
+    if (!responsableDisponible()) return '';
     const choisi = data.Responsable
         ? '<div class="asg-list"><div class="asg resp-choisi"><span class="asg-ava" style="background:' + getTeamMemberColor(data.Responsable) + '">' + getInitials(getTeamMemberName(data.Responsable)) + '</span>' +
           '<span class="an">' + escapeHtml(getTeamMemberName(data.Responsable)) + '</span>' +
@@ -1680,6 +1689,7 @@ function openCreateChantierPanel() {
             titre: '', description: '', type: 'chantier', statut: '', progression: 0, priorite: null,
             dateDebut: dateToGrist(today), dateEcheance: dateToGrist(addDays(today, 30)),
             projet: projects.length > 0 ? projects[0].id : null,
+            Responsable: null,
             assignees: [], dependDe: [], dependDebutDe: [], tags: [], subtasks: [], charges: [],
             estimationH: null, tempsPasse: null, couleur: null, parentTask: null
         }
@@ -1697,7 +1707,8 @@ async function createChantier() {
     }
     const record = {
         Nom_du_chantier: data.titre, Description: data.description || '',
-        Projets: toGristRefList(data.projet ? [data.projet] : [])
+        Projets: toGristRefList(data.projet ? [data.projet] : []),
+        Responsable: data.Responsable || null
     };
     record[colonneDateChantier('debut')] = data.dateDebut || null;
     record[colonneDateChantier('fin')] = data.dateEcheance || null;
@@ -2424,7 +2435,7 @@ async function saveChantierToGrist(data) {
     if (idChantier <= 0) return;
     const colDebut = colonneDateChantier('debut');
     const colFin = colonneDateChantier('fin');
-    const brut = { Nom_du_chantier: data.titre, Description: data.description };
+    const brut = { Nom_du_chantier: data.titre, Description: data.description, Responsable: data.Responsable || null };
     brut[colDebut] = data.dateDebut || null;
     brut[colFin] = data.dateEcheance || null;
     const record = pruneChantierRecord(brut);
@@ -2433,6 +2444,7 @@ async function saveChantierToGrist(data) {
     const local = {};
     if ('Nom_du_chantier' in record) local.titre = record.Nom_du_chantier;
     if ('Description' in record) local.description = record.Description;
+    if ('Responsable' in record) local.Responsable = record.Responsable;
     if (colDebut in record) local.dateDebut = record[colDebut];
     if (colFin in record) local.dateEcheance = record[colFin];
     try {

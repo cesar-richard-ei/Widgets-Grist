@@ -246,3 +246,53 @@ test('modifier les dates d un chantier les ecrit sous ce meme nom', async ({ pag
         return c.Debut[c.id.indexOf(1)];
     })).toBe(Math.floor(Date.UTC(2026, 2, 2) / 1000));
 });
+
+// Le volet affiche un responsable de chantier sans jamais le lire ni l'écrire : la saisie disparaît
+// au rechargement, derrière le même indicateur d'enregistrement que les champs qui aboutissent.
+test('le volet d un chantier ouvre sur le responsable enregistré', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await expect(volet(page).locator('.resp-choisi')).toContainText('Bruno Klein');
+});
+
+test('choisir un responsable sur un chantier l ecrit dans sa table', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Guides utilisateurs');
+
+    await volet(page).locator('#responsableSelect .addbtn').click();
+    await volet(page).locator('#responsableSelect .multi-select-option', { hasText: 'David Sarr' }).click();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Responsable[c.id.indexOf(2)];
+    })).toBe(4);
+});
+
+test('creer un chantier avec un responsable l enregistre', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    await page.locator('#btnAjouter').click();
+    await page.locator('#menuAjout button', { hasText: 'Chantier' }).click();
+    await page.locator('#taskTitle').fill('Recette métier');
+    await volet(page).locator('#responsableSelect .addbtn').click();
+    await volet(page).locator('#responsableSelect .multi-select-option', { hasText: 'Alice Martin' }).click();
+    await page.locator('#panel .panel-btn.success').click();
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Responsable[c.Nom_du_chantier.indexOf('Recette métier')];
+    })).toBe(1);
+});
+
+// Sans la colonne côté Chantiers, le champ n'a pas de destination : le laisser rendrait la saisie
+// silencieusement inopérante, alors que les tâches gardent la leur.
+test('sans la colonne sur Chantiers, le volet d un chantier ne propose pas de responsable', async ({ page }) => {
+    await D.ouvrirGantt(page, D.sansColonne(D.documentCible(), 'Responsable', 'Chantiers'));
+    await D.ouvrirVolet(page, 'Socle technique');
+    await expect(volet(page).locator('#responsableSelect')).toHaveCount(0);
+
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+    await expect(volet(page).locator('#responsableSelect')).toHaveCount(1);
+});
