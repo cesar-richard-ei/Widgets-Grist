@@ -105,6 +105,24 @@ test('la ligne du jour tombe sur la colonne de la semaine courante', async ({ pa
     expect(ecart.dans).toBe(true);
 });
 
+// La colonne de la semaine courante est un fond. Peinte au-dessus, elle coupe les barres en deux :
+// elle doit donc précéder les lignes, là où le trait du jour les suit.
+test('la colonne de la semaine courante se peint sous les lignes', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const ordre = await page.evaluate(() => {
+        const rang = document.querySelector('.fiche-rang');
+        const avant = (sel) => {
+            const e = document.querySelector(sel);
+            return Boolean(e && (rang.compareDocumentPosition(e) & Node.DOCUMENT_POSITION_PRECEDING));
+        };
+        return { colonne: avant('.fiche-colonne-courante'), trait: avant('.fiche-aujourdhui') };
+    });
+
+    expect(ordre.colonne).toBe(true);
+    expect(ordre.trait).toBe(false);
+});
+
 test('rien ne s édite : ni création, ni volet, ni poignée', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
 

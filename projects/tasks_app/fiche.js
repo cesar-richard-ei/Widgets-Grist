@@ -145,13 +145,15 @@ function bloc(classe, libelle, contenu) {
         + '<div class="fiche-valeur">' + (contenu || '<span class="vide">Non renseigné</span>') + '</div></div>';
 }
 
-function pastilles(ids) {
+const ICONE_LIEN = '<svg class="fiche-lien" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">'
+    + '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg>';
+
+function pastilles(ids, avecLien) {
     if (!ids.length) return '';
     return ids.map((id) => {
         const m = membre(id);
         if (!m) return '';
-        return '<span class="fiche-personne" style="--teinte:' + echapper(m.couleur || '#3e5de7') + '">'
-            + '<span class="fiche-initiales">' + echapper(initiales(m.nom)) + '</span>' + echapper(m.nom) + '</span>';
+        return '<span class="fiche-personne">' + (avecLien ? ICONE_LIEN : '') + echapper(m.nom) + '</span>';
     }).join('');
 }
 
@@ -192,8 +194,8 @@ function cadrage() {
     return '<section class="fiche-cadrage">'
         + '<div class="fiche-colonne">'
         + bloc('bloc-responsable', 'Responsable', pastilles(projet.responsable ? [projet.responsable] : []))
-        + bloc('bloc-sponsors', 'Sponsors', pastilles(listeRefs(projet.Sponsor)))
-        + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(listeRefs(projet.Contributeurs_cles)))
+        + bloc('bloc-sponsors', 'Sponsors', pastilles(listeRefs(projet.Sponsor), true))
+        + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(listeRefs(projet.Contributeurs_cles), true))
         + '</div>'
         + '<div class="fiche-colonne large">'
         + bloc('bloc-description', 'Description', texteOuVide(projet.Description))
@@ -222,33 +224,47 @@ function feuilleDeRoute() {
         mois.push('<div class="fiche-mois" style="flex:' + largeur + '">' + echapper(d.toLocaleDateString('fr-FR', { month: 'short' }).replace('.', '')) + '</div>');
     }
 
-    const semaines = cols.map((c) => '<div class="fiche-semaine">S' + c.semaine + '</div>').join('');
-    const aujourdhui = (jours(f.debut, f.today) / f.duree) * 100;
+    const lundiCourant = lundiDe(f.today);
+    const semaines = cols.map((c) => '<div class="fiche-semaine' + (c.debut.getTime() === lundiCourant.getTime() ? ' courante' : '') + '">S' + c.semaine + '</div>').join('');
+
+    const pourcent = (d) => (jours(f.debut, d) / f.duree) * 100;
+    const aujourdhui = pourcent(f.today);
+    const colonneCourante = { gauche: pourcent(lundiCourant), largeur: (7 / f.duree) * 100 };
 
     const corps = rangs.map((r) => {
         const b = barre(f, r.debut, r.fin);
+        const replie = chantiersReplies.has(Number(r.id.slice(1)));
         const chevron = r.chantier && r.filles
-            ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (chantiersReplies.has(Number(r.id.slice(1))) ? '▶' : '▼') + '</button>'
+            ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (replie ? '▶' : '▼') + '</button>'
             : '<span class="fiche-chevron-vide"></span>';
-        const teinte = r.responsable && membre(r.responsable) ? (membre(r.responsable).couleur || '#3e5de7') : '#94a3b8';
+        const teinte = r.responsable && membre(r.responsable) ? (membre(r.responsable).couleur || '#3e5de7') : '#4a9ae0';
+        const periode = [r.debut, r.fin].every(Boolean)
+            ? r.debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' → ' + r.fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
+            : '';
         return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + '">'
             + '<div class="fiche-ligne">' + chevron
-            + '<span class="fiche-nom">' + echapper(r.titre) + '</span>'
-            + (r.chantier ? '' : '<span class="fiche-dates">' + (r.debut ? r.debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '') + '</span>')
-            + (r.progression ? '<span class="fiche-progression">' + Math.round(r.progression) + '%</span>' : '')
+            + '<span class="fiche-marque" style="--teinte:' + echapper(teinte) + '"></span>'
+            + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span>'
+            + (periode ? '<span class="fiche-dates">' + echapper(periode) + '</span>' : '') + '</span>'
+            + '<span class="fiche-progression">' + Math.round(r.progression || 0) + '%</span>'
+            + (r.filles ? '<span class="fiche-filles">↳' + r.filles + '</span>' : '')
             + avatars(r)
             + '</div>'
             + '<div class="fiche-piste">'
-            + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '"></span>' : '')
+            + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '">'
+                + (r.progression ? '<span class="fiche-avancee" style="width:' + Math.min(Math.max(r.progression, 0), 100) + '%"></span>' : '')
+                + '</span>' : '')
             + '</div></div>';
     }).join('');
 
     return '<section class="fiche-route">'
-        + '<h2>Feuille de route ' + (nbChantiers > 1 ? 'des ' + nbChantiers + ' chantiers associés' : 'du chantier associé') + '</h2>'
+        + '<h2>' + (nbChantiers > 1 ? 'Feuilles de route des ' + nbChantiers + ' chantiers associés' : 'Feuille de route du chantier associé') + '</h2>'
         + '<div class="fiche-grille">'
-        + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Tâches</div>'
+        + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Tâches<span class="fiche-compteur">' + rangs.filter((r) => !r.chantier).length + '</span></div>'
         + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div><div class="fiche-semaines">' + semaines + '</div></div></div>'
-        + '<div class="fiche-corps">' + corps
+        + '<div class="fiche-corps">'
+        + '<div class="fiche-overlay fiche-fond"><div class="fiche-colonne-courante" style="left:' + colonneCourante.gauche.toFixed(2) + '%;width:' + colonneCourante.largeur.toFixed(2) + '%"></div></div>'
+        + corps
         + '<div class="fiche-overlay"><div class="fiche-aujourdhui" style="left:' + aujourdhui.toFixed(2) + '%"></div></div>'
         + '</div></div></section>';
 }
