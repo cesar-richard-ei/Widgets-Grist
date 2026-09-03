@@ -32,38 +32,42 @@
         .fiche { padding: 0 0 24px; }
 
         .fiche-entete {
-            background: var(--accent); color: #fff; padding: 22px 28px;
+            background: var(--accent); color: #fff; padding: 30px 34px;
             display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
         }
-        .fiche-titre { margin: 0; font-size: clamp(1.2rem, 2.6vw, 2rem); font-weight: 800; letter-spacing: -0.01em; }
+        .fiche-titre { margin: 0; font-size: clamp(1.5rem, 3vw, 2.5rem); font-weight: 800; letter-spacing: -0.015em; }
+        /* La maquette pose le type comme une etiquette collee sur le bandeau, legerement de
+           travers et debordant sur sa droite. */
         .fiche-type {
-            margin-left: auto; background: #fff; color: var(--accent); border-radius: 10px;
-            padding: 8px 18px; font-weight: 800; font-size: clamp(0.8rem, 1.3vw, 1.05rem);
-            white-space: nowrap; transform: rotate(-1.5deg); box-shadow: 0 3px 8px rgba(0, 0, 0, 0.18);
+            margin-left: auto; margin-right: -10px; background: #fff; color: var(--accent);
+            border-radius: 12px; padding: 12px 26px; font-weight: 800;
+            font-size: clamp(1rem, 1.6vw, 1.45rem); white-space: nowrap;
+            transform: rotate(-2.4deg); box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22);
         }
 
-        .fiche-cadrage { display: flex; gap: 40px; flex-wrap: wrap; padding: 26px 28px 8px; }
-        .fiche-colonne { display: flex; flex-direction: column; gap: 22px; min-width: 220px; flex: 1; }
+        .fiche-cadrage { display: flex; gap: 48px; flex-wrap: wrap; padding: 32px 34px 10px; }
+        .fiche-colonne { display: flex; flex-direction: column; gap: 28px; min-width: 240px; flex: 1; }
         .fiche-colonne.large { flex: 2.6; min-width: 300px; }
-        .fiche-trio { display: flex; gap: 26px; flex-wrap: wrap; }
+        .fiche-trio { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 4px; }
         .fiche-trio .fiche-bloc { flex: 1; min-width: 160px; }
-        .fiche-label { color: var(--texte); font-size: 0.95rem; margin-bottom: 8px; }
-        .fiche-valeur { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+        .fiche-label { color: var(--texte); font-size: 1.05rem; margin-bottom: 10px; }
+        .fiche-valeur { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
         /* Les zones de saisie du metier ont un fond, les listes de personnes n'en ont pas. */
         .bloc-description .fiche-valeur, .fiche-trio .fiche-valeur {
-            background: var(--fond-doux); border-radius: var(--rayon); padding: 12px 14px;
-            width: 100%; min-height: 46px; display: block; white-space: pre-wrap;
+            background: var(--fond-doux); border-radius: var(--rayon); padding: 16px 18px;
+            width: 100%; min-height: 56px; display: block; white-space: pre-wrap;
+            font-size: 1.05rem; line-height: 1.55;
         }
         .fiche-valeur .vide { color: var(--texte-doux); font-style: italic; }
 
         .fiche-personne {
             display: inline-flex; align-items: center; gap: 8px; background: var(--accent);
-            color: #fff; border-radius: var(--rayon); padding: 6px 14px; font-weight: 600; font-size: 0.95rem;
+            color: #fff; border-radius: var(--rayon); padding: 9px 17px; font-weight: 600; font-size: 1.05rem;
         }
         .fiche-lien { opacity: 0.85; flex: none; }
 
-        .fiche-route { padding: 26px 28px 0; }
-        .fiche-route h2 { font-size: 1.05rem; font-weight: 800; margin: 0 0 14px; }
+        .fiche-route { padding: 32px 34px 0; }
+        .fiche-route h2 { font-size: 1.2rem; font-weight: 800; margin: 0 0 16px; }
         .fiche-grille {
             border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden;
             --colonne: clamp(200px, 32%, 420px);
@@ -128,7 +132,7 @@
 
         @media (max-width: 760px) {
             .fiche-cadrage { flex-direction: column; gap: 22px; padding: 20px 16px 4px; }
-            .fiche-entete, .fiche-route { padding-left: 16px; padding-right: 16px; }
+            .fiche-entete, .fiche-route { padding-left: 18px; padding-right: 18px; }
             .fiche-grille { --colonne: clamp(140px, 44%, 240px); }
             .fiche-progression, .fiche-filles { display: none; }
         }
