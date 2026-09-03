@@ -9,7 +9,8 @@
         :root {
             --fond: #ffffff;
             --fond-doux: #f5f7fb;
-            --texte: #1a1a1a;
+            --texte: #292929;
+            --texte-libelle: #414141;
             --texte-doux: #6b7280;
             --trait: #e5e7eb;
             --accent: #1e78d3;
@@ -21,6 +22,7 @@
         @media (prefers-color-scheme: dark) {
             :root {
                 --fond: #0b1220; --fond-doux: #16213a; --texte: #e5e7eb; --texte-doux: #94a3b8;
+                --texte-libelle: #cbd5e1;
                 --trait: #1e293b; --accent-clair: #16213a;
             }
         }
@@ -40,9 +42,9 @@
            travers et debordant sur sa droite. */
         .fiche-type {
             margin-left: auto; margin-right: 29px; background: #fff; color: var(--accent);
-            border-radius: 11px; padding: 5px 30px; font-weight: 800; line-height: 1.2;
-            font-size: clamp(1.1rem, 1.95vw, 1.75rem); white-space: nowrap;
-            transform: rotate(3deg); box-shadow: 0 5px 14px rgba(0, 0, 0, 0.22);
+            border-radius: 999px; padding: 4px 18px; font-weight: 800; line-height: 1.2;
+            font-size: clamp(1.15rem, 2.27vw, 2rem); white-space: nowrap;
+            transform: rotate(3deg); box-shadow: 5px 6px 10px rgba(0, 0, 0, 0.16);
         }
 
         .fiche-cadrage { display: flex; gap: 48px; flex-wrap: wrap; padding: 32px 34px 10px; }
@@ -51,11 +53,11 @@
         .fiche-colonne.large { min-width: 300px; }
         .fiche-trio { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 4px; }
         .fiche-trio .fiche-bloc { flex: 1; min-width: 160px; }
-        .fiche-label { color: var(--texte); font-size: 1.25rem; margin-bottom: 14px; }
+        .fiche-label { color: var(--texte-libelle); font-size: 1.25rem; margin-bottom: 8px; }
         .fiche-valeur { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
         /* Les zones de saisie du metier ont un fond, les listes de personnes n'en ont pas. */
         .bloc-description .fiche-valeur, .fiche-trio .fiche-valeur {
-            background: var(--fond-doux); border-radius: var(--rayon); padding: 17px 20px;
+            background: var(--fond-doux); border-radius: var(--rayon); padding: 15px 17px;
             width: 100%; display: block; white-space: pre-wrap;
             font-size: 1.25rem; line-height: 1.45;
         }
@@ -63,9 +65,9 @@
 
         .fiche-personne {
             display: inline-flex; align-items: center; gap: 8px; background: var(--accent);
-            color: #fff; border-radius: var(--rayon); padding: 4px 17px; font-weight: 600; font-size: 1.25rem; line-height: 1.2;
+            color: #fff; border-radius: 7px; padding: 2px 16px; font-weight: 400; font-size: 1.5rem; line-height: 1.15;
         }
-        .fiche-lien { opacity: 0.85; flex: none; }
+        .fiche-lien { opacity: 0.9; flex: none; width: 20px; height: 20px; }
 
         .fiche-route { padding: 32px 34px 0; }
         .fiche-route h2 { font-size: 1.2rem; font-weight: 800; margin: 0 0 16px; }
@@ -810,7 +812,7 @@
                 + '<div class="fiche-valeur">' + (contenu || '<span class="vide">Non renseigné</span>') + '</div></div>';
         }
 
-        const ICONE_LIEN = '<svg class="fiche-lien" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round">'
+        const ICONE_LIEN = '<svg class="fiche-lien" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">'
             + '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg>';
 
         function pastilles(ids, avecLien) {
