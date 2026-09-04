@@ -171,14 +171,16 @@ const ETAPES_ANNEE = ['0002-08-05', '0020-08-05', '0202-08-05'];
 test('les dates intermédiaires d une saisie ne partent pas en base', async ({ page }) => {
     await ouvrirTache(page);
     const initiale = await D.champTache(page, 1, 'dateDebut');
-    const cellules = () => page.locator('#timelineGrid .grid-cell').count();
-    const avant = await cellules();
+    // La largeur de la grille suit l'etendue de la plage : elle bougerait si une date absurde
+    // partait en base.
+    const largeur = () => page.locator('#timelineGrid').evaluate((g) => g.style.width);
+    const avant = await largeur();
     const champ = page.locator('#panel input[type="date"]').first();
 
     for (const etape of ETAPES_ANNEE) {
         await champ.fill(etape);
         expect(await D.champTache(page, 1, 'dateDebut')).toBe(initiale);
-        expect(await cellules()).toBe(avant);
+        expect(await largeur()).toBe(avant);
     }
 });
 
