@@ -1418,47 +1418,6 @@
             return prev;
         }
         function _restoreExpandState(prev) { expandedTasks = prev; render(); }
-        function exportPrint() {
-            document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('open'));
-            const prev = _expandAllForExport();
-            setTimeout(() => { window.print(); setTimeout(() => _restoreExpandState(prev), 500); }, 200);
-        }
-
-        async function exportPNG() {
-            document.querySelectorAll('.filter-menu').forEach(m => m.classList.remove('open'));
-            showToast('Préparation export...', 'info');
-
-            // Load html2canvas dynamically
-            if (!window.html2canvas) {
-                const script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
-                document.head.appendChild(script);
-                await new Promise(resolve => script.onload = resolve);
-            }
-
-            const prev = _expandAllForExport();
-            await new Promise(r => setTimeout(r, 100)); // attendre re-render
-            try {
-                const element = document.getElementById('ganttWrapper');
-                const canvas = await html2canvas(element, {
-                    backgroundColor: '#ffffff',
-                    scale: 2,
-                    logging: false,
-                    useCORS: true
-                });
-
-                const link = document.createElement('a');
-                link.download = 'gantt-' + new Date().toISOString().split('T')[0] + '.png';
-                link.href = canvas.toDataURL('image/png');
-                link.click();
-                showToast('Export PNG réussi', 'success');
-            } catch (e) {
-                console.error('Export error:', e);
-                showToast('Erreur export PNG', 'error');
-            } finally {
-                _restoreExpandState(prev);
-            }
-        }
         function showSaveIndicator() { const el = document.getElementById('saveIndicator'); el.classList.add('visible'); clearTimeout(saveTimeout); saveTimeout = setTimeout(() => el.classList.remove('visible'), 1500); }
 
         // RefList/ChoiceList helpers
@@ -2085,46 +2044,6 @@
         }
         function goToToday() { viewStartDate = new Date(); ganttNowAligned = false; render(); }
 
-        function fitToTasks() {
-            const ft = getFilteredTasks();
-            if (ft.length === 0) { goToToday(); return; }
-
-            // Find min/max dates from tasks
-            let minDate = null, maxDate = null;
-            ft.forEach(t => {
-                const start = gristToDate(t.dateDebut);
-                const end = gristToDate(t.dateEcheance);
-                if (start && (!minDate || start < minDate)) minDate = start;
-                if (end && (!maxDate || end > maxDate)) maxDate = end;
-            });
-
-            if (!minDate || !maxDate) { goToToday(); return; }
-
-            // Add some padding (7 days before, 7 days after)
-            minDate = addDays(minDate, -7);
-            maxDate = addDays(maxDate, 7);
-
-            // Calculate span in days
-            const spanDays = getDaysDiff(minDate, maxDate);
-
-            // Choose best view based on span
-            if (spanDays <= 14) {
-                currentView = 'week';
-            } else if (spanDays <= 60) {
-                currentView = 'month';
-            } else if (spanDays <= 120) {
-                currentView = 'quarter';
-            } else if (spanDays <= 200) {
-                currentView = 'semester';
-            } else {
-                currentView = 'year';
-            }
-
-            viewStartDate = minDate;
-            document.querySelectorAll('.view-controls .btn').forEach(b => b.classList.toggle('active', b.dataset.view === currentView));
-            document.documentElement.style.setProperty('--cell-width', VIEW_CONFIG[currentView].cellWidth + 'px');
-            render();
-        }
         function updatePeriodLabel() {
             const start = getViewStartDate();
             let text = '';
