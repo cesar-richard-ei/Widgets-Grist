@@ -375,6 +375,33 @@ const chantierAvecColonneRemplie = () => {
     return doc;
 };
 
+// Changer le chantier d'une tache doit se voir tout de suite : l'ecriture partait et le toast
+// s'affichait, mais le volet gardait l'ancien rattachement jusqu'au rechargement.
+test('changer le chantier d une tache se voit dans le volet', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    const rattachement = volet(page).locator('.form-group:has(#chantierSelect) .multi-select-chip');
+    await expect(rattachement).toContainText('Socle technique');
+
+    await volet(page).locator('#chantierSelect .addbtn').click();
+    await volet(page).locator('#chantierSelect .multi-select-option', { hasText: 'Guides utilisateurs' }).click();
+
+    await expect(rattachement).toContainText('Guides utilisateurs');
+});
+
+test('changer le chantier d une tache la deplace sous son nouveau parent', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    await volet(page).locator('#chantierSelect .addbtn').click();
+    await volet(page).locator('#chantierSelect .multi-select-option', { hasText: 'Guides utilisateurs' }).click();
+
+    await expect.poll(() => D.champTache(page, 1, 'chantier')).toBe(2);
+});
+
 test('les contributeurs d un chantier ne viennent pas de sa colonne', async ({ page }) => {
     await D.ouvrirGantt(page, chantierAvecColonneRemplie());
 
