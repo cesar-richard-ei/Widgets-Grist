@@ -61,7 +61,8 @@ function tableDeRef(tableId, colId) {
 }
 
 const refPersonne = (tableId, colId, v) => (v ? { table: tableDeRef(tableId, colId), id: v } : null);
-const refsPersonnes = (tableId, colId, v) => listeRefs(v).map((id) => ({ table: tableDeRef(tableId, colId), id }));
+const refsPersonnes = (tableId, colId, v) => (Array.isArray(v) && v[0] === 'L' ? v.slice(1) : [])
+    .map((valeur) => ({ table: tableDeRef(tableId, colId), id: valeur }));
 
 function colonneDateChantier(borne) {
     const noms = NOMS_DATE_CHANTIER[borne];
@@ -80,7 +81,20 @@ function categorieDuProjet(p) {
     return typeof v === 'string' ? v : '';
 }
 
-const membre = (ref) => (ref ? personnes.get(ref.table + ':' + ref.id) || null : null);
+const clefNom = (v) => String(v == null ? '' : v).replace(/\s+/g, ' ').trim().toLowerCase();
+
+// Le serveur ne sert pas toujours l'identifiant d'une reference : sur grist.numerique.gouv.fr une
+// reference simple arrive sous son libelle, la ou une liste garde ses identifiants. Les deux formes
+// doivent retrouver la personne.
+function membre(ref) {
+    if (!ref) return null;
+    const parId = personnes.get(ref.table + ':' + ref.id);
+    if (parId) return parId;
+    const parNom = personnes.get(ref.table + '#' + clefNom(ref.id));
+    if (parNom) return parNom;
+    console.warn('[fiche] personne introuvable', ref.table, ref.id);
+    return null;
+}
 const initiales = (nom) => String(nom || '').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
 
 const lundiDe = (d) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); r.setHours(0, 0, 0, 0); return r; };
@@ -330,7 +344,10 @@ async function chargerPersonnes() {
     for (const table of tables) {
         const lues = await lire(table);
         if (!lues.length) console.warn('[fiche] aucune personne lue dans', table);
-        lues.forEach((m) => personnes.set(table + ':' + m.id, m));
+        lues.forEach((m) => {
+            personnes.set(table + ':' + m.id, m);
+            if (m.nom) personnes.set(table + '#' + clefNom(m.nom), m);
+        });
     }
 }
 
