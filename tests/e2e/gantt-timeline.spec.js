@@ -88,6 +88,28 @@ test('la navigation avance et recule d un mois en vue semestre', async ({ page }
     await expect(libelle).toHaveText(depart);
 });
 
+// La grille et les barres doivent partager la meme echelle : l'en-tete pose une colonne par
+// semaine, les barres et la ligne du jour se placent en pixels par jour. Si la plage ne couvre pas
+// un nombre entier de semaines, les deux derivent et le jour ne tombe plus dans sa colonne.
+for (const jours of [0, 400]) {
+    test('la ligne du jour tombe dans la colonne de la semaine courante' + (jours ? ', plage etendue par une tache ancienne' : ''), async ({ page }) => {
+        const doc = D.documentCible();
+        if (jours) doc.Tasks.records.push({ id: 7, titre: 'Historique', chantier: 1, dateDebut: D.j(-jours), dateEcheance: D.j(-jours + 70), statut: 'done', type: 'tache', priorite: '3' });
+        await D.ouvrirGantt(page, doc);
+        await D.attendreRendu(page);
+
+        const dans = await page.evaluate(() => {
+            const trait = document.querySelector('#timelineGrid .today-line').getBoundingClientRect();
+            const colonne = document.querySelector('#timelineHeader .day-cell.today');
+            if (!colonne) return null;
+            const c = colonne.getBoundingClientRect();
+            return trait.left >= c.left - 1 && trait.left <= c.right + 1;
+        });
+
+        expect(dans).toBe(true);
+    });
+}
+
 test('une tâche ancienne est dessinée dans la plage, sans décaler l ouverture', async ({ page }) => {
     const doc = D.documentCible();
     doc.Tasks.records.push({ id: 7, titre: 'Historique', chantier: 1, dateDebut: D.j(-400), dateEcheance: D.j(-330), statut: 'done', type: 'tache', priorite: '3' });

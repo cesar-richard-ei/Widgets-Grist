@@ -1144,13 +1144,18 @@
                 else if (unit === 'month') eStart = startOfMonth(eStart);
                 else eStart = new Date(eStart.getFullYear(), eStart.getMonth(), eStart.getDate());
 
-                const effectiveDays = Math.max(daysDiff(eStart, eEnd), viewDays);
+                let effectiveDays = Math.max(daysDiff(eStart, eEnd), viewDays);
                 let numCells;
                 if (unit === 'month') {
                     const eEnd2 = addDays(eStart, effectiveDays);
                     numCells = Math.max(1, (eEnd2.getFullYear() - eStart.getFullYear()) * 12 + (eEnd2.getMonth() - eStart.getMonth()));
                 } else if (unit === 'week') {
                     numCells = Math.ceil(effectiveDays / 7);
+                    // La grille pose une colonne par semaine : la plage doit donc couvrir des semaines
+                    // entieres. Sinon `pxPerDay` etale la plage sur la largeur des colonnes, sept jours ne
+                    // valent plus une colonne, et tout ce qui se place au jour (barres, jalons, ligne du
+                    // jour) glisse d'autant plus que la plage est longue.
+                    effectiveDays = numCells * 7;
                 } else {
                     numCells = effectiveDays;
                 }
