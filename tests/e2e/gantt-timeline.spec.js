@@ -88,6 +88,28 @@ test('la navigation avance et recule d un mois en vue semestre', async ({ page }
     await expect(libelle).toHaveText(depart);
 });
 
+// Le Gantt s'ouvre toujours ancre sur aujourd'hui, quelle que soit l'anciennete des taches. Le
+// bouton « Ajuster » calait la vue sur la tache la plus ancienne et basculait en vue Annee au-dela
+// de 200 jours : un clic suffisait a se retrouver des annees en arriere sans comprendre pourquoi.
+test('une tache vieille de trois ans ne deplace pas l ouverture', async ({ page }) => {
+    const doc = D.documentCible();
+    const anciennete = 3 * 365;
+    doc.Tasks.records.push({ id: 7, titre: 'Vieux sujet', chantier: 1, dateDebut: D.j(-anciennete), dateEcheance: D.j(-anciennete + 30), statut: 'done', type: 'tache', priorite: '3' });
+    await D.ouvrirGantt(page, doc);
+    await D.attendreRendu(page);
+
+    const etat = await page.evaluate(() => {
+        const sc = document.getElementById('timelineScroll');
+        const ligne = document.querySelector('#timelineGrid .today-line');
+        const x = parseInt(ligne.style.left, 10) - sc.scrollLeft;
+        return { vue: currentView, visible: x >= 0 && x <= sc.clientWidth, dansLePremierTiers: x <= sc.clientWidth / 3 };
+    });
+
+    expect(etat.vue).toBe('semester');
+    expect(etat.visible).toBe(true);
+    expect(etat.dansLePremierTiers).toBe(true);
+});
+
 // La grille et les barres doivent partager la meme echelle : l'en-tete pose une colonne par
 // semaine, les barres et la ligne du jour se placent en pixels par jour. Si la plage ne couvre pas
 // un nombre entier de semaines, les deux derivent et le jour ne tombe plus dans sa colonne.

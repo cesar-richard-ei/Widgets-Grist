@@ -233,7 +233,7 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 - Barre d'outils sur une seule ligne sous 560px, logo et nom de la vue masqués, défilement horizontal pour le reste
 - Jalon déplaçable à la souris dans le graphique. Seul le déplacement est ouvert : un jalon n'a qu'une date, il n'y a rien à redimensionner
 - Couleurs avatars membres depuis `couleur` Team — **TEAM-01**
-- Export Print/PDF + PNG — **GEN-03**
+- Pas d'export ni d'ajustement de la vue : la barre d'outils ne garde que la navigation, la couleur, les filtres et la création. `fitToTasks` calait la vue sur la tâche la plus ancienne et basculait en vue Année, ce qui envoyait l'utilisateur des années en arrière d'un clic ; la fonction a été retirée avec le bouton
 
 ### Calendar (v15)
 - 7 vues : mois / semaine / 2 semaines / 5 jours / trimestre / semestre / année
@@ -366,6 +366,8 @@ function removeSubtask(id)   { /* filter out, re-render */ }
 ```
 
 ### Export (GEN-03)
+
+Kanban, Calendar et Dashboard uniquement : le Gantt n'expose plus d'export, et ses deux fonctions ont été retirées avec le menu.
 
 ```javascript
 function exportPrint() { window.print(); }
