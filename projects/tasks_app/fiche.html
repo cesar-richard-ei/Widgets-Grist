@@ -1036,8 +1036,12 @@
             }
         }
 
-        async function charger() {
+        async function charger(selectionne) {
             try { schemaMeta = await TF.fetchSchemaMeta(grist); } catch (e) { schemaMeta = null; }
+            // L'enregistrement servi par onRecord depend d'options que le serveur applique a sa facon :
+            // seul son identifiant est fiable, les valeurs se lisent dans la table comme celles des autres.
+            const projets = await lire('Projects');
+            projet = projets.find((p) => p.id === (selectionne || {}).id) || selectionne || null;
             chantiers = await lire('Chantiers');
             taches = await lire('Tasks');
             categories = await lire('Categorie_de_projet');
@@ -1048,10 +1052,7 @@
         function demarrer() {
             try {
                 grist.ready({ requiredAccess: 'full' });
-                // Sans ces options, Grist developpe les references et decode les dates : le responsable
-                // arrive sous son nom au lieu de son identifiant, et rien ne se resout. Les tables lues
-                // par fetchTable servant deja des valeurs brutes, l'enregistrement doit l'etre aussi.
-                grist.onRecord(async (record) => { projet = record; await charger(); },
+                grist.onRecord(async (record) => await charger(record),
                     { expandRefs: false, keepEncoded: true, includeColumns: 'normal' });
             } catch (e) {
                 el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s\'ouvre depuis un document Grist.</p>';

@@ -282,11 +282,12 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   personnes affichaient « Non renseigné » sur le document du métier. Le widget passe donc
   `{ expandRefs: false, keepEncoded: true, includeColumns: 'normal' }`, pour recevoir les mêmes
   valeurs que les tables lues par `fetchTable`.
-- **Une référence se résout par son identifiant ou par son libellé.** Les options passées à
-  `onRecord` sont appliquées par le serveur, et celui du document du métier ignore `expandRefs` sur
-  une référence simple : le responsable arrive sous son nom quand les sponsors gardent leurs
-  identifiants. Les deux formes retrouvent la personne, et ce qui reste introuvable est journalisé
-  sous `[fiche]`.
+- **De l'enregistrement servi, seul l'identifiant est fiable.** `onRecord` délègue à
+  `fetchSelectedRecord`, que le serveur exécute avec sa propre lecture des options : le responsable
+  arrivait tantôt sous son nom, tantôt sous une forme illisible, quand les listes gardaient leurs
+  identifiants. La fiche relit donc le projet dans `Projects` comme elle lit les autres tables, et
+  ne garde de l'enregistrement que la ligne sélectionnée. La résolution d'une personne accepte
+  encore l'identifiant ou le libellé, et journalise sous `[fiche]` ce qui reste introuvable.
 - **La table des personnes n'est pas nommée en dur.** Chaque colonne dit dans son type où pointent
   ses références (`Ref:Team`, `RefList:Autre`) ; la fiche lit ces tables et indexe les personnes par
   table et identifiant. Une catégorie sans fiche annonce celle qui vient plutôt que de décrire ce

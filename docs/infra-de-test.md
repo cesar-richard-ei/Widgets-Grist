@@ -75,9 +75,10 @@ Il applique désormais ces deux options, avec les défauts de Grist. Un widget q
 brutes le demande : `onRecord(cb, { expandRefs: false, keepEncoded: true })`.
 
 Demander ces options ne suffit pas : `onRecord` délègue à `fetchSelectedRecord`, que le serveur
-exécute. Celui qui héberge le document du métier ignore `expandRefs` pour une référence simple, qui
-arrive donc sous son libellé quand une liste garde ses identifiants. Le simulacre reproduit ce
-serveur avec `refsAffichees: true` dans la configuration Grist du test.
+exécute à sa façon. Le simulacre reproduit deux serveurs observés, `refsAffichees: true` qui sert
+une référence simple sous son libellé, et `refsOpaques: true` qui la sert sous une forme
+inexploitable, les listes gardant leurs identifiants dans les deux cas. Un widget ne doit donc rien
+attendre de l'enregistrement servi hormis son identifiant.
 
 Reste non simulé, faute d'équivalent ici : `includeColumns`, dont le défaut `shown` limite le
 record aux colonnes montrées dans le panneau de droite.

@@ -195,3 +195,15 @@ test('un responsable servi sous son nom se retrouve quand même', async ({ page 
     await expect(fiche(page).locator('.bloc-responsable')).toContainText('Chloé Roux');
     await expect(fiche(page).locator('.bloc-sponsors')).toContainText('Alice Martin');
 });
+
+// Les options de sérialisation sont appliquées par le serveur, et chacun s'y prend à sa façon :
+// seul l'identifiant de l'enregistrement servi est fiable, le reste se lit dans la table.
+test('la fiche se lit dans la table, quelle que soit la forme servie', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB, {
+        grist: { tableLiee: 'Projects', selection: DATALAB, refsOpaques: true }
+    });
+
+    await expect(fiche(page).locator('.bloc-responsable')).toContainText('Chloé Roux');
+    await expect(fiche(page).locator('.bloc-sponsors')).toContainText('Alice Martin');
+    await expect(fiche(page).locator('.fiche-titre')).toHaveText('Datalab');
+});
