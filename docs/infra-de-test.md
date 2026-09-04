@@ -74,6 +74,11 @@ dont toutes les personnes affichaient « Non renseigné » sur le document du m�
 Il applique désormais ces deux options, avec les défauts de Grist. Un widget qui veut des valeurs
 brutes le demande : `onRecord(cb, { expandRefs: false, keepEncoded: true })`.
 
+Demander ces options ne suffit pas : `onRecord` délègue à `fetchSelectedRecord`, que le serveur
+exécute. Celui qui héberge le document du métier ignore `expandRefs` pour une référence simple, qui
+arrive donc sous son libellé quand une liste garde ses identifiants. Le simulacre reproduit ce
+serveur avec `refsAffichees: true` dans la configuration Grist du test.
+
 Reste non simulé, faute d'équivalent ici : `includeColumns`, dont le défaut `shown` limite le
 record aux colonnes montrées dans le panneau de droite.
 

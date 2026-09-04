@@ -184,3 +184,14 @@ test('les personnes se lisent dans la table que désignent les colonnes', async 
     await expect(fiche(page).locator('.bloc-sponsors')).toContainText('Alice Martin');
     await expect(fiche(page).locator('.bloc-contributeurs')).toContainText('Bruno Klein');
 });
+
+// Le serveur applique lui-même `expandRefs`, et celui qui héberge le document du métier l'ignore :
+// une référence simple arrive sous son libellé quand une liste garde ses identifiants.
+test('un responsable servi sous son nom se retrouve quand même', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB, {
+        grist: { tableLiee: 'Projects', selection: DATALAB, refsAffichees: true }
+    });
+
+    await expect(fiche(page).locator('.bloc-responsable')).toContainText('Chloé Roux');
+    await expect(fiche(page).locator('.bloc-sponsors')).toContainText('Alice Martin');
+});

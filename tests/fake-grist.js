@@ -264,7 +264,12 @@ function createFakeGrist(documentInitial, options) {
             const type = (colonnes[colId] || {}).type || '';
             const refUnique = /^Ref:(.+)$/.exec(type);
             const refListe = /^RefList:(.+)$/.exec(type);
-            if (developper && refUnique && valeur) {
+            if (config.refsAffichees && refUnique && valeur) {
+                // Serveur qui ignore expandRefs : une reference simple arrive sous son libelle,
+                // une liste garde ses identifiants. Constate sur grist.numerique.gouv.fr.
+                const cible = (doc[refUnique[1]] || { records: [] }).records.find((r) => r.id === valeur);
+                sortie[colId] = cible && cible.nom != null ? cible.nom : valeur;
+            } else if (developper && refUnique && valeur) {
                 sortie[colId] = (doc[refUnique[1]] || { records: [] }).records.find((r) => r.id === valeur) || valeur;
             } else if (developper && refListe && Array.isArray(valeur) && valeur[0] === 'L') {
                 const cible = (doc[refListe[1]] || { records: [] }).records;
