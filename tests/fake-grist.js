@@ -247,13 +247,45 @@ function createFakeGrist(documentInitial, options) {
     }
 
     function onRecords(cb) { abonnes.records.push(cb); }
+
+    /**
+     * Grist ne sert pas l'enregistrement tel qu'il est stocke : par defaut il developpe les
+     * references (expandRefs) et decode les valeurs (keepEncoded). Un widget qui attend des
+     * identifiants et des horodatages doit le demander, sinon il recoit des noms et des dates.
+     */
+    function servirRecord(enregistrement, options) {
+        if (!enregistrement) return null;
+        const o = options || {};
+        const developper = o.expandRefs !== false;
+        const encode = o.keepEncoded === true;
+        const colonnes = (doc[tableLiee] || {}).columns || {};
+        const sortie = {};
+        for (const [colId, valeur] of Object.entries(enregistrement)) {
+            const type = (colonnes[colId] || {}).type || '';
+            const refUnique = /^Ref:(.+)$/.exec(type);
+            const refListe = /^RefList:(.+)$/.exec(type);
+            if (developper && refUnique && valeur) {
+                sortie[colId] = (doc[refUnique[1]] || { records: [] }).records.find((r) => r.id === valeur) || valeur;
+            } else if (developper && refListe && Array.isArray(valeur) && valeur[0] === 'L') {
+                const cible = (doc[refListe[1]] || { records: [] }).records;
+                sortie[colId] = valeur.slice(1).map((id) => cible.find((r) => r.id === id) || id);
+            } else if (!encode && type === 'Date' && typeof valeur === 'number') {
+                sortie[colId] = new Date(valeur * 1000);
+            } else {
+                sortie[colId] = valeur;
+            }
+        }
+        return sortie;
+    }
+
     // Grist rejoue l'enregistrement selectionne a l'abonnement : un widget de fiche, qui ne lit
     // que cet enregistrement, n'a sinon jamais rien a afficher.
-    function onRecord(cb) {
-        abonnes.record.push(cb);
+    function onRecord(cb, options) {
+        const servir = (rec) => cb(servirRecord(rec, options));
+        abonnes.record.push(servir);
         if (config.selection === undefined || !doc[tableLiee]) return;
         const enregistrement = doc[tableLiee].records.find((r) => r.id === config.selection) || null;
-        Promise.resolve().then(() => cb(enregistrement));
+        Promise.resolve().then(() => servir(enregistrement));
     }
     // Grist rejoue les options de la section a l'abonnement : c'est ce que le Gantt neutralise avec
     // son garde « premier onOptions ». Sans ce rejeu, un widget qui lit des filtres partages n'etait

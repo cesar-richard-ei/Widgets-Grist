@@ -701,7 +701,7 @@
 
         let schemaMeta = null;
         let projet = null;
-        let equipe = [];
+        let personnes = new Map();
         let chantiers = [];
         let taches = [];
         let categories = [];
@@ -732,6 +732,22 @@
             return c ? c.colId : null;
         }
 
+        // Une colonne de personnes designe sa table dans son type : la chercher sous un nom fige laissait
+        // les pastilles vides des que le document pointait ailleurs que sur Team.
+        const TABLE_PERSONNES = 'Team';
+        const COLONNES_PERSONNES = [
+            ['Projects', 'responsable'], ['Projects', 'Sponsor'], ['Projects', 'Contributeurs_cles'],
+            ['Chantiers', 'Responsable'], ['Tasks', 'Responsable'], ['Tasks', 'assignees']
+        ];
+
+        function tableDeRef(tableId, colId) {
+            const trouve = /^Ref(?:List)?:(.+)$/.exec(typeColonne(tableId, colId) || '');
+            return trouve ? trouve[1] : TABLE_PERSONNES;
+        }
+
+        const refPersonne = (tableId, colId, v) => (v ? { table: tableDeRef(tableId, colId), id: v } : null);
+        const refsPersonnes = (tableId, colId, v) => listeRefs(v).map((id) => ({ table: tableDeRef(tableId, colId), id }));
+
         function colonneDateChantier(borne) {
             const noms = NOMS_DATE_CHANTIER[borne];
             if (!schemaMeta) return noms[0];
@@ -749,8 +765,7 @@
             return typeof v === 'string' ? v : '';
         }
 
-        const membre = (id) => equipe.find((m) => m.id === id) || null;
-        const nomMembre = (id) => { const m = membre(id); return m ? (m.nom || '') : ''; };
+        const membre = (ref) => (ref ? personnes.get(ref.table + ':' + ref.id) || null : null);
         const initiales = (nom) => String(nom || '').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
 
         const lundiDe = (d) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); r.setHours(0, 0, 0, 0); return r; };
@@ -817,14 +832,14 @@
                     id: 'c' + c.id, chantier: true, titre: c.Nom_du_chantier || 'Sans titre',
                     debut: gristVersDate(c[colDebut] || (debuts.length ? Math.min.apply(null, debuts) : null)),
                     fin: gristVersDate(c[colFin] || (fins.length ? Math.max.apply(null, fins) : null)),
-                    responsable: c.Responsable || null, filles: filles.length
+                    responsable: refPersonne('Chantiers', 'Responsable', c.Responsable), filles: filles.length
                 });
                 if (chantiersReplies.has(c.id)) return;
                 filles.forEach((t) => out.push({
                     id: 't' + t.id, chantier: false, titre: t.titre || 'Sans titre',
                     debut: gristVersDate(t.dateDebut), fin: gristVersDate(t.dateEcheance),
-                    responsable: t.Responsable || null, progression: t.progression || 0,
-                    personnes: listeRefs(t.assignees), parent: c.id
+                    responsable: refPersonne('Tasks', 'Responsable', t.Responsable), progression: t.progression || 0,
+                    personnes: refsPersonnes('Tasks', 'assignees', t.assignees), parent: c.id
                 }));
             });
             return out;
@@ -838,10 +853,10 @@
         const ICONE_LIEN = '<svg class="fiche-lien" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">'
             + '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg>';
 
-        function pastilles(ids, avecLien) {
-            if (!ids.length) return '';
-            return ids.map((id) => {
-                const m = membre(id);
+        function pastilles(refs, avecLien) {
+            if (!refs.length) return '';
+            return refs.map((ref) => {
+                const m = membre(ref);
                 if (!m) return '';
                 return '<span class="fiche-personne">' + (avecLien ? ICONE_LIEN : '') + echapper(m.nom) + '</span>';
             }).join('');
@@ -850,10 +865,10 @@
         /** Les personnes posees sur une ligne, en pastilles rondes ; au-dela de trois, un compteur. */
         function avatars(r) {
             const ids = (r.personnes || []).slice();
-            if (r.responsable && ids.indexOf(r.responsable) === -1) ids.unshift(r.responsable);
+            if (r.responsable && !ids.some((x) => x.table === r.responsable.table && x.id === r.responsable.id)) ids.unshift(r.responsable);
             if (!ids.length) return '';
-            const montres = ids.slice(0, 3).map((id) => {
-                const m = membre(id);
+            const montres = ids.slice(0, 3).map((ref) => {
+                const m = membre(ref);
                 if (!m) return '';
                 return '<span class="fiche-avatar" style="--teinte:' + echapper(m.couleur || '#3e5de7') + '" title="' + echapper(m.nom || '') + '">'
                     + echapper(initiales(m.nom)) + '</span>';
@@ -883,9 +898,9 @@
         function cadrage() {
             return '<section class="fiche-cadrage">'
                 + '<div class="fiche-colonne">'
-                + bloc('bloc-responsable', 'Responsable', pastilles(projet.responsable ? [projet.responsable] : []))
-                + bloc('bloc-sponsors', 'Sponsors', pastilles(listeRefs(projet.Sponsor), true))
-                + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(listeRefs(projet.Contributeurs_cles), true))
+                + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean)))
+                + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor), true))
+                + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles), true))
                 + '</div>'
                 + '<div class="fiche-colonne large">'
                 + bloc('bloc-description', 'Description', texteOuVide(projet.Description))
@@ -989,22 +1004,38 @@
             }));
         }
 
+        async function lire(table) {
+            try { return TF.columnarToRows(await grist.docApi.fetchTable(table)); } catch (e) { return []; }
+        }
+
+        async function chargerPersonnes() {
+            const tables = new Set([TABLE_PERSONNES]);
+            COLONNES_PERSONNES.forEach((c) => tables.add(tableDeRef(c[0], c[1])));
+            personnes = new Map();
+            for (const table of tables) {
+                const lues = await lire(table);
+                if (!lues.length) console.warn('[fiche] aucune personne lue dans', table);
+                lues.forEach((m) => personnes.set(table + ':' + m.id, m));
+            }
+        }
+
         async function charger() {
-            const lire = async (table) => {
-                try { return TF.columnarToRows(await grist.docApi.fetchTable(table)); } catch (e) { return []; }
-            };
             try { schemaMeta = await TF.fetchSchemaMeta(grist); } catch (e) { schemaMeta = null; }
-            equipe = await lire('Team');
             chantiers = await lire('Chantiers');
             taches = await lire('Tasks');
             categories = await lire('Categorie_de_projet');
+            await chargerPersonnes();
             rendre();
         }
 
         function demarrer() {
             try {
                 grist.ready({ requiredAccess: 'full' });
-                grist.onRecord(async (record) => { projet = record; await charger(); });
+                // Sans ces options, Grist developpe les references et decode les dates : le responsable
+                // arrive sous son nom au lieu de son identifiant, et rien ne se resout. Les tables lues
+                // par fetchTable servant deja des valeurs brutes, l'enregistrement doit l'etre aussi.
+                grist.onRecord(async (record) => { projet = record; await charger(); },
+                    { expandRefs: false, keepEncoded: true, includeColumns: 'normal' });
             } catch (e) {
                 el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s\'ouvre depuis un document Grist.</p>';
             }

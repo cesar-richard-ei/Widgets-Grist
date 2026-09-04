@@ -277,6 +277,15 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   responsive sans recalcul au redimensionnement.
 - La ligne du jour est portée par un calque qui ne couvre que la piste, jamais par le corps entier :
   la colonne des libellés la décalerait de plusieurs semaines.
+- **L'enregistrement est demandé brut.** `onRecord` développe les références et décode les dates par
+  défaut : le responsable arrivait sous son nom au lieu de son identifiant, et les trois blocs de
+  personnes affichaient « Non renseigné » sur le document du métier. Le widget passe donc
+  `{ expandRefs: false, keepEncoded: true, includeColumns: 'normal' }`, pour recevoir les mêmes
+  valeurs que les tables lues par `fetchTable`.
+- **La table des personnes n'est pas nommée en dur.** Chaque colonne dit dans son type où pointent
+  ses références (`Ref:Team`, `RefList:Autre`) ; la fiche lit ces tables et indexe les personnes par
+  table et identifiant. Une catégorie sans fiche annonce celle qui vient plutôt que de décrire ce
+  que le widget ne fait pas.
 
 ### Plan (v16) — plan de charge
 

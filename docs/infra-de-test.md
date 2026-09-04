@@ -63,6 +63,20 @@ métier : elle posait `Chantiers.Projets` sans savoir si la colonne s'écrit.
 Conséquence pour les fixtures : une écriture vers une colonne que le document de test ne déclare pas
 fait désormais échouer le test au lieu de passer inaperçue.
 
+### Le simulacre sert ce que Grist sert
+
+`onRecord` ne rend pas l'enregistrement tel qu'il est stocké : Grist développe les références
+(`expandRefs`, actif par défaut) et décode les valeurs (`keepEncoded`, inactif par défaut). Un
+widget qui attend un identifiant reçoit donc un nom, et une date arrive en objet plutôt qu'en
+horodatage. Le simulacre rendait les valeurs brutes, ce qui a rendu verts les tests d'une fiche
+dont toutes les personnes affichaient « Non renseigné » sur le document du métier.
+
+Il applique désormais ces deux options, avec les défauts de Grist. Un widget qui veut des valeurs
+brutes le demande : `onRecord(cb, { expandRefs: false, keepEncoded: true })`.
+
+Reste non simulé, faute d'équivalent ici : `includeColumns`, dont le défaut `shown` limite le
+record aux colonnes montrées dans le panneau de droite.
+
 ### Trois pièges qui rendent un test vert et faux
 
 **Lire l'ordre du DOM** quand c'est l'ordre affiché qui compte : une règle CSS `order` peut

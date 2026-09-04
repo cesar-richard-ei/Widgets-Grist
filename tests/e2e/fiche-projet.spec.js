@@ -161,3 +161,26 @@ test('sans chantier, la feuille de route le dit', async ({ page }) => {
 
     await expect(fiche(page).locator('.fiche-route')).toContainText('Aucun chantier');
 });
+
+// La table des personnes ne s'appelle pas « Team » partout : chaque colonne dit dans son type où
+// ses références pointent. Un nom figé laissait toutes les pastilles vides.
+test('les personnes se lisent dans la table que désignent les colonnes', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Effectifs = doc.Team;
+    delete doc.Team;
+    for (const [table, colonnes] of Object.entries({
+        Projects: ['responsable', 'Sponsor', 'Contributeurs_cles'],
+        Tasks: ['Responsable', 'assignees'],
+        Chantiers: ['Responsable', 'Contributeurs']
+    })) {
+        colonnes.forEach((colId) => {
+            const col = doc[table].columns[colId];
+            if (col) col.type = col.type.replace(':Team', ':Effectifs');
+        });
+    }
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.bloc-responsable')).toContainText('Chloé Roux');
+    await expect(fiche(page).locator('.bloc-sponsors')).toContainText('Alice Martin');
+    await expect(fiche(page).locator('.bloc-contributeurs')).toContainText('Bruno Klein');
+});
