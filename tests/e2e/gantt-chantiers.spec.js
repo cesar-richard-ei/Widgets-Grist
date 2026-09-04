@@ -422,3 +422,33 @@ test('la ligne d un chantier montre ce que son volet montre', async ({ page }) =
     expect(noms).toEqual(['Chloé Roux']);
     expect(pastilles).toEqual(['Chloé Roux']);
 });
+
+// Le volet d'un chantier laisse choisir son projet, mais l'enregistrement l'ignorait : le champ
+// revenait à sa valeur d'origine au rendu suivant.
+test('changer le projet d un chantier part en base', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await volet(page).locator('.prop-row:has(.prop-label:text-is("Projet")) select').selectOption({ label: 'Datalab' });
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Projets[c.id.indexOf(1)];
+    })).toEqual(['L', 2]);
+});
+
+// Le volet ne montre que le premier rattachement : enregistrer ne doit pas effacer les autres.
+test('changer le projet ne retire pas les autres rattachements du chantier', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Projects.records.push({ id: 3, nom: 'Espace de travail', couleur: '#10b981', actif: true, Categorie: 2 });
+    doc.Chantiers.records.find((c) => c.id === 1).Projets = ['L', 1, 2];
+    await D.ouvrirGantt(page, doc);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await volet(page).locator('.prop-row:has(.prop-label:text-is("Projet")) select').selectOption({ label: 'Espace de travail' });
+
+    await expect.poll(() => page.evaluate(async () => {
+        const c = await window.grist.docApi.fetchTable('Chantiers');
+        return c.Projets[c.id.indexOf(1)];
+    })).toEqual(['L', 3, 2]);
+});

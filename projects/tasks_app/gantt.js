@@ -261,7 +261,7 @@ function chantierEnLigne(c) {
         id: ID_CHANTIER + c.id, idChantier: c.id, estChantier: true,
         titre: c.Nom_du_chantier || '', description: c.Description || '',
         dateDebut: c[colonneDateChantier('debut')] || null, dateEcheance: c[colonneDateChantier('fin')] || null,
-        projet: projets.length ? projets[0] : 0,
+        projet: projets.length ? projets[0] : 0, projets: projets,
         assignees: c.Contributeurs || null, Responsable: c.Responsable || null,
         type: 'tache', statut: '', priorite: null, parentTask: null
     };
@@ -2479,6 +2479,16 @@ async function saveTaskToGrist() {
 // Enregistre un chantier dans sa propre table. L'identifiant affiché est décalé de ID_CHANTIER :
 // seul l'identifiant réel part dans l'écriture. Les contributeurs remontent des tâches et ne sont
 // pas écrits : le volet réécrirait la colonne avec la remontée à chaque enregistrement.
+// Un chantier peut etre rattache a plusieurs projets, la ou le volet n'en montre qu'un, le
+// premier. Changer ce champ remplace donc ce seul rattachement et laisse les autres en place :
+// ecrire la seule valeur affichee effacerait les rattachements que le volet ne montre pas.
+function rattachementsDuChantier(data) {
+    const ligne = tasks.find(t => t.id === panelState.taskId);
+    const autres = ((ligne && ligne.projets) || []).slice(1);
+    const choisi = data.projet ? [Number(data.projet)] : [];
+    return choisi.concat(autres.filter(id => id !== Number(data.projet)));
+}
+
 async function saveChantierToGrist(data) {
     const idChantier = panelState.taskId - ID_CHANTIER;
     if (idChantier <= 0) return;
@@ -2487,6 +2497,7 @@ async function saveChantierToGrist(data) {
     const brut = { Nom_du_chantier: data.titre, Description: data.description, Responsable: data.Responsable || null };
     brut[colDebut] = data.dateDebut || null;
     brut[colFin] = data.dateEcheance || null;
+    brut.Projets = toGristRefList(rattachementsDuChantier(data));
     const record = pruneChantierRecord(brut);
     // La ligne locale ne reprend que ce qui est réellement parti : une colonne élaguée n'a pas été
     // enregistrée, l'afficher comme telle ferait mentir le graphique jusqu'au rechargement.
@@ -2494,6 +2505,10 @@ async function saveChantierToGrist(data) {
     if ('Nom_du_chantier' in record) local.titre = record.Nom_du_chantier;
     if ('Description' in record) local.description = record.Description;
     if ('Responsable' in record) local.Responsable = record.Responsable;
+    if ('Projets' in record) {
+        local.projets = getRefListArray(record.Projets);
+        local.projet = local.projets.length ? local.projets[0] : 0;
+    }
     if (colDebut in record) local.dateDebut = record[colDebut];
     if (colFin in record) local.dateEcheance = record[colFin];
     try {

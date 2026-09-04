@@ -816,6 +816,15 @@ rattachement. Écrire un nom en dur revenait à faire élaguer les deux colonnes
 `pruneChantierRecord()` : aucune date de chantier ne partait en base, et la lecture retombait sur les
 bornes des tâches, ce qui masquait la panne à l'affichage.
 
+Le **projet** d'un chantier s'enregistre depuis le volet, dans `Chantiers.Projets`. Le champ existait
+et se laissait modifier, mais `saveChantierToGrist()` ne l'écrivait pas : le choix revenait à sa
+valeur d'origine au rendu suivant, ce que les utilisateurs voyaient comme une réinitialisation.
+
+Un chantier peut être rattaché à plusieurs projets là où le volet n'en montre qu'un, le premier.
+Enregistrer remplace donc ce seul rattachement et laisse les suivants en place : écrire la seule
+valeur affichée effacerait ceux que le volet ne montre pas. Un chantier de la production est dans
+ce cas.
+
 > `Chantiers.Contributeurs` n'est ni écrite ni lue. La colonne existe dans la structure du document,
 > mais un chantier ne tient pas sa propre liste : elle remonte de ses tâches, dans le volet **comme
 > sur les pastilles de la ligne**. Les lire de deux sources différentes montrait des têtes à gauche
