@@ -9,6 +9,11 @@ const NOMS_DATE_CHANTIER = { debut: ['Debut', 'Date_debut'], fin: ['Fin', 'Date_
 const MOIS_AVANT = 1;   // la fenêtre s'ouvre au premier jour du mois précédent
 const MOIS_TOTAL = 6;
 
+const ETINCELLES = '<svg viewBox="0 0 24 24" width="26" height="26" fill="currentColor" focusable="false">'
+    + '<path d="M11 2.6 12.9 8.1 18.4 10 12.9 11.9 11 17.4 9.1 11.9 3.6 10 9.1 8.1z"/>'
+    + '<path d="M18 13.4 18.8 15.6 21 16.4 18.8 17.2 18 19.4 17.2 17.2 15 16.4 17.2 15.6z"/>'
+    + '</svg>';
+
 let schemaMeta = null;
 let projet = null;
 let equipe = [];
@@ -269,6 +274,17 @@ function feuilleDeRoute() {
         + '</div></div></section>';
 }
 
+// Une categorie sans fiche annonce celle qui vient, plutot que de renvoyer l'utilisateur a ce
+// que le widget ne fait pas.
+function ficheAVenir(categorie) {
+    return '<div class="fiche-bientot">'
+        + '<span class="fiche-bientot-vignette" aria-hidden="true">' + ETINCELLES + '</span>'
+        + '<p class="fiche-bientot-titre">La fiche ' + echapper(categorie) + ' arrive bientôt !</p>'
+        + '<p class="fiche-bientot-texte">Une fiche adaptée à ' + echapper(projet.nom || 'cette ligne')
+        + ' est en préparation. En attendant, sélectionnez un projet pour afficher la sienne.</p>'
+        + '</div>';
+}
+
 function rendre() {
     const racine = el('fiche');
     if (!projet) {
@@ -277,9 +293,7 @@ function rendre() {
     }
     const categorie = categorieDuProjet(projet);
     if (categorie && categorie !== CATEGORIE_FICHE) {
-        racine.innerHTML = enTete()
-            + '<p class="fiche-message fiche-hors-perimetre">Cette fiche ne concerne que les projets. '
-            + echapper(projet.nom || 'Cette ligne') + ' est de catégorie ' + echapper(categorie) + '.</p>';
+        racine.innerHTML = enTete() + ficheAVenir(categorie);
         return;
     }
     racine.innerHTML = enTete() + cadrage() + feuilleDeRoute();

@@ -135,10 +135,11 @@ test('rien ne s édite : ni création, ni volet, ni poignée', async ({ page }) 
     await expect(page.locator('#panel')).toHaveCount(0);
 });
 
-test('une ligne qui n est pas un projet n ouvre pas de fiche', async ({ page }) => {
-    await D.ouvrirFiche(page, null, PORTAIL, { attendre: '.fiche-hors-perimetre' });
+test('une ligne qui n est pas un projet annonce sa fiche a venir', async ({ page }) => {
+    await D.ouvrirFiche(page, null, PORTAIL, { attendre: '.fiche-bientot' });
 
-    await expect(fiche(page).locator('.fiche-hors-perimetre')).toContainText('Produit');
+    await expect(fiche(page).locator('.fiche-bientot-titre')).toContainText('La fiche Produit arrive bientôt');
+    await expect(fiche(page).locator('.fiche-bientot-texte')).toContainText('Portail habilitations');
     await expect(fiche(page).locator('.fiche-ligne')).toHaveCount(0);
 });
 
