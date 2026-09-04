@@ -229,3 +229,26 @@ test('changer de vue temporelle recale sur le jour', async ({ page }) => {
 
     await expect.poll(() => ecartAuCalage(page)).toBeCloseTo(0, 0);
 });
+
+// La grille se peint en fond, colonne par colonne : elle ne doit plus poser un élément par
+// croisement ligne × colonne, sans quoi une plage étirée par une tâche ancienne se paie en
+// centaines de milliers de nœuds reconstruits à chaque rendu.
+test('la grille ne grossit pas avec l etendue de la plage', async ({ page }) => {
+    const doc = D.documentCible();
+    const anciennete = 5 * 365;
+    doc.Tasks.records.push({ id: 7, titre: 'Vieux sujet', chantier: 1, dateDebut: D.j(-anciennete), dateEcheance: D.j(-anciennete + 30), statut: 'done', type: 'tache', priorite: '3' });
+    await D.ouvrirGantt(page, doc);
+    await D.attendreRendu(page);
+
+    const mesure = await page.evaluate(() => {
+        const grille = document.getElementById('timelineGrid');
+        return {
+            largeur: parseFloat(grille.style.width),
+            lignes: grille.querySelectorAll('.grid-row').length,
+            dansLesLignes: grille.querySelectorAll('.grid-row *').length
+        };
+    });
+
+    expect(mesure.largeur).toBeGreaterThan(8000);
+    expect(mesure.dansLesLignes).toBe(0);
+});

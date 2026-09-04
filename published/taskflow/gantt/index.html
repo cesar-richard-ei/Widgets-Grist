@@ -160,10 +160,7 @@
         .timeline-scroll { flex: 1; overflow: auto; }
         .timeline-grid { position: relative; min-height: 100%; }
         .grid-row { height: var(--row-height); border-bottom: 1px solid var(--border); display: flex; }
-        .grid-cell { width: var(--cell-width); min-width: var(--cell-width); border-right: 1px solid #f1f5f9; height: 100%; }
-        .grid-cell.weekend { background: #fef2f2; }
-        .grid-cell.today { background: rgba(79, 70, 229, 0.08); }
-        .grid-cell.month-start { border-left: 1px solid var(--border); }
+        .month-sep { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--border); z-index: 1; pointer-events: none; }
 
         /* Gantt Bars */
         .gantt-bar { position: absolute; height: 24px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; padding: 0 8px; font-size: 0.7rem; font-weight: 500; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; z-index: 10; transition: all 0.15s; }
@@ -2513,6 +2510,56 @@
             }
         }
 
+        // Quadrillage, week-ends, colonne du jour et debuts de mois sont peints en fond de la grille et
+        // non en elements : une cellule par croisement ligne x colonne faisait plus de 800 000 noeuds sur
+        // le document du metier, reconstruits a chaque rendu.
+        function peindreFondGrille(grid, unite, start, totalDays, numCells, cw) {
+            // Les couches se peignent de la premiere a la derniere : le quadrillage passe donc au-dessus
+            // des week-ends et de la colonne du jour, comme la bordure des cellules le faisait.
+            const couches = ['linear-gradient(to right, transparent 0 ' + (cw - 1) + 'px, #f1f5f9 ' + (cw - 1) + 'px ' + cw + 'px)'];
+            const tailles = [cw + 'px 100%'];
+            const positions = ['0 0'];
+            const repetitions = ['repeat'];
+            if (unite === 'day') {
+                // Les week-ends reviennent tous les sept jours : une seule bande decalee sur le premier
+                // samedi de la plage suffit a les peindre tous.
+                couches.push('linear-gradient(to right, #fef2f2 0 ' + (2 * cw) + 'px, transparent ' + (2 * cw) + 'px ' + (7 * cw) + 'px)');
+                tailles.push((7 * cw) + 'px 100%');
+                positions.push((((6 - start.getDay() + 7) % 7) * cw) + 'px 0');
+                repetitions.push('repeat');
+            }
+
+            const aujourdhui = new Date();
+            aujourdhui.setHours(0, 0, 0, 0);
+            let colonne;
+            if (unite === 'month') colonne = (aujourdhui.getFullYear() - start.getFullYear()) * 12 + (aujourdhui.getMonth() - start.getMonth());
+            else if (unite === 'week') colonne = Math.floor(getDaysDiff(start, aujourdhui) / 7);
+            else colonne = getDaysDiff(start, aujourdhui);
+            if (colonne >= 0 && colonne < numCells) {
+                couches.push('linear-gradient(rgba(79, 70, 229, 0.08), rgba(79, 70, 229, 0.08))');
+                tailles.push(cw + 'px 100%');
+                positions.push((colonne * cw) + 'px 0');
+                repetitions.push('no-repeat');
+            }
+
+            grid.style.backgroundImage = couches.join(', ');
+            grid.style.backgroundSize = tailles.join(', ');
+            grid.style.backgroundPosition = positions.join(', ');
+            grid.style.backgroundRepeat = repetitions.join(', ');
+
+            // Les mois n'ont pas tous la meme longueur : leurs separateurs restent des elements, un par
+            // mois de la plage, la ou les cellules en posaient un par jour et par ligne.
+            if (unite === 'day') {
+                for (let i = 0; i < totalDays; i++) {
+                    if (addDays(start, i).getDate() !== 1) continue;
+                    const sep = document.createElement('div');
+                    sep.className = 'month-sep';
+                    sep.style.left = (i * cw) + 'px';
+                    grid.appendChild(sep);
+                }
+            }
+        }
+
         function renderTimeline() {
             // WBS-02: utiliser currentVisible (ordre DFS) au lieu d'une liste plate filtrée
             const ft = currentVisible.map(v => v.task);
@@ -2545,39 +2592,14 @@
                         aplatDeTeinte(groupe.couleur, 0.2) + '"></div>';
                     return;
                 }
-                gridHtml += '<div class="grid-row">';
-                if (cfg.unit === 'month') {
-                    const effEnd = addDays(start, totalDays);
-                    let cur = new Date(start.getFullYear(), start.getMonth(), 1);
-                    while (cur < effEnd) {
-                        const m = cur.getMonth();
-                        const y = cur.getFullYear();
-                        const isCurrentMonth = (new Date().getMonth() === m && new Date().getFullYear() === y);
-                        gridHtml += '<div class="grid-cell ' + (isCurrentMonth ? 'today' : '') + '" style="width:' + effectiveCellWidth + 'px"></div>';
-                        cur = new Date(y, m + 1, 1);
-                    }
-                } else if (cfg.unit === 'week') {
-                    for (let i = 0; i < totalDays; i += 7) {
-                        const d = addDays(start, i);
-                        const isT = new Date() >= d && new Date() < addDays(d, 7);
-                        gridHtml += '<div class="grid-cell ' + (isT ? 'today' : '') + '" style="width:' + effectiveCellWidth + 'px"></div>';
-                    }
-                } else {
-                    for (let i = 0; i < totalDays; i++) {
-                        const d = addDays(start, i);
-                        const isWe = isWeekend(d);
-                        const isT = isSameDay(d, new Date());
-                        const isMonthStart = d.getDate() === 1;
-                        gridHtml += '<div class="grid-cell ' + (isWe ? 'weekend ' : '') + (isT ? 'today ' : '') + (isMonthStart ? 'month-start' : '') + '" style="width:' + effectiveCellWidth + 'px"></div>';
-                    }
-                }
-                gridHtml += '</div>';
+                gridHtml += '<div class="grid-row"></div>';
             });
 
             const grid = document.getElementById('timelineGrid');
             grid.innerHTML = gridHtml;
             grid.style.width = totalWidth + 'px';
             grid.style.height = (ft.length * 44) + 'px';
+            peindreFondGrille(grid, cfg.unit, start, totalDays, numCells, effectiveCellWidth);
 
             if (calerSurFenetre) {
                 const sc = document.getElementById('timelineScroll');

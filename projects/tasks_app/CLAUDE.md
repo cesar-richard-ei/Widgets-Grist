@@ -707,10 +707,27 @@ fenêtre seule :
 | Semestre | 15 200 | 45 ms |
 | Année | 3 600 | 21 ms |
 
-La vue Semaine est la seule qui pique, `render()` étant rejoué à chaque filtre ou clic. Si cela
-gêne, la piste identifiée est de supprimer les `div.grid-cell` au profit d'un fond CSS répété sur
-la ligne, les colonnes « aujourd'hui », week-end et début de mois devenant des surcouches. Aucune
-cellule ne serait alors créée, quelle que soit l'étendue.
+**Cette piste a été suivie le 04/09/2026** : le quadrillage, les week-ends et la colonne du jour
+sont des couches de fond de `#timelineGrid`, posées par `peindreFondGrille()`. L'ordre des couches
+reproduit celui des bordures d'origine, le quadrillage passant au-dessus du reste. Seuls les
+séparateurs de début de mois restent des éléments, les mois n'ayant pas tous la même longueur, à
+raison d'un par mois de la plage et non d'un par jour et par ligne.
+
+Mesuré sur l'export du document de production, 344 tâches et 132 chantiers étalés sur 6,6 ans :
+
+| Vue | Nœuds avant | Nœuds après | Rendu avant | Rendu après |
+|---|---|---|---|---|
+| Semaine | 834 967 | 7 710 | 2 035 ms | 56 ms |
+| Mois | 834 967 | 7 710 | 3 478 ms | 65 ms |
+| Trimestre | 123 047 | 4 350 | 1 638 ms | 48 ms |
+| Semestre | 123 268 | 4 352 | 466 ms | 36 ms |
+| Année | 31 528 | 3 935 | 303 ms | 34 ms |
+
+Un dépliage passe de 139 ms en moyenne à 16 ms, et le tas de 38 Mo à 10 Mo. Le rendu est identique
+au pixel près, vérifié par comparaison de captures avant et après.
+
+**Ne pas** réintroduire d'élément par colonne : `tests/e2e/gantt-timeline.spec.js` vérifie qu'aucun
+élément ne vit dans une `.grid-row` sur une plage étirée par une tâche ancienne.
 
 ### Chantiers dans leur propre table (Gantt)
 
