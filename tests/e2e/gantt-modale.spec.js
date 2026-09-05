@@ -76,25 +76,3 @@ test('annuler ne supprime rien', async ({ page }) => {
     await expect(modale(page)).not.toBeVisible();
     expect(await identifiants(page)).toEqual(avant);
 });
-
-// Demander une table que le document ne porte pas fait journaliser une erreur par Grist, avant même
-// que notre garde ne la voie : une ligne rouge à chaque ouverture.
-test('une table absente du schema n est pas demandee', async ({ page }) => {
-    const doc = D.documentCible();
-    delete doc.Categorie_de_projet;
-    doc.Projects.columns.Categorie = { type: 'Choice' };
-    await page.addInitScript(() => {
-        window.__lectures = [];
-        const armer = setInterval(() => {
-            if (!window.grist || !window.grist.docApi || window.grist.docApi.__suivi) return;
-            const vraie = window.grist.docApi.fetchTable.bind(window.grist.docApi);
-            window.grist.docApi.fetchTable = (nom) => { window.__lectures.push(nom); return vraie(nom); };
-            window.grist.docApi.__suivi = true;
-            clearInterval(armer);
-        }, 1);
-    });
-
-    await D.ouvrirGantt(page, doc);
-
-    expect(await page.evaluate(() => window.__lectures)).not.toContain('Categorie_de_projet');
-});

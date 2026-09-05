@@ -1557,12 +1557,9 @@
 
         // Insère les chantiers comme lignes de niveau 0 et réécrit le parent de chaque tâche : sa tâche
         // parente si elle en a une, sinon son chantier.
-        async function fusionnerChantiers() {
+        function fusionnerChantiers(brut) {
             const colonne = colonneChantier();
-            if (!colonne) return;
-            if (!tableDeclaree('Chantiers')) return;
-            let brut;
-            try { brut = await grist.docApi.fetchTable('Chantiers'); } catch (e) { noterRefus('Chantiers'); return; }
+            if (!colonne || !brut) return;
             const chantiers = convert(brut).map(chantierEnLigne);
             const parProjet = new Map(chantiers.map(c => [c.idChantier, c.projet]));
             const hierarchie = parentTaskEstHierarchie();
@@ -4236,20 +4233,37 @@
             bandeau.hidden = false;
         }
 
+        // Une table du document, ou null : absente du schéma elle n'est pas demandée, refusée elle est
+        // notée pour le bandeau. Jamais d'exception, l'appelant décide de ce qu'il fait du vide.
+        async function lireTable(nom) {
+            if (!tableDeclaree(nom)) return null;
+            try { return await grist.docApi.fetchTable(nom); } catch (e) { noterRefus(nom); return null; }
+        }
+
         async function loadAllData(prefetched) {
             tablesRefusees = new Set();
-            // prefetched : données déjà lues par ensureSchema à l'ouverture (évite une seconde lecture). Absent sur les rechargements onRecords → lecture fraîche.
-            try { const _raw = (prefetched && prefetched.Tasks) || await grist.docApi.fetchTable('Tasks'); TASK_COLS = new Set(Object.keys(_raw || {})); tasks = convert(_raw); } catch (e) { tasks = []; noterRefus('Tasks'); }
-            try { team = convert((prefetched && prefetched.Team) || await grist.docApi.fetchTable('Team')); } catch (e) { team = []; noterRefus('Team'); }
-            try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; noterRefus('Projects'); }
+            // Les cinq lectures partent ensemble : enchaînées, elles coûtaient autant d'allers-retours au
+            // chargement comme à chaque retour sur le widget, pour des tables qui ne dépendent pas les unes
+            // des autres. `prefetched` porte ce qu'ensureSchema a déjà lu à l'ouverture.
+            const deja = prefetched || {};
+            const [brutTasks, brutTeam, brutProjects, brutCategories, brutChantiers] = await Promise.all([
+                deja.Tasks || lireTable('Tasks'),
+                deja.Team || lireTable('Team'),
+                deja.Projects || lireTable('Projects'),
+                lireTable('Categorie_de_projet'),
+                // Le rattachement se lit sur le type d'une colonne de Tasks : sans lui, la table des
+                // chantiers n'a pas à être demandée.
+                colonneChantier() ? lireTable('Chantiers') : null
+            ]);
+            TASK_COLS = new Set(Object.keys(brutTasks || {}));
+            tasks = convert(brutTasks);
+            team = convert(brutTeam);
+            projects = convert(brutProjects);
             // Categorie du sujet de niveau 1 (Projet / Produit / Offre de service), affichee en badge sur
             // le bandeau. Table absente sur un document qui ne la porte pas : le bandeau garde le nom seul.
-            categoriesProjet = [];
-            if (tableDeclaree('Categorie_de_projet')) {
-                try { categoriesProjet = convert(await grist.docApi.fetchTable('Categorie_de_projet')); } catch (e) { noterRefus('Categorie_de_projet'); }
-            }
+            categoriesProjet = convert(brutCategories);
             gristReady = true;
-            await fusionnerChantiers();
+            fusionnerChantiers(brutChantiers);
             entretenirOptionResponsable();
             rebuildChildrenCache();
             sortTasks();

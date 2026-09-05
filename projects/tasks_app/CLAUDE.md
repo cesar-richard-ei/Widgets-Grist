@@ -580,6 +580,15 @@ désormais son effet, et la modale rend `null` quand elle est abandonnée.
 **Ne pas** réintroduire `confirm()`, `alert()` ni `prompt()` : `tests/e2e/gantt-modale.spec.js`
 échoue si un dialogue du navigateur s'ouvre.
 
+### Lectures groupées
+
+`loadAllData()` lit les cinq tables du document en parallèle, `Chantiers` comprise, au lieu de les
+enchaîner. Elles ne dépendent pas les unes des autres, et cette lecture se rejoue à chaque retour
+sur le widget : en série, elle coûtait autant d'allers-retours qu'il y a de tables. `lireTable()`
+rend `null` plutôt que de lever, l'appelant décidant de ce qu'il fait du vide, et `fusionnerChantiers()`
+reçoit désormais ses données au lieu de les lire elle-même. Couvert par
+`tests/e2e/gantt-chargement.spec.js`, qui compte les lectures simultanément en vol.
+
 ### Tables que le document ne porte pas
 
 `tableDeclaree(nom)` interroge les métadonnées avant toute lecture facultative. Demander une table
