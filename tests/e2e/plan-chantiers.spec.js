@@ -1,11 +1,10 @@
 'use strict';
 
-const path = require('path');
 const base = require('@playwright/test');
 const test = base.test;
 const expect = base.expect;
+const D = require('./documents.js');
 
-const CHEMIN_SIMULACRE = path.join(__dirname, '..', 'fake-grist.js');
 
 // Les chantiers ont leur propre table et portent le rattachement au projet : sur le document du
 // metier, aucune tache ne renseigne Tasks.projet. Le plan de charge doit donc resoudre le projet
@@ -108,20 +107,10 @@ const DOC_ANCIEN = {
     }
 };
 
-// Le Plan bascule sur les donnees d'exemple hors iframe : il est charge dans un cadre, comme
-// dans Grist. Le simulacre est injecte dans tous les cadres de la page.
-async function ouvrirPlan(page, doc) {
-    await page.route('**/grist-plugin-api.js', (route) => route.abort());
-    await page.addInitScript({ path: CHEMIN_SIMULACRE });
-    await page.addInitScript((d) => { window.grist = window.createFakeGrist(d); }, doc);
-    await page.goto('http://localhost:3001/tasks_app/plan.html');
-    await page.setContent('<iframe id="f" style="width:100%;height:700px;border:0" src="http://localhost:3001/tasks_app/plan.html?shell=1"></iframe>');
-    await expect(grille(page).locator('table.grid')).toBeVisible();
-}
-
-const plan = (page) => page.frameLocator('#f');
+const ouvrirPlan = D.ouvrirPlan;
+const plan = D.plan;
 const grille = (page) => plan(page).locator('#gridwrap');
-const cadre = (page) => page.frame({ url: /plan\.html\?shell=1/ });
+const cadre = D.cadrePlan;
 const grouperPar = (page, valeur) => plan(page).locator('#selGroup').selectOption(valeur);
 const tacheEnBase = (page, id) => cadre(page).evaluate(async (taskId) => {
     const t = await window.grist.docApi.fetchTable('Tasks');
