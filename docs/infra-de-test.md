@@ -83,6 +83,22 @@ attendre de l'enregistrement servi hormis son identifiant.
 Reste non simulé, faute d'équivalent ici : `includeColumns`, dont le défaut `shown` limite le
 record aux colonnes montrées dans le panneau de droite.
 
+### Les widgets vivent dans un cadre
+
+Un widget Grist est servi par un autre domaine que la page qui l'héberge, dans une iframe. Les tests
+le chargent au premier plan, ce qui est plus simple à écrire et suffit à presque tout, mais laisse
+un angle mort : le défaut de la fiche du 4 septembre, où toutes les personnes s'affichaient en
+« Non renseigné », ne se produisait que dans ce contexte.
+
+`tests/e2e/widgets-en-cadre.spec.js` exerce donc chaque widget dans un cadre, sur le document de
+référence, et vérifie qu'il rend sans erreur de console. Les erreurs de la page hôte y sont ignorées
+et seules celles venues du cadre comptent : la page charge aussi le widget, le temps que le cadre la
+remplace. Le Plan, lui, n'a pas le choix du montage : hors cadre, il bascule sur ses données
+d'exemple.
+
+`D.ouvrirPlan()` porte ce montage pour tous les tests du Plan, avec `refuserEcritures` pour exercer
+ce que le widget dit d'un refus. Trois copies de ce helper vivaient dans les fichiers de test.
+
 ### Trois pièges qui rendent un test vert et faux
 
 **Lire l'ordre du DOM** quand c'est l'ordre affiché qui compte : une règle CSS `order` peut
