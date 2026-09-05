@@ -3186,8 +3186,14 @@ restaurerLargeurs();
 afficherVersion();
 brancherPoignee('poigneeTaskList', 'taskList', 1);
 brancherPoignee('poigneePanel', 'panel', -1);
-// Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre)
-new ResizeObserver(() => render()).observe(document.getElementById('timelineScroll'));
+// Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre). Un
+// redimensionnement émet un événement par image : sans ce regroupement, chaque pixel de la poignée
+// déclenchait un rendu complet, et la souris avançait plus vite que le widget.
+let renduRedimensionnement = null;
+new ResizeObserver(() => {
+    if (renduRedimensionnement !== null) return;
+    renduRedimensionnement = requestAnimationFrame(() => { renduRedimensionnement = null; render(); });
+}).observe(document.getElementById('timelineScroll'));
 // Décorateur panneau (look « Propriétés / B ») : icône devant chaque libellé, sans toucher au rendu
 (function(){
     var P={
