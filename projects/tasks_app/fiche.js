@@ -379,10 +379,12 @@ function messageDeRefus() {
         + '. La fiche est incomplète, vérifiez vos accès à ces tables.</p>';
 }
 
-async function chargerPersonnes() {
-    const tables = Array.from(new Set([TABLE_PERSONNES].concat(COLONNES_PERSONNES.map((c) => tableDeRef(c[0], c[1])))));
+/** Tables où pointent les colonnes de personnes : le type de chaque colonne les désigne. */
+const tablesDePersonnes = () => Array.from(new Set(
+    [TABLE_PERSONNES].concat(COLONNES_PERSONNES.map((c) => tableDeRef(c[0], c[1])))));
+
+function indexerPersonnes(tables, lots) {
     personnes = new Map();
-    const lots = await Promise.all(tables.map((t) => lire(t)));
     tables.forEach((table, i) => {
         if (!lots[i].length) console.warn(LOG, 'aucune personne lue dans', table);
         lots[i].forEach((m) => {
@@ -400,16 +402,18 @@ async function chargerTables() {
     tablesRefusees = new Set();
     const attente = setTimeout(() => signalerAttente(sequence), DELAI_SANS_REPONSE);
     try { schemaMeta = await TF.fetchSchemaMeta(grist); } catch (e) { schemaMeta = null; }
-    const [lesChantiers, lesTaches, lesCategories] = await Promise.all([
-        lire('Chantiers'), lire('Tasks'), lire('Categorie_de_projet')
-    ]);
-    await chargerPersonnes();
+    const tablesPersonnes = tablesDePersonnes();
+    const lots = await Promise.all(
+        [lire('Chantiers'), lire('Tasks'), lire('Categorie_de_projet')]
+            .concat(tablesPersonnes.map((t) => lire(t))));
+    const [lesChantiers, lesTaches, lesCategories] = lots;
     clearTimeout(attente);
     // Une lecture partie avant celle-ci ne doit pas réinstaller son état par-dessus le nôtre.
     if (sequence !== chargementCourant) return false;
     chantiers = lesChantiers;
     taches = lesTaches;
     categories = lesCategories;
+    indexerPersonnes(tablesPersonnes, lots.slice(3));
     tablesChargees = true;
     return true;
 }
