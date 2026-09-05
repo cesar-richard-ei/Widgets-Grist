@@ -398,6 +398,18 @@
         .delete-confirm.visible { display: block; }
         .delete-confirm-text { font-size: 0.8rem; color: var(--danger); margin-bottom: 10px; }
         .delete-confirm-actions { display: flex; gap: 8px; }
+        /* Modale de choix : elle remplace les dialogues du navigateur, qui s'ouvrent au nom du
+           domaine servant le widget et n'offrent que deux réponses. */
+        .modale { position: fixed; inset: 0; z-index: 300; display: none; align-items: center; justify-content: center; background: rgba(15, 23, 42, 0.45); padding: 20px; }
+        .modale.visible { display: flex; }
+        .modale-boite { background: var(--card-bg); border: 1px solid var(--border); border-radius: 10px; box-shadow: var(--shadow-lg); max-width: 420px; width: 100%; padding: 20px 22px; }
+        .modale-titre { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+        .modale-texte { margin-top: 8px; font-size: 0.84rem; color: var(--text-muted); line-height: 1.5; }
+        .modale-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+        .modale-btn { padding: 8px 14px; border-radius: 6px; font-size: 0.82rem; font-weight: 500; cursor: pointer; background: var(--card-bg); color: var(--text); border: 1px solid var(--border); }
+        .modale-btn:hover { border-color: var(--primary); }
+        .modale-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+        .modale-btn.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
         .delete-confirm-btn { flex: 1; padding: 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 500; cursor: pointer; border: none; }
         .delete-confirm-btn.cancel { background: var(--card-bg); border: 1px solid var(--border); }
         .delete-confirm-btn.confirm { background: var(--danger); color: white; }
@@ -704,6 +716,14 @@
     <div class="tooltip" id="tooltip"></div>
     <div class="save-indicator" id="saveIndicator">Enregistré</div>
     <div class="toast-container" id="toastContainer"></div>
+
+    <div class="modale" id="modaleChoix" role="dialog" aria-modal="true" aria-labelledby="modaleTitre">
+        <div class="modale-boite">
+            <div class="modale-titre" id="modaleTitre"></div>
+            <p class="modale-texte"></p>
+            <div class="modale-actions"></div>
+        </div>
+    </div>
 
     <script>
         // ═══════════════════════════════════════════════════════════════════════
@@ -1540,6 +1560,7 @@
         async function fusionnerChantiers() {
             const colonne = colonneChantier();
             if (!colonne) return;
+            if (!tableDeclaree('Chantiers')) return;
             let brut;
             try { brut = await grist.docApi.fetchTable('Chantiers'); } catch (e) { noterRefus('Chantiers'); return; }
             const chantiers = convert(brut).map(chantierEnLigne);
@@ -2895,9 +2916,13 @@
             selectedTaskId = null;
             render();
         }
-        function confirmClosePanel() {
+        async function confirmClosePanel() {
             if (panelState.isNew && panelState.editData?.titre?.trim()) {
-                if (confirm('Fermer sans créer la tâche ?')) closePanel();
+                const choix = await demanderChoix(
+                    'Fermer sans créer ?',
+                    'La fiche n’a pas encore été créée : ce qui a été saisi sera perdu.',
+                    [{ libelle: 'Continuer la saisie', valeur: null }, { libelle: 'Fermer sans créer', valeur: 'fermer', danger: true }]);
+                if (choix === 'fermer') closePanel();
             } else { closePanel(); }
         }
 
@@ -3707,6 +3732,45 @@
             }
         }
 
+        /**
+         * Demande un choix dans une modale du widget. Un dialogue du navigateur s'ouvre au nom du domaine
+         * qui sert le widget, au milieu d'une page qui n'est pas la sienne, et n'offre que deux réponses,
+         * dont un « Annuler » auquel il fallait accrocher une action. Chaque bouton nomme ici son effet.
+         * `choix` : [{ libelle, valeur, danger }]. Rend la valeur choisie, null si la modale est abandonnée.
+         */
+        function demanderChoix(titre, message, choix) {
+            return new Promise((resolve) => {
+                const modale = document.getElementById('modaleChoix');
+                modale.querySelector('.modale-titre').textContent = titre;
+                modale.querySelector('.modale-texte').textContent = message;
+                const actions = modale.querySelector('.modale-actions');
+                actions.innerHTML = '';
+                const fermer = (valeur) => {
+                    modale.classList.remove('visible');
+                    document.removeEventListener('keydown', surTouche, true);
+                    modale.onclick = null;
+                    resolve(valeur);
+                };
+                const surTouche = (e) => {
+                    if (e.key !== 'Escape') return;
+                    e.stopPropagation();   // sans quoi la touche fermerait aussi le volet derrière
+                    fermer(null);
+                };
+                for (const c of choix) {
+                    const bouton = document.createElement('button');
+                    bouton.className = 'modale-btn' + (c.danger ? ' danger' : '');
+                    bouton.textContent = c.libelle;
+                    bouton.onclick = () => fermer(c.valeur);
+                    actions.appendChild(bouton);
+                }
+                modale.onclick = (e) => { if (e.target === modale) fermer(null); };
+                modale.classList.add('visible');
+                document.addEventListener('keydown', surTouche, true);
+                const premier = actions.querySelector('button');
+                if (premier) premier.focus();
+            });
+        }
+
         function showDeleteConfirm() { document.getElementById('deleteConfirm').classList.add('visible'); }
         function hideDeleteConfirm() { document.getElementById('deleteConfirm').classList.remove('visible'); }
 
@@ -3901,8 +3965,17 @@
             const descendants = getAllDescendants(panelState.taskId);
             let ids = [panelState.taskId];
             if (descendants.length) {
-                const choice = confirm('Cette tâche contient ' + descendants.length + ' sous-tâche(s).\n\nOK = supprimer tout (cascade)\nAnnuler = détacher les enfants (ils deviennent racines)');
-                if (choice) ids = [panelState.taskId, ...descendants.map(d => d.id)];
+                const pluriel = descendants.length > 1;
+                const choix = await demanderChoix(
+                    'Cette tâche contient ' + descendants.length + ' sous-tâche' + (pluriel ? 's' : ''),
+                    'Supprimer la tâche seule laisse ' + (pluriel ? 'ses sous-tâches' : 'sa sous-tâche') + ' dans le document, sans parent.',
+                    [
+                        { libelle: 'Annuler', valeur: null },
+                        { libelle: pluriel ? 'Détacher les sous-tâches' : 'Détacher la sous-tâche', valeur: 'detacher' },
+                        { libelle: 'Tout supprimer', valeur: 'cascade', danger: true }
+                    ]);
+                if (!choix) { hideDeleteConfirm(); return; }
+                if (choix === 'cascade') ids = [panelState.taskId, ...descendants.map(d => d.id)];
                 else {
                     // Détacher : mettre parentTask=null sur les enfants directs, puis delete le parent
                     const directKids = getChildren(panelState.taskId);
@@ -4143,6 +4216,11 @@
         // l'écran est alors le même que celui d'une erreur de structure, et rien ne le disait.
         let tablesRefusees = new Set();
 
+        // Demander une table que le document ne porte pas fait journaliser une erreur par le bac à sable de
+        // Grist, avant même que notre garde ne la voie : une ligne rouge à chaque ouverture, dans la console
+        // où l'on cherche les vrais problèmes.
+        const tableDeclaree = (nom) => !schemaMeta || (schemaMeta.tables || []).some(t => t.tableId === nom);
+
         function noterRefus(nom) {
             const declaree = schemaMeta && (schemaMeta.tables || []).some(t => t.tableId === nom);
             if (declaree) tablesRefusees.add(nom);
@@ -4166,7 +4244,10 @@
             try { projects = convert((prefetched && prefetched.Projects) || await grist.docApi.fetchTable('Projects')); } catch (e) { projects = []; noterRefus('Projects'); }
             // Categorie du sujet de niveau 1 (Projet / Produit / Offre de service), affichee en badge sur
             // le bandeau. Table absente sur un document qui ne la porte pas : le bandeau garde le nom seul.
-            try { categoriesProjet = convert(await grist.docApi.fetchTable('Categorie_de_projet')); } catch (e) { categoriesProjet = []; noterRefus('Categorie_de_projet'); }
+            categoriesProjet = [];
+            if (tableDeclaree('Categorie_de_projet')) {
+                try { categoriesProjet = convert(await grist.docApi.fetchTable('Categorie_de_projet')); } catch (e) { noterRefus('Categorie_de_projet'); }
+            }
             gristReady = true;
             await fusionnerChantiers();
             entretenirOptionResponsable();

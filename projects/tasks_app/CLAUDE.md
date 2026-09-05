@@ -569,6 +569,24 @@ Il se prolonge sur la timeline (`.grid-row.piste-groupe`), même teinte et même
 haut comme son pendant de gauche puisque les deux colonnes défilent de concert. Le trait qui
 séparait le bandeau de sa première ligne a été retiré, la teinte suffit à marquer la rupture.
 
+### Questions posées à l'utilisateur
+
+Le widget pose ses questions dans sa propre modale, `demanderChoix(titre, message, choix)`, jamais
+par `confirm()`. Un dialogue du navigateur s'ouvre au nom du domaine qui sert le widget, au milieu
+d'une page qui n'est pas la sienne, et n'offre que deux réponses : la suppression d'une tâche
+parente accrochait donc le détachement des sous-tâches au bouton « Annuler ». Chaque bouton nomme
+désormais son effet, et la modale rend `null` quand elle est abandonnée.
+
+**Ne pas** réintroduire `confirm()`, `alert()` ni `prompt()` : `tests/e2e/gantt-modale.spec.js`
+échoue si un dialogue du navigateur s'ouvre.
+
+### Tables que le document ne porte pas
+
+`tableDeclaree(nom)` interroge les métadonnées avant toute lecture facultative. Demander une table
+absente fait journaliser une erreur par le bac à sable de Grist, avant même que notre garde ne la
+voie : une ligne rouge à chaque ouverture, dans la console où l'on cherche les vrais problèmes.
+S'applique à `Categorie_de_projet` et à `Chantiers`.
+
 ### Légende (Gantt uniquement)
 
 Dynamique selon `colorMode` — rendue par `renderLegend()` appelée dans `render()`. Affiche les 4 priorités, ou les statuts, ou les 8 premiers projets/membres actifs selon le mode.
