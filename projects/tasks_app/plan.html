@@ -138,7 +138,7 @@ tfoot td.colres{background:var(--surface-2);z-index:2}
         <option value="person">Personne</option>
         <option value="project">Projet</option>
         <option value="chantier">Chantier</option>
-        <option value="role">Rôle</option>
+        <option value="domaine">Domaine</option>
       </select>
     </label>
     <div class="seg" id="segMode"></div>
@@ -798,7 +798,17 @@ const S = {
 };
 let statusCfg = TF.buildStatusConfig(TF.DEFAULT_STATUSES, 'default'); // #1 : statuts dynamiques — alimenté par TF.loadStatusConfig en Grist (terminal/libellés depuis les vrais choix)
 let schemaMeta = null; // métadonnées Grist (_grist_Tables[_column]), lues une fois par chargement
-const LIBELLE_GROUPE = { person: 'Personne', project: 'Projet', chantier: 'Chantier', role: 'Rôle' };
+const LIBELLE_GROUPE = { person: 'Personne', project: 'Projet', chantier: 'Chantier', domaine: 'Domaine' };
+// Le domaine d'une personne est son équipe de rattachement, porté par Team.Domaine comme dans le
+// Gantt. Team.role existe aussi mais reste vide sur le document du métier : grouper dessus rangeait
+// les 234 personnes dans un seul groupe sans nom.
+const SANS_DOMAINE = 'Sans domaine';
+const domaineDe = (m) => (m && m.Domaine) ? m.Domaine : SANS_DOMAINE;
+const domainesConnus = () => {
+  const vus = [];
+  for (const m of activeTeam()) if (m.Domaine && !vus.includes(m.Domaine)) vus.push(m.Domaine);
+  return vus.sort();
+};
 
 // Utils
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -826,6 +836,41 @@ function colonneEcrivable(tableId, colId) {
   if (!t) return true;
   const c = (schemaMeta.cols || []).find(x => x.parentId === t.id && x.colId === colId);
   return !c || !c.isFormula;
+}
+// Colonnes d'une table dans lesquelles une écriture a une chance d'aboutir. Rend null quand les
+// métadonnées manquent, auquel cas rien n'est élagué.
+function colonnesEcrivables(tableId) {
+  const t = schemaMeta && (schemaMeta.tables || []).find(x => x.tableId === tableId);
+  if (!t) return null;
+  return new Set((schemaMeta.cols || []).filter(c => c.parentId === t.id && !c.isFormula).map(c => c.colId));
+}
+// Grist rejette le lot entier dès qu'une action vise une colonne absente ou calculée : une seule
+// colonne en trop et rien n'est enregistré. La structure du document ne nous appartient pas, d'où
+// cet élagage avant chaque écriture, comme le Gantt le fait pour les tâches et les chantiers.
+function elaguer(tableId, rec) {
+  const colonnes = colonnesEcrivables(tableId);
+  if (!colonnes) return Object.assign({}, rec);
+  const out = {};
+  for (const k in rec) if (colonnes.has(k)) out[k] = rec[k];
+  return out;
+}
+// Un refus porte sa raison : la perdre laisse l'utilisateur devant un échec muet, et personne ne
+// sait quelle colonne pose problème. Tronquée, le toast n'ayant pas la place d'une trace.
+function messageErreur(e) {
+  const brut = (e && (e.message || e.error)) || String(e || '');
+  return brut.length > 110 ? brut.slice(0, 110) + '…' : brut;
+}
+// Toute écriture passe par ici : en démo elle n'a pas lieu, un refus se voit et se journalise.
+async function ecrire(actions, sujet) {
+  if (S.demo) return true;
+  try {
+    await grist.docApi.applyUserActions(actions);
+    return true;
+  } catch (e) {
+    console.error(LOG, sujet, 'refuse :', (e && e.message) || e, actions);
+    toast(sujet + ' : ' + messageErreur(e));
+    return false;
+  }
 }
 // Le rattachement d'une tâche à son chantier est porté par Tasks.chantier. Sur les documents où
 // parentTask a été repointé vers Chantiers sans que la colonne existe encore, c'est parentTask qui
@@ -920,7 +965,7 @@ function keyFn() {
   // Projet/Chantier/Rôle = clé COMPOSITE "groupe|personne" → on garde la personne (vue ressource, distincte du Gantt).
   if (S.groupBy === 'project') return (t, c) => String(projetDeTache(t) || '0') + '|' + c.teamId;
   if (S.groupBy === 'chantier') return (t, c) => String(chantierDeTache(t) || '0') + '|' + c.teamId;
-  if (S.groupBy === 'role') return (t, c) => { const m = teamById(c.teamId); return ((m && m.role) ? m.role : '—') + '|' + c.teamId; };
+  if (S.groupBy === 'domaine') return (t, c) => domaineDe(teamById(c.teamId)) + '|' + c.teamId;
   return (t, c) => String(c.teamId);
 }
 
@@ -957,14 +1002,20 @@ function buildRows() {
       return { label: c ? c.nom : 'Hors chantier', color: p ? p.couleur : '#64748b' };
     });
   }
-  if (S.groupBy === 'role') {
-    const rs = {};
-    for (const m of activeTeam()) { const r = m.role || '—'; if (!rs[r]) rs[r] = { label: r, color: '#6366f1', members: [] }; rs[r].members.push(m); }
+  if (S.groupBy === 'domaine') {
+    const groupes = new Map();
+    for (const m of activeTeam()) {
+      const d = domaineDe(m);
+      if (!groupes.has(d)) groupes.set(d, []);
+      groupes.get(d).push(m);
+    }
     const out = [];
-    for (const r of Object.keys(rs)) {
-      const g = rs[r];
-      out.push({ key: 'h:' + r, isHeader: true, label: r, color: g.color, members: g.members, gkeys: g.members.map(m => r + '|' + m.id) });
-      for (const m of g.members) out.push({ key: r + '|' + m.id, isSub: true, teamId: m.id, label: m.nom, color: m.couleur || '#6366f1', cap: capOf(m), members: [m] });
+    // Le domaine n'a pas de couleur à lui : celle du premier membre qui le porte, l'ordre des
+    // effectifs faisant foi, comme dans le menu de filtres du Gantt.
+    for (const [d, membres] of [...groupes.entries()].sort((a, b) => a[0].localeCompare(b[0], 'fr'))) {
+      const couleur = (membres[0] && membres[0].couleur) || '#6366f1';
+      out.push({ key: 'h:' + d, isHeader: true, label: d, color: couleur, members: membres, gkeys: membres.map(m => d + '|' + m.id) });
+      for (const m of membres) out.push({ key: d + '|' + m.id, isSub: true, teamId: m.id, label: m.nom, color: m.couleur || '#6366f1', cap: capOf(m), members: [m] });
     }
     return out;
   }
@@ -1012,6 +1063,16 @@ function entretenirOptionChantier() {
   if (S.groupBy === 'chantier') S.groupBy = 'person';
 }
 
+// Même règle pour le domaine : sur un document dont personne ne porte de domaine, le groupement
+// n'aurait qu'un groupe à montrer.
+function entretenirOptionDomaine() {
+  const select = document.getElementById('selGroup');
+  const option = select && select.querySelector('option[value="domaine"]');
+  if (!option || domainesConnus().length) return;
+  option.remove();
+  if (S.groupBy === 'domaine') S.groupBy = 'person';
+}
+
 function cellColor(h, cap) {
   if (!(h > 0)) return 'transparent';
   if (!(cap > 0)) return 'var(--ok)';
@@ -1027,6 +1088,7 @@ function render() {
   renderSeg('segMode', [['prevu', 'Prévu'], ['realise', 'Réalisé'], ['reste', 'Reste'], ['dispo', 'Dispo']], S.mode, v => { S.mode = v; if (v === 'dispo' && S.groupBy !== 'person') { S.groupBy = 'person'; document.getElementById('selGroup').value = 'person'; toast('Vue Dispo : groupement « Personne » (la marge ne se mesure qu\'au global, tous projets confondus)'); } render(); });
   renderSeg('segUnit', [['pct', '%'], ['hours', 'h']], S.unit, v => { S.unit = v; render(); });
   entretenirOptionChantier();
+  entretenirOptionDomaine();
   document.getElementById('selGroup').value = S.groupBy;
   document.getElementById('chkDone').checked = S.includeDone;
   document.getElementById('chkDerive').checked = S.derive;
@@ -1216,17 +1278,30 @@ function startBarDrag(e, bar) {
     const lane = el && el.closest('[data-lane]');
     if (lane && lane.dataset.lane !== fromLane) lane.classList.add('drop-tgt');
   }
-  function up(ev) {
-    document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up);
+  function terminer() {
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', up);
+    window.removeEventListener('blur', abandonner);
+    document.removeEventListener('mouseleave', abandonner);
     document.body.style.cursor = ''; clearTgt();
     bar.classList.remove('dragging'); bar.style.transform = '';
-    if (!dragging) { openTaskPop(taskId, bar, fromLane, period); return; }
+  }
+  // Le relâchement n'arrive pas toujours dans la page : curseur sorti de la fenêtre, onglet qui
+  // perd la main. Sans ce filet, les écouteurs restent posés et le curseur garde sa main.
+  function abandonner() { const enCours = dragging; terminer(); if (enCours) render(); }
+  function up(ev) {
+    const enCours = dragging;
+    terminer();
+    if (!enCours) { openTaskPop(taskId, bar, fromLane, period); return; }
     const ddays = Math.round((ev.clientX - startX) / trackW * totalDays);
     const el = document.elementFromPoint(ev.clientX, ev.clientY);
     const laneEl = el && el.closest('[data-lane]');
     applyBarDrag(taskId, fromLane, laneEl ? laneEl.dataset.lane : fromLane, ddays);
   }
-  document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+  window.addEventListener('blur', abandonner);
+  document.addEventListener('mouseleave', abandonner);
   e.preventDefault();
 }
 async function applyBarDrag(taskId, fromLane, toLane, ddays) {
@@ -1443,11 +1518,16 @@ function refreshCell() { if (S._cellKey != null) openCell(S._cellKey, S._cellPer
 function setAllocUnit(u) { S.allocUnit = u; refreshCell(); }
 // Allocation éditable : agit sur Tasks.charges + COHÉRENCE assignés (option A) — recalcule la heatmap.
 const toRefList = (ids) => (ids && ids.length) ? ['L'].concat(ids.map(Number)) : null;
-async function persistTask(taskId, updates) {
-  const t = S.tasks.find(x => x.id === taskId); if (!t) return;
-  Object.assign(t, updates); // optimiste
-  if (!S.demo) { try { await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', taskId, updates]]); } catch (e) {} }
+// L'état local ne bouge qu'une fois l'écriture acceptée : l'appliquer d'avance affichait une
+// allocation refusée comme enregistrée, jusqu'à ce qu'un rechargement la fasse disparaître.
+async function persistTask(taskId, updates, sujet) {
+  const t = S.tasks.find(x => x.id === taskId); if (!t) return false;
+  const record = elaguer('Tasks', updates);
+  if (!Object.keys(record).length) { toast('Ce document n’accepte aucune de ces colonnes en écriture.'); return false; }
+  const ok = await ecrire([['UpdateRecord', 'Tasks', taskId, record]], sujet || 'Enregistrement');
+  if (ok) Object.assign(t, record);
   render(); refreshCell();
+  return ok;
 }
 function setCharge(taskId, teamId, heures) {
   const t = S.tasks.find(x => x.id === taskId); if (!t) return;
@@ -1456,7 +1536,7 @@ function setCharge(taskId, teamId, heures) {
   const updates = { charges: JSON.stringify(arr) };
   // cohérence : une charge implique d'être assigné
   if (heures > 0) { const asg = getRefList(t.assignees); if (!asg.includes(Number(teamId))) updates.assignees = toRefList(asg.concat([Number(teamId)])); }
-  persistTask(taskId, updates);
+  persistTask(taskId, updates, 'Allocation');
 }
 function reassignCharge(taskId, fromId, toId) {
   if (fromId === toId) return;
@@ -1468,16 +1548,14 @@ function reassignCharge(taskId, fromId, toId) {
   let asg = getRefList(t.assignees);
   if (!asg.includes(Number(toId))) asg = asg.concat([Number(toId)]);
   if (!arr.some(c => Number(c.teamId) === Number(fromId))) asg = asg.filter(id => id !== Number(fromId));
-  persistTask(taskId, { charges: JSON.stringify(arr), assignees: toRefList(asg) });
+  persistTask(taskId, { charges: JSON.stringify(arr), assignees: toRefList(asg) }, 'Réaffectation');
 }
 // Replanification depuis la vue : modifie les dates de la tâche (ré-étale la charge).
 async function setDates(taskId, debut, echeance) {
-  const t = S.tasks.find(x => x.id === taskId); if (!t) return;
   const upd = {};
-  if (debut !== null) { t.dateDebut = inputToG(debut); upd.dateDebut = t.dateDebut; }
-  if (echeance !== null) { t.dateEcheance = inputToG(echeance); upd.dateEcheance = t.dateEcheance; }
-  if (!S.demo) { try { await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', taskId, upd]]); } catch (e) {} }
-  render(); refreshCell();
+  if (debut !== null) upd.dateDebut = inputToG(debut);
+  if (echeance !== null) upd.dateEcheance = inputToG(echeance);
+  return persistTask(taskId, upd, 'Replanification');
 }
 // 2.1 — panneau ressource : capacité hebdo + indisponibilités (Team.capaciteHebdo / Team.indispos).
 function openResource(key) {
@@ -1498,11 +1576,9 @@ function openResource(key) {
 }
 async function setCapacity(memberId, val) {
   const m = teamById(memberId); if (!m) return;
-  m.capaciteHebdo = val > 0 ? val : null;
-  if (!S.demo) {
-    try { await grist.docApi.applyUserActions([['UpdateRecord', 'Team', memberId, { capaciteHebdo: m.capaciteHebdo }]]); }
-    catch (e) { console.error('[plan] capacite refusee', e); toast('Capacité non enregistrée : ' + (e && e.message ? e.message : 'refus de Grist')); }
-  }
+  const capacite = val > 0 ? val : null;
+  const ok = await ecrire([['UpdateRecord', 'Team', memberId, elaguer('Team', { capaciteHebdo: capacite })]], 'Capacité');
+  if (ok) m.capaciteHebdo = capacite;
   render();
 }
 async function reloadDispos() {
@@ -1517,11 +1593,13 @@ async function addIndispo(memberId) {
   if (end < start) { toast('La fin doit être après le début.'); return; }
   const fields = { membre: memberId, type: label, dateDebut: isoToSec(start), dateFin: isoToSec(end), dispo: dispoPct / 100 };
   if (S.demo) { fields.id = (S.dispos || []).reduce((mx, r) => Math.max(mx, r.id || 0), 0) + 1; (S.dispos || (S.dispos = [])).push(fields); buildDispoIndex(); render(); openResource(String(memberId)); return; }
-  try { await grist.docApi.applyUserActions([['AddRecord', 'Disponibilites', null, fields]]); await reloadDispos(); render(); openResource(String(memberId)); } catch (e) { toast('Erreur ajout'); }
+  if (!(await ecrire([['AddRecord', 'Disponibilites', null, elaguer('Disponibilites', fields)]], 'Ajout de l’indisponibilité'))) return;
+  await reloadDispos(); render(); openResource(String(memberId));
 }
 async function removeIndispo(memberId, rowId) {
   if (S.demo) { S.dispos = (S.dispos || []).filter(r => r.id !== rowId); buildDispoIndex(); render(); openResource(String(memberId)); return; }
-  try { await grist.docApi.applyUserActions([['RemoveRecord', 'Disponibilites', rowId]]); await reloadDispos(); render(); openResource(String(memberId)); } catch (e) { toast('Erreur suppression'); }
+  if (!(await ecrire([['RemoveRecord', 'Disponibilites', rowId]], 'Suppression de l’indisponibilité'))) return;
+  await reloadDispos(); render(); openResource(String(memberId));
 }
 
 // Modale de confirmation INTERNE (jamais de popup navigateur).
@@ -1542,9 +1620,16 @@ async function initCharges() {
   const targets = S.tasks.filter(t => !TF.parseCharges(t.charges).length && Number(t.estimationH) > 0 && getRefList(t.assignees).length);
   if (!targets.length) { toast('Aucune tâche à initialiser (estimation + assignés requis, charge vide).'); return; }
   if (!(await confirmModal('Initialiser la charge', targets.length + ' tâche(s) sans charge mais avec estimation + assignés.\nRépartir l’estimation ÷ nb assignés ?'))) return;
-  const actions = [];
-  for (const t of targets) { const asg = getRefList(t.assignees); const per = Math.round(Number(t.estimationH) / asg.length * 10) / 10; const j = JSON.stringify(asg.map(id => ({ teamId: id, heures: per }))); t.charges = j; actions.push(['UpdateRecord', 'Tasks', t.id, { charges: j }]); }
-  if (!S.demo) { try { await grist.docApi.applyUserActions(actions); } catch (e) {} }
+  const actions = [], calcul = new Map();
+  for (const t of targets) {
+    const asg = getRefList(t.assignees);
+    const per = Math.round(Number(t.estimationH) / asg.length * 10) / 10;
+    const j = JSON.stringify(asg.map(id => ({ teamId: id, heures: per })));
+    calcul.set(t, j);
+    actions.push(['UpdateRecord', 'Tasks', t.id, elaguer('Tasks', { charges: j })]);
+  }
+  if (!(await ecrire(actions, 'Initialisation des charges'))) return;
+  for (const [t, j] of calcul) t.charges = j;
   render(); toast(targets.length + ' tâche(s) initialisée(s).');
 }
 // Export CSV (COPIL) de la grille courante.
@@ -1705,10 +1790,10 @@ function loadDemo() {
   const g = (n) => Math.floor((today.getTime() + n * day) / 1000); // n jours depuis aujourd'hui -> Unix s
   const isoD = (n) => new Date(today.getTime() + n * day).toISOString().slice(0, 10);
   S.team = [
-    { id: 1, nom: 'Alice Martin', role: 'Dev', couleur: '#6366f1', capaciteHebdo: 35, actif: true },
-    { id: 2, nom: 'Bob Durant', role: 'Dev', couleur: '#10b981', capaciteHebdo: 35, actif: true },
-    { id: 3, nom: 'Claire Bernard', role: 'Design', couleur: '#f59e0b', capaciteHebdo: 28, actif: true },
-    { id: 4, nom: 'David Roy', role: 'PM', couleur: '#ec4899', capaciteHebdo: 35, actif: true, indispos: '[{"start":"' + isoD(8) + '","end":"' + isoD(14) + '","label":"Congés"}]' }
+    { id: 1, nom: 'Alice Martin', Domaine: 'Socle technique', couleur: '#6366f1', capaciteHebdo: 35, actif: true },
+    { id: 2, nom: 'Bob Durant', Domaine: 'Socle technique', couleur: '#10b981', capaciteHebdo: 35, actif: true },
+    { id: 3, nom: 'Claire Bernard', Domaine: 'Design et produits', couleur: '#f59e0b', capaciteHebdo: 28, actif: true },
+    { id: 4, nom: 'David Roy', Domaine: 'Pilotage', couleur: '#ec4899', capaciteHebdo: 35, actif: true, indispos: '[{"start":"' + isoD(8) + '","end":"' + isoD(14) + '","label":"Congés"}]' }
   ];
   S.projects = [{ id: 1, nom: 'Refonte Portail', couleur: '#6366f1' }, { id: 2, nom: 'App Mobile', couleur: '#10b981' }];
   S.tasks = [

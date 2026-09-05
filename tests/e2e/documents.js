@@ -220,7 +220,28 @@ const ouvrirFiche = (page, doc, projet, options) => ouvrir(page, 'fiche', doc, O
     options || {}
 ));
 
-const ouvrirPlan = (page, doc, options) => ouvrir(page, 'plan', doc, Object.assign({ attendre: '.plan-grid, #grid' }, options || {}));
+/**
+ * Le Plan bascule sur ses données d'exemple hors cadre : il se charge donc dans une iframe, comme
+ * dans Grist. Le simulacre est injecté dans tous les cadres de la page.
+ * `refuser` fait échouer les écritures, pour exercer ce que le widget en dit.
+ */
+async function ouvrirPlan(page, doc, options) {
+    const o = options || {};
+    await page.route('**/grist-plugin-api.js', (route) => route.abort());
+    await page.addInitScript({ path: CHEMIN_SIMULACRE });
+    await page.addInitScript(([d, config, refus]) => {
+        window.grist = window.createFakeGrist(d, config || undefined);
+        if (refus) window.grist.docApi.applyUserActions = () => Promise.reject(new Error(refus));
+    }, [doc || documentCible(), o.optionsSection ? { options: o.optionsSection } : null, o.refuserEcritures || null]);
+    await page.goto('http://localhost:3001/tasks_app/plan.html');
+    await page.setContent('<iframe id="f" style="width:100%;height:700px;border:0" src="http://localhost:3001/tasks_app/plan.html?shell=1"></iframe>');
+    await base.expect(page.frameLocator('#f').locator('#gridwrap table.grid, #gridwrap .empty')).toBeVisible();
+}
+
+/** Cadre du Plan, pour évaluer du code dans le widget lui-même. */
+const cadrePlan = (page) => page.frame({ url: /plan\.html\?shell=1/ });
+/** Racine du Plan, pour cibler ses éléments. */
+const plan = (page) => page.frameLocator('#f');
 
 /** Ligne de la colonne de gauche portant ce libellé. */
 const ligne = (page, titre) => page.locator('#taskList .task-row', { hasText: titre });
@@ -305,6 +326,6 @@ const contraste = (page, selecteur) => page.evaluate((sel) => {
 module.exports = {
     j, COULEURS, EQUIPE, PROJETS, CHANTIERS,
     documentCible, documentParentRepointe, documentSansChantiers, sansColonne, colonneCalculee, renommerColonne, avecLiens,
-    ouvrir, ouvrirGantt, ouvrirPlan, ouvrirFiche, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste,
+    ouvrir, ouvrirGantt, ouvrirPlan, cadrePlan, plan, ouvrirFiche, ligne, deplier, toutDeplier, ouvrirVolet, attendreRendu, champTache, contraste,
     trier, triCourant
 };
