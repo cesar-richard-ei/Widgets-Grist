@@ -67,3 +67,28 @@ test('une table absente du schema n est pas demandee', async ({ page }) => {
 
     expect(await page.evaluate(() => window.__lectures)).not.toContain('Categorie_de_projet');
 });
+
+// Les tables ne dépendent pas les unes des autres : les lire en série coûtait un aller-retour par
+// table, sur un widget que l'on ouvre à chaque consultation de projet.
+test('les tables se lisent ensemble', async ({ page }) => {
+    await page.addInitScript(() => {
+        window.__maxEnVol = 0;
+        let enVol = 0;
+        const armer = setInterval(() => {
+            if (!window.grist || !window.grist.docApi || window.grist.docApi.__suivi) return;
+            const vraie = window.grist.docApi.fetchTable.bind(window.grist.docApi);
+            window.grist.docApi.fetchTable = (nom) => {
+                enVol++;
+                window.__maxEnVol = Math.max(window.__maxEnVol, enVol);
+                return vraie(nom).finally(() => { enVol--; });
+            };
+            window.grist.docApi.__suivi = true;
+            clearInterval(armer);
+        }, 1);
+        setTimeout(() => clearInterval(armer), 3000);
+    });
+
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    expect(await page.evaluate(() => window.__maxEnVol)).toBeGreaterThanOrEqual(4);
+});

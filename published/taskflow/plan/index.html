@@ -1320,8 +1320,10 @@ async function applyBarDrag(taskId, fromLane, toLane, ddays) {
     const ok = await confirmModal('Confirmer le déplacement', parts.join(' ') + ' ?');
     if (!ok) { render(); return; }
   }
-  if (newDebut && newEch) setDates(taskId, newDebut, newEch);
-  if (reassign) reassignCharge(taskId, fromPid, toPid);
+  // Les deux écritures s'enchaînent : parties ensemble, la seconde emportait l'état que la
+  // première venait d'appliquer.
+  if (newDebut && newEch) { if (!(await setDates(taskId, newDebut, newEch))) return; }
+  if (reassign) await reassignCharge(taskId, fromPid, toPid);
 }
 
 // Aperçu d'une tâche (composant court repris du design UX/UI) : on sait de quoi il retourne avant d'ajuster.
@@ -1538,17 +1540,17 @@ function setCharge(taskId, teamId, heures) {
   if (heures > 0) { const asg = getRefList(t.assignees); if (!asg.includes(Number(teamId))) updates.assignees = toRefList(asg.concat([Number(teamId)])); }
   persistTask(taskId, updates, 'Allocation');
 }
-function reassignCharge(taskId, fromId, toId) {
-  if (fromId === toId) return;
-  const t = S.tasks.find(x => x.id === taskId); if (!t) return;
-  const arr = TF.parseCharges(t.charges); const fi = arr.findIndex(c => c.teamId === fromId); if (fi < 0) return;
+async function reassignCharge(taskId, fromId, toId) {
+  if (fromId === toId) return false;
+  const t = S.tasks.find(x => x.id === taskId); if (!t) return false;
+  const arr = TF.parseCharges(t.charges); const fi = arr.findIndex(c => c.teamId === fromId); if (fi < 0) return false;
   const hrs = arr[fi].heures; arr.splice(fi, 1);
   const ti = arr.findIndex(c => c.teamId === toId); if (ti >= 0) arr[ti].heures += hrs; else arr.push({ teamId: toId, heures: hrs });
   // cohérence assignés (option A) : + toId ; - fromId s'il n'a plus de charge sur la tâche
   let asg = getRefList(t.assignees);
   if (!asg.includes(Number(toId))) asg = asg.concat([Number(toId)]);
   if (!arr.some(c => Number(c.teamId) === Number(fromId))) asg = asg.filter(id => id !== Number(fromId));
-  persistTask(taskId, { charges: JSON.stringify(arr), assignees: toRefList(asg) }, 'Réaffectation');
+  return persistTask(taskId, { charges: JSON.stringify(arr), assignees: toRefList(asg) }, 'Réaffectation');
 }
 // Replanification depuis la vue : modifie les dates de la tâche (ré-étale la charge).
 async function setDates(taskId, debut, echeance) {
