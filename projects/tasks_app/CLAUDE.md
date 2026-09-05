@@ -295,7 +295,7 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
 
 ### Plan (v16) — plan de charge
 
-- **Heatmap** capacité vs charge par ressource × période (semaine/mois), groupable par **Personne / Projet / Chantier / Rôle** (Projet/Chantier/Rôle = en-tête + sous-lignes par membre)
+- **Heatmap** capacité vs charge par ressource × période (semaine/mois), groupable par **Personne / Projet / Chantier / Domaine** (Projet/Chantier/Domaine = en-tête + sous-lignes par membre)
 - **Modes** : Prévu / Réalisé / Reste / **Dispo** (voir modèle ci-dessous)
 - Unités **% / h**, options **Inclure terminé / Estimer / Jours ouvrés**
 - **Allocation éditable** (drill sur cellule) : heures, %, **réaffectation** entre membres, **replanification** des dates — écriture réelle dans `Tasks.charges` / dates
@@ -337,6 +337,24 @@ JSON `[{teamId, heures}]` = répartition de l'effort par assigné. `effCharges(t
 | **Réalisé** | `tempsPasse` réparti ; **à défaut**, pour une tâche **clôturée**, le prévu est repris (= **estimé**, signalé par une légende dédiée) |
 | **Reste** | prévu − réalisé (borné à 0) |
 | **Dispo** | capacité − charge. **Notion globale** → disponible **uniquement en groupement Personne** (Dispo et Projet/Rôle sont mutuellement exclusifs : choisir Dispo force Personne ; choisir Projet/Rôle en Dispo rétablit Prévu). Une marge par-projet serait surestimée (ignorerait les autres projets de la personne). |
+
+### Écritures : élaguées, et jamais muettes
+
+Toute écriture passe par `ecrire(actions, sujet)`, qui journalise le refus et le dit en toast, et
+par `elaguer(tableId, record)`, qui retire les colonnes absentes ou calculées avant l'envoi. Grist
+rejette le lot entier dès qu'une colonne pose problème : sans élagage, une seule colonne passée en
+formule côté document ferait échouer toutes les écritures du Plan.
+
+**L'état local ne bouge qu'après l'acceptation.** `persistTask()` appliquait la valeur en mémoire
+avant d'écrire : une allocation refusée restait affichée comme enregistrée, jusqu'à ce qu'un
+rechargement la fasse disparaître sans explication. Couvert par `tests/e2e/plan-ecritures.spec.js`.
+
+### Groupement par domaine, pas par rôle
+
+Le domaine est l'équipe de rattachement d'une personne, `Team.Domaine`, comme dans le Gantt.
+`Team.role` existe mais reste **vide sur les 234 membres** du document du métier : le groupement par
+rôle rangeait donc tout le monde dans un unique groupe sans nom. `entretenirOptionDomaine()` retire
+l'option d'un document dont personne ne porte de domaine, comme son pendant pour les chantiers.
 
 ### `dateCloture`
 
