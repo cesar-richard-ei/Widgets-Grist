@@ -282,6 +282,15 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   personnes affichaient « Non renseigné » sur le document du métier. Le widget passe donc
   `{ expandRefs: false, keepEncoded: true, includeColumns: 'normal' }`, pour recevoir les mêmes
   valeurs que les tables lues par `fetchTable`.
+- **Les tables se lisent une fois, la sélection ne fait que rendre.** `charger()` ne relit les
+  tables qu'à l'ouverture et sur `onRecords` ; un changement de projet ne lit plus que `Projects`.
+  Relire les sept tables à chaque clic coûtait 250 ko et autant d'allers-retours pour rendre les
+  mêmes données. Les lectures sont parallèles, et une réponse tardive n'écrase pas un chargement
+  plus récent (`chargementCourant`).
+- **Une lecture qui ne revient pas se dit.** `signalerAttente()` nomme les tables en attente au bout
+  de dix secondes, comme le Plan ; une lecture refusée se distingue d'une donnée absente par le
+  bandeau `messageDeRefus()`, comme le Gantt. Une table que le schéma ne déclare pas n'est pas
+  demandée, pour ne pas faire journaliser une erreur par Grist.
 - **De l'enregistrement servi, seul l'identifiant est fiable.** `onRecord` délègue à
   `fetchSelectedRecord`, que le serveur exécute avec sa propre lecture des options : le responsable
   arrivait tantôt sous son nom, tantôt sous une forme illisible, quand les listes gardaient leurs

@@ -325,7 +325,7 @@ function rendre() {
         racine.innerHTML = enTete() + ficheAVenir(categorie);
         return;
     }
-    racine.innerHTML = enTete() + cadrage() + feuilleDeRoute();
+    racine.innerHTML = enTete() + messageDeRefus() + cadrage() + feuilleDeRoute();
     racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
         const id = Number(b.dataset.chantier);
         if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
@@ -333,34 +333,99 @@ function rendre() {
     }));
 }
 
-async function lire(table) {
-    try { return TF.columnarToRows(await grist.docApi.fetchTable(table)); } catch (e) { return []; }
-}
+const LOG = '[fiche]';
+// Tables déclarées par le document : demander une table absente fait remonter une erreur du bac à
+// sable de Grist dans la console, avant même que notre garde ne la voie.
+const tableDeclaree = (nom) => !schemaMeta || (schemaMeta.tables || []).some((t) => t.tableId === nom);
 
-async function chargerPersonnes() {
-    const tables = new Set([TABLE_PERSONNES]);
-    COLONNES_PERSONNES.forEach((c) => tables.add(tableDeRef(c[0], c[1])));
-    personnes = new Map();
-    for (const table of tables) {
-        const lues = await lire(table);
-        if (!lues.length) console.warn('[fiche] aucune personne lue dans', table);
-        lues.forEach((m) => {
-            personnes.set(table + ':' + m.id, m);
-            if (m.nom) personnes.set(table + '#' + clefNom(m.nom), m);
-        });
+// Lectures encore en vol, par nom de table. Une lecture qui ne résout ni n'échoue laisserait la
+// fiche sur son texte de chargement sans que rien ne désigne la table qui manque.
+const lecturesEnAttente = new Set();
+const DELAI_SANS_REPONSE = 10000;
+// Tables déclarées par le document mais refusées à la lecture : un problème de droits donne le même
+// écran vide qu'une donnée absente, et rien ne les distinguait.
+let tablesRefusees = new Set();
+let chargementCourant = 0;
+let tablesChargees = false;
+
+async function lire(table) {
+    if (!tableDeclaree(table)) return [];
+    lecturesEnAttente.add(table);
+    try {
+        return TF.columnarToRows(await grist.docApi.fetchTable(table));
+    } catch (e) {
+        console.warn(LOG, 'lecture refusée sur', table, ':', (e && e.message) || e);
+        tablesRefusees.add(table);
+        return [];
+    } finally {
+        lecturesEnAttente.delete(table);
     }
 }
 
-async function charger(selectionne) {
+// Chargement encore en vol au bout du délai : nommer les tables qui n'ont pas répondu, et le dire
+// à l'écran. Pas de repli sur des données d'exemple, les lectures pouvant encore aboutir.
+function signalerAttente(sequence) {
+    if (sequence !== chargementCourant || !lecturesEnAttente.size || projet) return;
+    const noms = Array.from(lecturesEnAttente).join(', ');
+    console.warn(LOG, 'aucune réponse pour', noms, 'après', Math.round(DELAI_SANS_REPONSE / 1000) + 's');
+    el('fiche').innerHTML = '<p class="fiche-message">En attente de Grist. Pas de réponse pour '
+        + echapper(noms) + '. La fiche s’affichera dès l’arrivée des données.</p>';
+}
+
+function messageDeRefus() {
+    if (!tablesRefusees.size) return '';
+    return '<p class="fiche-message fiche-refus">Lecture refusée sur : '
+        + echapper(Array.from(tablesRefusees).join(', '))
+        + '. La fiche est incomplète, vérifiez vos accès à ces tables.</p>';
+}
+
+async function chargerPersonnes() {
+    const tables = Array.from(new Set([TABLE_PERSONNES].concat(COLONNES_PERSONNES.map((c) => tableDeRef(c[0], c[1])))));
+    personnes = new Map();
+    const lots = await Promise.all(tables.map((t) => lire(t)));
+    tables.forEach((table, i) => {
+        if (!lots[i].length) console.warn(LOG, 'aucune personne lue dans', table);
+        lots[i].forEach((m) => {
+            personnes.set(table + ':' + m.id, m);
+            if (m.nom) personnes.set(table + '#' + clefNom(m.nom), m);
+        });
+    });
+}
+
+// Une sélection ne change que la ligne affichée : les tables, elles, ne bougent qu'à la main d'un
+// utilisateur. Les relire à chaque clic coûtait sept allers-retours et 250 ko sur le document du
+// métier, pour rendre exactement les mêmes données.
+async function chargerTables() {
+    const sequence = ++chargementCourant;
+    tablesRefusees = new Set();
+    const attente = setTimeout(() => signalerAttente(sequence), DELAI_SANS_REPONSE);
     try { schemaMeta = await TF.fetchSchemaMeta(grist); } catch (e) { schemaMeta = null; }
-    // L'enregistrement servi par onRecord depend d'options que le serveur applique a sa facon :
-    // seul son identifiant est fiable, les valeurs se lisent dans la table comme celles des autres.
-    const projets = await lire('Projects');
-    projet = projets.find((p) => p.id === (selectionne || {}).id) || selectionne || null;
-    chantiers = await lire('Chantiers');
-    taches = await lire('Tasks');
-    categories = await lire('Categorie_de_projet');
+    const [lesChantiers, lesTaches, lesCategories] = await Promise.all([
+        lire('Chantiers'), lire('Tasks'), lire('Categorie_de_projet')
+    ]);
     await chargerPersonnes();
+    clearTimeout(attente);
+    // Une lecture partie avant celle-ci ne doit pas réinstaller son état par-dessus le nôtre.
+    if (sequence !== chargementCourant) return false;
+    chantiers = lesChantiers;
+    taches = lesTaches;
+    categories = lesCategories;
+    tablesChargees = true;
+    return true;
+}
+
+/**
+ * L'enregistrement servi par onRecord dépend d'options que le serveur applique à sa façon : seul
+ * son identifiant est fiable, les valeurs se lisent dans la table comme celles des autres.
+ */
+async function charger(selectionne, relire) {
+    if (relire || !tablesChargees) {
+        if (!(await chargerTables())) return;
+    }
+    const sequence = chargementCourant;
+    const projets = await lire('Projects');
+    if (sequence !== chargementCourant) return;
+    projet = projets.find((p) => p.id === (selectionne || {}).id) || selectionne || null;
     rendre();
 }
 
@@ -369,8 +434,11 @@ function demarrer() {
         grist.ready({ requiredAccess: 'full' });
         grist.onRecord(async (record) => await charger(record),
             { expandRefs: false, keepEncoded: true, includeColumns: 'normal' });
+        // Grist ne notifie que la table du widget : une modification dans les chantiers, les tâches
+        // ou les effectifs passerait inaperçue sans cette relecture.
+        grist.onRecords(async () => await charger(projet, true));
     } catch (e) {
-        el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s\'ouvre depuis un document Grist.</p>';
+        el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s’ouvre depuis un document Grist.</p>';
     }
 }
 

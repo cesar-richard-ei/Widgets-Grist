@@ -189,12 +189,17 @@ async function ouvrir(page, widget, doc, options) {
     // La vraie API Grist écraserait le simulacre.
     await page.route('**/grist-plugin-api.js', (route) => route.abort());
     await page.addInitScript({ path: CHEMIN_SIMULACRE });
-    await page.addInitScript(([document, reglages, refusee, optionsSection, gristConfig]) => {
+    await page.addInitScript(([document, reglages, refusee, optionsSection, gristConfig, bloquee]) => {
         const config = Object.assign({}, gristConfig || {}, optionsSection ? { options: optionsSection } : {});
         window.grist = window.createFakeGrist(document, Object.keys(config).length ? config : undefined);
-        if (refusee) {
+        if (refusee || bloquee) {
             const vraie = window.grist.docApi.fetchTable.bind(window.grist.docApi);
-            window.grist.docApi.fetchTable = (nom) => nom === refusee ? Promise.reject(new Error('Access denied')) : vraie(nom);
+            window.grist.docApi.fetchTable = (nom) => {
+                if (nom === refusee) return Promise.reject(new Error('Access denied'));
+                // Une lecture qui ne résout ni n'échoue : le cas qu'un widget doit finir par dire.
+                if (nom === bloquee) return new Promise(() => {});
+                return vraie(nom);
+            };
         }
         // Un seul appel à ouvrir() par test : le stockage n'est préparé qu'à la première
         // navigation, un second appel avec d'autres réglages ne les poserait pas.
@@ -208,7 +213,7 @@ async function ouvrir(page, widget, doc, options) {
                 sessionStorage.setItem('__preparation', '1');
             }
         } catch (e) { /* stockage indisponible */ }
-    }, [doc || documentCible(), o.reglages || {}, o.refuser || null, o.optionsSection || null, o.grist || null]);
+    }, [doc || documentCible(), o.reglages || {}, o.refuser || null, o.optionsSection || null, o.grist || null, o.bloquer || null]);
     await page.goto('http://localhost:3001/tasks_app/' + widget + '.html');
     if (o.attendre !== false) await page.waitForSelector(o.attendre || '#taskList .task-row');
 }
