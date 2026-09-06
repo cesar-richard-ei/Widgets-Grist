@@ -223,11 +223,7 @@
         .tooltip-row { display: flex; justify-content: space-between; gap: 12px; font-size: 0.72rem; opacity: 0.9; }
 
         /* Legend */
-        .legend { display: flex; gap: 14px; padding: 8px 16px; background: var(--card-bg); border-top: 1px solid var(--border); font-size: 0.7rem; align-items: center; flex-wrap: wrap; flex-shrink: 0; }
-        .legend-item { display: flex; align-items: center; gap: 5px; }
         .legend-color { width: 10px; height: 10px; border-radius: 2px; }
-        .legend-milestone { width: 8px; height: 8px; background: var(--text-muted); transform: rotate(45deg); }
-        .legend-separator { width: 1px; height: 16px; background: var(--border); }
 
         /* Panel Slide-in */
         .panel { position: absolute; top: 0; right: 0; width: var(--panel-width); height: 100%; background: var(--card-bg); border-left: 1px solid var(--border); display: flex; flex-direction: column; transform: translateX(100%); transition: transform 0.25s ease; z-index: 50; }
@@ -261,16 +257,13 @@
         .panel-section:last-child { border-bottom: none; }
         .panel-section-header { display: flex; align-items: center; gap: 8px; padding: 8px 12px; margin: 0 -16px 12px -16px; background: linear-gradient(135deg, var(--bg) 0%, rgba(79,70,229,0.03) 100%); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
         .panel-section-header:first-child { border-top: none; margin-top: -4px; }
-        .panel-section-icon { font-size: 0.85rem; opacity: 0.7; }
         .panel-section-title { font-size: 0.7rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
         .panel-section-badge { font-size: 0.65rem; padding: 2px 6px; background: var(--primary-light); color: var(--primary); border-radius: 10px; font-weight: 600; margin-left: auto; }
 
         /* Form Elements */
-        .type-selector { display: flex; gap: 6px; margin-bottom: 16px; background: var(--bg); padding: 4px; border-radius: 8px; }
         .type-option { flex: 1; padding: 8px 6px; border: none; background: transparent; border-radius: 6px; text-align: center; cursor: pointer; font-size: 0.75rem; font-weight: 500; color: var(--text-muted); }
         .type-option:hover { background: var(--card-bg); }
         .type-option.selected { background: var(--card-bg); color: var(--text); box-shadow: var(--shadow); }
-        .type-option-icon { display: block; font-size: 1rem; margin-bottom: 2px; }
         .form-group { margin-bottom: 14px; }
         .form-label { display: block; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; text-transform: uppercase; }
         .form-input, .form-select, .form-textarea { width: 100%; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; font-size: 0.85rem; color: var(--text); background: var(--card-bg); transition: border-color 0.15s, box-shadow 0.15s; }
@@ -293,7 +286,6 @@
         .status-pill { padding: 6px 10px; border: 1px solid var(--border); border-radius: 20px; font-size: 0.72rem; cursor: pointer; background: var(--card-bg); }
         .status-pill:hover { border-color: var(--primary); }
         .status-pill.selected { background: var(--primary); color: white; border-color: var(--primary); }
-        .progress-container { display: flex; align-items: center; gap: 10px; }
         .progress-slider { flex: 1; -webkit-appearance: none; height: 6px; border-radius: 3px; background: var(--border); }
         .progress-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--primary); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
         .progress-value { font-size: 0.85rem; font-weight: 600; color: var(--primary); min-width: 40px; text-align: right; }
@@ -374,14 +366,7 @@
 
         /* Time */
         .time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-        .time-group label { font-size: 0.68rem; color: var(--text-muted); display: block; margin-bottom: 4px; }
-        .time-input-wrap { display: flex; align-items: center; gap: 4px; }
-        .time-input-wrap input { width: 60px; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; text-align: center; font-size: 0.85rem; }
-        .time-input-wrap input:focus { outline: none; border-color: var(--primary); }
-        .time-input-wrap span { color: var(--text-muted); font-size: 0.75rem; }
         .time-bar { height: 6px; background: var(--border); border-radius: 3px; margin-top: 8px; overflow: hidden; }
-        .time-bar-fill { height: 100%; background: var(--success); }
-        .time-bar-fill.over { background: var(--danger); }
 
         /* Deps display */
         .dep-lien + .dep-lien { margin-top: 10px; }
@@ -431,7 +416,6 @@
             body { background: white !important; }
             .header, .panel, .demo-badge { display: none !important; }
             .gantt-wrapper { margin: 0 !important; height: auto !important; }
-            .gantt-container { overflow: visible !important; }
             .task-list-scroll, .timeline-scroll { overflow: visible !important; height: auto !important; }
             .gantt-bar, .gantt-milestone { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
             @page { size: landscape; margin: 1cm; }
@@ -531,8 +515,6 @@
         .panel-title-edit { font-weight: 700; }
         /* ════ Panneau · structure A « Sections » (libellés au-dessus, contrôles déployés) ════ */
         .props-list { border-bottom: none; padding: 0; margin-bottom: 2px; display: flex; flex-direction: column; }
-        .panel-crumb { display: flex; align-items: center; gap: 7px; font-size: 0.72rem; color: var(--text-muted); font-weight: 600; margin-bottom: 7px; }
-        .panel-crumb .pd { width: 8px; height: 8px; border-radius: 50%; flex: none; }
         .panel .asg-list { display: flex; flex-direction: column; }
         .panel .asg { display: flex; align-items: center; gap: 9px; padding: 6px 0; }
         .panel .asg-ava { width: 25px; height: 25px; border-radius: 50%; color: #fff; font-size: 0.6rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; }
@@ -1407,7 +1389,6 @@
         const couleurSure = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : '#6366f1';
         const gristToDate = (ts) => { if (ts == null || ts === '') return null; const n = Number(ts); return isNaN(n) ? null : new Date(n * 1000); };
         const dateToGrist = (d) => d ? Math.floor(d.getTime() / 1000) : null;
-        const formatDate = (d) => d ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(d) : '-';
         const formatDateShort = (d) => d ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' }).format(d) : '-';
         const formatDateISO = (d) => d ? d.toISOString().split('T')[0] : '';
         const isWeekend = (d) => d.getDay() === 0 || d.getDay() === 6;
@@ -1426,15 +1407,6 @@
             return brut.length > 120 ? brut.slice(0, 120) + '…' : brut;
         }
 
-        // GEN-03: Export functions
-        // WBS-02: déplie toute la hiérarchie temporairement pour l'export, retourne l'état précédent
-        function _expandAllForExport() {
-            const prev = new Set(expandedTasks);
-            for (const t of tasks) if (hasChildren(t)) expandedTasks.add(t.id);
-            render();
-            return prev;
-        }
-        function _restoreExpandState(prev) { expandedTasks = prev; render(); }
         function showSaveIndicator() { const el = document.getElementById('saveIndicator'); el.classList.add('visible'); clearTimeout(saveTimeout); saveTimeout = setTimeout(() => el.classList.remove('visible'), 1500); }
 
         // RefList/ChoiceList helpers
@@ -1621,23 +1593,8 @@
                 }
             }
         }
-        const isRoot = (t) => !t?.parentTask;
-        const getParent = (t) => t?.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
         const getChildren = (id) => childrenByParent.get(id) || [];
         const hasChildren = (t) => t && getChildren(t.id).length > 0;
-        function getDepth(t) { let d = 0, cur = t, guard = 0; while (cur?.parentTask && guard++ < 32) { cur = tasks.find(x => x.id === cur.parentTask); d++; } return d; }
-        // Itératif DFS pour éviter stack overflow
-        function walkTree(roots, cb, depth = 0) {
-            const stack = roots.map(r => ({ task: r, depth: 0 }));
-            while (stack.length) {
-                const { task, depth: d } = stack.shift();
-                cb(task, d);
-                const kids = getChildren(task.id);
-                if (kids.length) {
-                    for (let i = kids.length - 1; i >= 0; i--) stack.unshift({ task: kids[i], depth: d + 1 });
-                }
-            }
-        }
         function getAllDescendants(id, acc = [], visited = new Set()) {
             if (visited.has(id)) return acc;  // WBS-FIX: anti-cycle
             visited.add(id);
@@ -2005,8 +1962,6 @@
         // ═══════════════════════════════════════════════════════════════════════
         function getStartOfWeek(d) { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - day + (day === 0 ? -6 : 1)); r.setHours(0, 0, 0, 0); return r; }
         function getStartOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-        function getStartOfQuarter(d) { return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1); }
-        function getStartOfSemester(d) { return new Date(d.getFullYear(), Math.floor(d.getMonth() / 6) * 6, 1); }
         function getStartOfYear(d) { return new Date(d.getFullYear(), 0, 1); }
         function getWeekNumber(d) { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const year = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil((((t - year) / 86400000) + 1) / 7); }
         // Trimestre et semestre sont des fenêtres glissantes ancrées sur le mois courant, pas sur
@@ -2025,13 +1980,6 @@
             if (cfg.unit === 'week') return cfg.weeks * 7; 
             if (cfg.unit === 'month') return cfg.months * 30; // Approximation pour vue année
             return cfg.days; 
-        }
-        function getPixelsPerDay() { 
-            const cfg = VIEW_CONFIG[currentView]; 
-            if (cfg.unit === 'day') return cfg.cellWidth; 
-            if (cfg.unit === 'week') return cfg.cellWidth / 7; 
-            if (cfg.unit === 'month') return cfg.cellWidth / 30; // Approximation pour vue année
-            return cfg.cellWidth; 
         }
 
         // ═══════════════════════════════════════════════════════════════════════
@@ -2080,6 +2028,9 @@
         // ═══════════════════════════════════════════════════════════════════════
         // SORTING & FILTERING
         // ═══════════════════════════════════════════════════════════════════════
+        // Le tri n'a plus de sélecteur dans la barre d'outils, épurée en septembre : il reste une capacité
+        // du moteur, pilotable par cette fonction, que les tests exercent. Sort à trancher avec le métier,
+        // comme la checklist.
         function changeSortMode(mode) {
             sortMode = mode;
             sortTasks(); render();
@@ -2146,7 +2097,6 @@
             persistFilters();
             render();
         }
-        function clearFilter(key) { filters[key] = []; synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
         function broadcastFilters() {
             if (gristReady && typeof grist !== 'undefined' && grist.setOption) {
                 try { grist.setOption('filters', { project: filters.project, priority: filters.priority, assignee: filters.assignee, domaine: filters.domaine }); } 
@@ -4543,7 +4493,7 @@
   .mt-item.active { color: var(--primary); }
   .mt-fab { flex: 0 0 auto; width: 52px; height: 52px; border-radius: 50%; background: var(--primary); color: #fff; border: 3px solid var(--card-bg); display: flex; align-items: center; justify-content: center; box-shadow: 0 6px 18px -4px rgba(62,93,231,.65); margin-top: -22px; cursor: pointer; }
   .mt-fab svg { width: 26px; height: 26px; }
-  .main-content, .kanban-container, .grid-container, .main, .gantt-wrapper { padding-bottom: 70px !important; }
+  .main-content, .main, .gantt-wrapper { padding-bottom: 70px !important; }
   .panel.open { padding-bottom: 62px; }
 }
 </style>
