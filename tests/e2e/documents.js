@@ -263,17 +263,24 @@ async function deplier(page, parent, fille) {
  */
 async function toutDeplier(page) {
     // Chaque dépliage reconstruit la liste : on re-résout le premier chevron fermé **visible** à
-    // chaque tour, plutôt que de parcourir une collection que le rendu vient de remplacer. Un
-    // chevron qui refuse le clic termine la boucle au lieu de la faire attendre son délai.
-    for (let tour = 0; tour < 20; tour++) {
+    // chaque tour, plutôt que de parcourir une collection que le rendu vient de remplacer.
+    const deplies = () => page.locator('#taskList .tree-chevron.expanded').count();
+    for (let tour = 0; tour < 30; tour++) {
         const ferme = page.locator('#taskList .task-row .tree-chevron:not(.expanded):visible').first();
         if (!(await ferme.count())) return;
+        const avant = await deplies();
         try {
             await ferme.click({ timeout: 2000 });
         } catch (e) {
-            return;
+            // Le rendu a pu arracher la cible entre sa résolution et le clic : on retente, plutôt
+            // que d'abandonner. Abandonner laissait la liste à moitié dépliée, et le test qui
+            // suivait échouait une fois sur vingt sans que rien ne désigne la cause.
+            continue;
         }
-        await page.locator('#taskList .task-row').first().waitFor();
+        // Un dépliage ajoute une branche ouverte : l'attendre garantit que le tour suivant part
+        // d'une liste à jour. Le compte des chevrons ouverts est monotone, contrairement à celui
+        // des fermés, qu'un dépliage peut faire croître en révélant des enfants.
+        await base.expect.poll(deplies, { timeout: 5000 }).toBeGreaterThan(avant);
     }
 }
 
