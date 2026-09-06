@@ -182,7 +182,13 @@ function getTaskBarGradient(t) {
 // ═══════════════════════════════════════════════════════════════════════
 // WBS (hiérarchie sous-tâches) — API commune
 // ═══════════════════════════════════════════════════════════════════════
-let childrenByParent = new Map();  // reconstruit à chaque loadAllData
+// Hiérarchie des tâches, reconstruite à chaque loadAllData. La logique vit dans le cœur, quatre
+// widgets en ayant chacun leur copie.
+let arbre = TF.construireArbre([]);
+function rebuildChildrenCache() {
+    arbre = TF.construireArbre(tasks);
+    if (arbre.cycles.size) console.warn('WBS: cycles detectes sur les taches', [...arbre.cycles]);
+}
 // Type d'une colonne d'après les métadonnées Grist, null si la table ou la colonne manque.
 function typeColonne(tableId, colId) {
     if (!schemaMeta) return null;
@@ -300,76 +306,15 @@ function donneesChantier(c) {
     };
 }
 
-function rebuildChildrenCache() {
-    childrenByParent = new Map();
-    // WBS-FIX: ignorer les parentTask qui formeraient un cycle (self-ref ou chaîne circulaire)
-    const cycleIds = new Set();
-    for (const t of tasks) {
-        const seen = new Set([t.id]);
-        let cur = t.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
-        let guard = 0;
-        while (cur && guard++ < 128) {
-            if (seen.has(cur.id)) { cycleIds.add(t.id); break; }
-            seen.add(cur.id);
-            cur = cur.parentTask ? tasks.find(x => x.id === cur.parentTask) : null;
-        }
-    }
-    if (cycleIds.size) console.warn('WBS: cycles detected on task ids:', [...cycleIds]);
-    for (const t of tasks) {
-        const pid = t.parentTask;
-        if (pid && !isNaN(pid) && !cycleIds.has(t.id)) {
-            if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
-            childrenByParent.get(pid).push(t);
-        }
-    }
-}
-const getChildren = (id) => childrenByParent.get(id) || [];
-const hasChildren = (t) => t && getChildren(t.id).length > 0;
-function getAllDescendants(id, acc = [], visited = new Set()) {
-    if (visited.has(id)) return acc;  // WBS-FIX: anti-cycle
-    visited.add(id);
-    const kids = getChildren(id);
-    for (const k of kids) { acc.push(k); getAllDescendants(k.id, acc, visited); }
-    return acc;
-}
+const getChildren = (id) => arbre.enfants(id);
+const hasChildren = (t) => arbre.aDesEnfants(t);
+const getAllDescendants = (id) => arbre.descendants(id);
+const canSetParent = (id, nouveauParent) => arbre.peutAvoirPourParent(id, nouveauParent);
+// Agrégations calculées à la demande, jamais persistées.
+const aggregateProgress = (t) => arbre.progression(t);
+const aggregateDates = (t) => arbre.bornes(t);
 // Anti-cycle : true si newParent peut être affecté à taskId sans créer de boucle
-function canSetParent(taskId, newParent) {
-    if (!newParent) return true;
-    if (newParent === taskId) return false;
-    let cur = tasks.find(x => x.id === newParent);
-    let guard = 0;
-    while (cur && guard++ < 64) {
-        if (cur.id === taskId) return false;
-        cur = cur.parentTask ? tasks.find(x => x.id === cur.parentTask) : null;
-    }
-    return true;
-}
 // Agrégations — calculées à la demande, JAMAIS persistées côté Grist
-function aggregateProgress(t, visited = new Set()) {
-    if (visited.has(t.id)) return t.progression || 0;
-    visited.add(t.id);
-    const kids = getChildren(t.id);
-    if (!kids.length) return t.progression || 0;
-    const allWeighted = kids.every(k => k.estimationH && k.estimationH > 0);
-    if (allWeighted) {
-        const totalW = kids.reduce((s, k) => s + k.estimationH, 0);
-        return Math.round(kids.reduce((s, k) => s + aggregateProgress(k, visited) * k.estimationH, 0) / totalW);
-    }
-    return Math.round(kids.reduce((s, k) => s + aggregateProgress(k, visited), 0) / kids.length);
-}
-function aggregateDates(t, visited = new Set()) {
-    if (visited.has(t.id)) return { start: t.dateDebut, end: t.dateEcheance };
-    visited.add(t.id);
-    const kids = getChildren(t.id);
-    if (!kids.length) return { start: t.dateDebut, end: t.dateEcheance };
-    let minS = t.dateDebut, maxE = t.dateEcheance;
-    for (const k of kids) {
-        const sub = aggregateDates(k, visited);
-        if (sub.start != null && (minS == null || sub.start < minS)) minS = sub.start;
-        if (sub.end != null && (maxE == null || sub.end > maxE)) maxE = sub.end;
-    }
-    return { start: minS, end: maxE };
-}
 // Date sur laquelle une ligne se trie : la sienne, sinon celle que sa barre affiche, agrégée de ses
 // enfants. Le document du métier ne saisit pas les dates d'un chantier : les lire brutes les rendait
 // toutes vides, donc égales, et le tri par date laissait l'ordre d'insertion en place.
