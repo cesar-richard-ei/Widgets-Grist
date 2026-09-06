@@ -1145,6 +1145,152 @@
         // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
         if (typeof module !== 'undefined' && module.exports) module.exports = TF;
         // </inline>
+        // <inline:core/arbre.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
+        /* ============================================================================
+         * arbre.js — Hierarchie des taches, module du cœur TaskFlow
+         * ----------------------------------------------------------------------------
+         * SOURCE UNIQUE, inlinee par scripts/build-inline.js dans les seuls widgets qui
+         * affichent un arbre : gantt, kanban, calendar, dashboard. Le plan, la fiche et
+         * le tableau blanc ne la portent pas.
+         *
+         * Se greffe sur TF : le marqueur doit donc venir APRES celui du cœur.
+         * ========================================================================== */
+        (function () {
+            'use strict';
+
+        /* ----- Hierarchie des taches -------------------------------------------
+         * Une tache peut en contenir d'autres, par `parentTask`. Quatre widgets en
+         * avaient chacun leur copie, aux memes bugs pres.
+         *
+         * Les cycles ne sont pas theoriques : sur le document du metier, les
+         * identifiants de Tasks et de Chantiers se recouvrent, et un parentTask
+         * repointe rattachait 41 taches sur 79 a une autre tache. L'index les
+         * ecarte a la construction plutot que de s'en proteger a chaque parcours.
+         * --------------------------------------------------------------------- */
+        function construireArbre(taches) {
+            const liste = Array.isArray(taches) ? taches : [];
+            const parId = new Map();
+            for (const t of liste) if (t && t.id != null) parId.set(t.id, t);
+
+            // Une tache dont la chaine de parents boucle : elle reste affichee, mais
+            // n'est rattachee a personne.
+            const cycles = new Set();
+            for (const t of liste) {
+                const vus = new Set([t.id]);
+                let cur = t.parentTask ? parId.get(t.parentTask) : null;
+                let garde = 0;
+                while (cur && garde++ < 128) {
+                    if (vus.has(cur.id)) { cycles.add(t.id); break; }
+                    vus.add(cur.id);
+                    cur = cur.parentTask ? parId.get(cur.parentTask) : null;
+                }
+            }
+
+            const parParent = new Map();
+            for (const t of liste) {
+                const pid = t.parentTask;
+                if (!pid || isNaN(pid) || cycles.has(t.id)) continue;
+                if (!parParent.has(pid)) parParent.set(pid, []);
+                parParent.get(pid).push(t);
+            }
+
+            const enfants = (id) => parParent.get(id) || [];
+            const aDesEnfants = (t) => !!t && enfants(t.id).length > 0;
+            const parent = (t) => (t && t.parentTask ? parId.get(t.parentTask) : null) || null;
+
+            function descendants(id, acc, vus) {
+                acc = acc || []; vus = vus || new Set();
+                if (vus.has(id)) return acc;
+                vus.add(id);
+                for (const k of enfants(id)) { acc.push(k); descendants(k.id, acc, vus); }
+                return acc;
+            }
+
+            function profondeur(t) {
+                let d = 0, cur = t, garde = 0;
+                while (cur && cur.parentTask && garde++ < 128) { cur = parId.get(cur.parentTask); if (cur) d++; }
+                return d;
+            }
+
+            // Rattacher une tache a l'un de ses propres descendants formerait une boucle.
+            function peutAvoirPourParent(id, nouveauParent) {
+                if (!nouveauParent) return true;
+                if (nouveauParent === id) return false;
+                let cur = parId.get(nouveauParent), garde = 0;
+                while (cur && garde++ < 128) {
+                    if (cur.id === id) return false;
+                    cur = cur.parentTask ? parId.get(cur.parentTask) : null;
+                }
+                return true;
+            }
+
+            /* Progression d'un parent : moyenne de ses enfants, ponderee par
+             * l'estimation quand ils en portent tous une. Jamais persistee. */
+            function progression(t, vus) {
+                vus = vus || new Set();
+                if (!t || vus.has(t.id)) return (t && t.progression) || 0;
+                vus.add(t.id);
+                const kids = enfants(t.id);
+                if (!kids.length) return t.progression || 0;
+                const tousEstimes = kids.every(k => k.estimationH && k.estimationH > 0);
+                if (tousEstimes) {
+                    const total = kids.reduce((s, k) => s + k.estimationH, 0);
+                    return Math.round(kids.reduce((s, k) => s + progression(k, vus) * k.estimationH, 0) / total);
+                }
+                return Math.round(kids.reduce((s, k) => s + progression(k, vus), 0) / kids.length);
+            }
+
+            /* Bornes d'un parent : les siennes, elargies par celles de ses
+             * descendants. Les dates propres restent prioritaires, un parent pouvant
+             * reserver une plage plus large que ses enfants. */
+            function bornes(t, vus) {
+                vus = vus || new Set();
+                if (!t || vus.has(t.id)) return { start: t && t.dateDebut, end: t && t.dateEcheance };
+                vus.add(t.id);
+                const kids = enfants(t.id);
+                if (!kids.length) return { start: t.dateDebut, end: t.dateEcheance };
+                let min = t.dateDebut, max = t.dateEcheance;
+                for (const k of kids) {
+                    const sous = bornes(k, vus);
+                    if (sous.start != null && (min == null || sous.start < min)) min = sous.start;
+                    if (sous.end != null && (max == null || sous.end > max)) max = sous.end;
+                }
+                return { start: min, end: max };
+            }
+
+            /* Parcours en profondeur, dans l'ordre d'affichage. Iteratif : une
+             * hierarchie profonde ferait deborder la pile. */
+            function parcourir(racines, cb) {
+                const pile = (racines || []).slice().reverse().map(r => ({ tache: r, profondeur: 0 }));
+                while (pile.length) {
+                    const { tache, profondeur: d } = pile.pop();
+                    cb(tache, d);
+                    const kids = enfants(tache.id);
+                    for (let i = kids.length - 1; i >= 0; i--) pile.push({ tache: kids[i], profondeur: d + 1 });
+                }
+            }
+
+            return {
+                cycles: cycles,
+                tache: (id) => parId.get(id) || null,
+                enfants: enfants,
+                aDesEnfants: aDesEnfants,
+                parent: parent,
+                descendants: (id) => descendants(id),
+                profondeur: profondeur,
+                peutAvoirPourParent: peutAvoirPourParent,
+                progression: (t) => progression(t),
+                bornes: (t) => bornes(t),
+                parcourir: parcourir
+            };
+        }
+
+            // Greffe sur le cœur, inliné juste au-dessus. Hors navigateur, TF n'existe pas.
+            if (typeof TF !== 'undefined') TF.construireArbre = construireArbre;
+            // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
+            if (typeof module !== 'undefined' && module.exports) module.exports = { construireArbre: construireArbre };
+        })();
+        // </inline>
 
         // ═══════════════════════════════════════════════════════════════════════
         // STATE
@@ -1248,84 +1394,22 @@
         // ═══════════════════════════════════════════════════════════════════════
         // WBS (hiérarchie sous-tâches) — API commune
         // ═══════════════════════════════════════════════════════════════════════
-        let childrenByParent = new Map();
+        // Hiérarchie des tâches : la logique vit dans le cœur partagé.
+        let arbre = TF.construireArbre([]);
         function rebuildChildrenCache() {
-            childrenByParent = new Map();
-            const cycleIds = new Set();
-            for (const t of tasks) {
-                const seen = new Set([t.id]);
-                let cur = t.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
-                let guard = 0;
-                while (cur && guard++ < 128) {
-                    if (seen.has(cur.id)) { cycleIds.add(t.id); break; }
-                    seen.add(cur.id);
-                    cur = cur.parentTask ? tasks.find(x => x.id === cur.parentTask) : null;
-                }
-            }
-            if (cycleIds.size) console.warn('WBS: cycles detected on task ids:', [...cycleIds]);
-            for (const t of tasks) {
-                const pid = t.parentTask;
-                if (pid && !isNaN(pid) && !cycleIds.has(t.id)) {
-                    if (!childrenByParent.has(pid)) childrenByParent.set(pid, []);
-                    childrenByParent.get(pid).push(t);
-                }
-            }
+            arbre = TF.construireArbre(tasks);
+            if (arbre.cycles.size) console.warn('WBS: cycles detectes sur les taches', [...arbre.cycles]);
         }
         const isRoot = (t) => !t?.parentTask;
         const getParent = (t) => t?.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
-        const getChildren = (id) => childrenByParent.get(id) || [];
+        const getChildren = (id) => arbre.enfants(id);
+        const getAllDescendants = (id) => arbre.descendants(id);
+        const canSetParent = (id, p) => arbre.peutAvoirPourParent(id, p);
+        const aggregateProgress = (t) => arbre.progression(t);
+        const aggregateDates = (t) => arbre.bornes(t);
+        const getDepth = (t) => arbre.profondeur(t);
+        const walkTree = (racines, cb) => arbre.parcourir(racines, cb);
         const hasChildren = (t) => t && getChildren(t.id).length > 0;
-        function getDepth(t) { let d = 0, cur = t, guard = 0; while (cur?.parentTask && guard++ < 32) { cur = tasks.find(x => x.id === cur.parentTask); d++; } return d; }
-        function walkTree(roots, cb) {
-            const stack = roots.map(r => ({ task: r, depth: 0 }));
-            while (stack.length) {
-                const { task, depth: d } = stack.shift();
-                cb(task, d);
-                const kids = getChildren(task.id);
-                if (kids.length) for (let i = kids.length - 1; i >= 0; i--) stack.unshift({ task: kids[i], depth: d + 1 });
-            }
-        }
-        function getAllDescendants(id, acc = [], visited = new Set()) {
-            if (visited.has(id)) return acc;
-            visited.add(id);
-            for (const k of getChildren(id)) { acc.push(k); getAllDescendants(k.id, acc, visited); }
-            return acc;
-        }
-        function canSetParent(taskId, newParent) {
-            if (!newParent) return true;
-            if (newParent === taskId) return false;
-            let cur = tasks.find(x => x.id === newParent), guard = 0;
-            while (cur && guard++ < 64) {
-                if (cur.id === taskId) return false;
-                cur = cur.parentTask ? tasks.find(x => x.id === cur.parentTask) : null;
-            }
-            return true;
-        }
-        function aggregateProgress(t, visited = new Set()) {
-            if (visited.has(t.id)) return t.progression || 0;
-            visited.add(t.id);
-            const kids = getChildren(t.id);
-            if (!kids.length) return t.progression || 0;
-            const allWeighted = kids.every(k => k.estimationH && k.estimationH > 0);
-            if (allWeighted) {
-                const totalW = kids.reduce((s, k) => s + k.estimationH, 0);
-                return Math.round(kids.reduce((s, k) => s + aggregateProgress(k, visited) * k.estimationH, 0) / totalW);
-            }
-            return Math.round(kids.reduce((s, k) => s + aggregateProgress(k, visited), 0) / kids.length);
-        }
-        function aggregateDates(t, visited = new Set()) {
-            if (visited.has(t.id)) return { start: t.dateDebut, end: t.dateEcheance };
-            visited.add(t.id);
-            const kids = getChildren(t.id);
-            if (!kids.length) return { start: t.dateDebut, end: t.dateEcheance };
-            let minS = t.dateDebut, maxE = t.dateEcheance;
-            for (const k of kids) {
-                const sub = aggregateDates(k, visited);
-                if (sub.start != null && (minS == null || sub.start < minS)) minS = sub.start;
-                if (sub.end != null && (maxE == null || sub.end > maxE)) maxE = sub.end;
-            }
-            return { start: minS, end: maxE };
-        }
 
         function wouldCreateCycle(taskId, depId, visited = new Set()) { if (taskId === depId) return true; if (visited.has(depId)) return false; visited.add(depId); const depTask = tasks.find(t => t.id === depId); if (!depTask) return false; return getDependsOn(depTask).some(d => wouldCreateCycle(taskId, d, visited)); }
         function getAvailableDependencies(taskId) { return tasks.filter(t => t.id !== taskId && !wouldCreateCycle(taskId, t.id)); }

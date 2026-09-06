@@ -639,6 +639,22 @@ Trois concepts **orthogonaux** coexistent dans TaskFlow, chacun avec son usage :
 - Un enfant peut avoir un statut/projet/priorité **différent** de son parent (aucune règle de cohérence forcée)
 - Suppression parent : cascade (défaut) ou détachement (enfants deviennent racines) — choix au moment de la suppression
 
+### Une seule implémentation, dans `core/arbre.js`
+
+La hiérarchie vivait en quatre copies, dans le Gantt, le kanban, le calendrier et le tableau de
+bord, aux mêmes bugs près. Elle est désormais dans `core/arbre.js`, couverte par
+`tests/unit/core-arbre.test.js`, et chaque widget garde ses noms locaux en enveloppes d'une ligne :
+
+```js
+let arbre = TF.construireArbre([]);          // reconstruit à chaque chargement
+const getChildren = (id) => arbre.enfants(id);
+const aggregateProgress = (t) => arbre.progression(t);
+```
+
+**Ce module est inliné à part**, par son propre marqueur `// <inline:core/arbre.js>` posé après
+celui du cœur, dont il dépend. Le loger dans `taskflow-core.js` aurait alourdi de 5 à 7 ko le plan,
+la fiche et le tableau blanc, qui n'affichent aucune hiérarchie : le cœur, lui, est inliné partout.
+
 ### API commune (dans chaque widget)
 
 ```js

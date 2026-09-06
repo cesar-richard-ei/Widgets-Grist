@@ -86,6 +86,13 @@ export default [
     },
 
     {
+        // Le module d'arbre se greffe sur le coeur, inline juste au-dessus de lui : TF n'existe
+        // donc pas dans son propre fichier, mais bien dans le widget qui le porte.
+        files: ['projects/tasks_app/core/arbre.js'],
+        languageOptions: { globals: { TF: 'readonly' } }
+    },
+
+    {
         // Les callbacks passes a page.evaluate() s'executent dans la page et
         // referencent les globales du widget, invisibles depuis ici.
         files: ['tests/**/*.js'],
