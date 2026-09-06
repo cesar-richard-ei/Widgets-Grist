@@ -596,9 +596,20 @@ absente fait journaliser une erreur par le bac à sable de Grist, avant même qu
 voie : une ligne rouge à chaque ouverture, dans la console où l'on cherche les vrais problèmes.
 S'applique à `Categorie_de_projet` et à `Chantiers`.
 
-### Légende (Gantt uniquement)
+### Capacités sans interface
 
-Dynamique selon `colorMode` — rendue par `renderLegend()` appelée dans `render()`. Affiche les 4 priorités, ou les statuts, ou les 8 premiers projets/membres actifs selon le mode.
+Deux fonctionnalités n'ont plus de porte d'entrée dans le widget, alors que leur code et leurs
+données subsistent. Leur sort se tranche avec le métier, pas dans le code.
+
+| Capacité | Ce qu'il en reste | Ce qui manque |
+|---|---|---|
+| Checklist (`Tasks.subtasks`) | badge « ◎ x/y » sur les lignes, écriture à chaque enregistrement, six fonctions | la section du volet, son champ de saisie et ses cases |
+| Tri (`sortMode`) | `sortTasks`, `sortFratrie`, `changeSortMode`, persistance | le sélecteur, retiré de la barre d'outils épurée |
+
+Mesuré le 06/09/2026 : **une seule tâche sur 535** porte une checklist, d'un seul élément non coché.
+
+La légende, elle, a été retirée avec la barre d'outils : ni `renderLegend()` ni ses règles CSS ne
+subsistent.
 
 ### Bonnes pratiques
 

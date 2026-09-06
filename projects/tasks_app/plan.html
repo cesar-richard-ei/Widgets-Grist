@@ -953,12 +953,6 @@ function chargesFor(t) {
 const taskWeeks = (t) => Math.max((Math.floor(t.dateEcheance * 1000 / 86400000) - Math.floor(t.dateDebut * 1000 / 86400000) + 1) / 7, 1 / 7);
 const gToInput = (ts) => ts ? new Date(ts * 1000).toISOString().slice(0, 10) : '';
 const inputToG = (s) => s ? Math.floor(Date.parse(s + 'T00:00:00Z') / 1000) : null;
-function tasksForKey(key) {
-  if (S.groupBy === 'project') return planTasks().filter(t => String(projetDeTache(t) || '0') === String(key)).map(t => t.id);
-  if (S.groupBy === 'chantier') return planTasks().filter(t => String(chantierDeTache(t) || '0') === String(key)).map(t => t.id);
-  if (S.groupBy === 'person') return planTasks().filter(t => getRefList(t.assignees).includes(Number(key))).map(t => t.id);
-  return [];
-}
 function toast(msg) { const el = document.getElementById('toast'); if (!el) return; el.textContent = msg; el.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => el.classList.remove('show'), 2800); }
 
 function keyFn() {
@@ -1073,11 +1067,6 @@ function entretenirOptionDomaine() {
   if (S.groupBy === 'domaine') S.groupBy = 'person';
 }
 
-function cellColor(h, cap) {
-  if (!(h > 0)) return 'transparent';
-  if (!(cap > 0)) return 'var(--ok)';
-  const r = h / cap; return r > 1 ? 'var(--over)' : r > 0.85 ? 'var(--warn)' : 'var(--ok)';
-}
 
 // ============================================================================
 // Rendu

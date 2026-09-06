@@ -210,8 +210,10 @@ const jourAuBordGauche = (page) => page.evaluate(() => {
     return Math.round((effectiveStart.getTime() + jours * 86400000) / 86400000);
 });
 
+// Fenêtre étroite exprès : sur un écran large, la plage tient entièrement et il n'y a rien à faire
+// défiler. Le test passait alors seulement grâce à la largeur laissée par le test précédent.
 test('les fleches deplacent ce que la timeline montre', async ({ page }) => {
-    await D.ouvrirGantt(page);
+    await D.ouvrirGantt(page, null, { largeur: 700 });
     await choisirVue(page, 'semester');
     const depart = await jourAuBordGauche(page);
 

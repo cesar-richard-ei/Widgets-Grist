@@ -119,7 +119,6 @@ const escapeAttr = (t) => escapeHtml(t).replace(/"/g, '&quot;');
 const couleurSure = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : '#6366f1';
 const gristToDate = (ts) => { if (ts == null || ts === '') return null; const n = Number(ts); return isNaN(n) ? null : new Date(n * 1000); };
 const dateToGrist = (d) => d ? Math.floor(d.getTime() / 1000) : null;
-const formatDate = (d) => d ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' }).format(d) : '-';
 const formatDateShort = (d) => d ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' }).format(d) : '-';
 const formatDateISO = (d) => d ? d.toISOString().split('T')[0] : '';
 const isWeekend = (d) => d.getDay() === 0 || d.getDay() === 6;
@@ -138,15 +137,6 @@ function messageErreur(e) {
     return brut.length > 120 ? brut.slice(0, 120) + '…' : brut;
 }
 
-// GEN-03: Export functions
-// WBS-02: déplie toute la hiérarchie temporairement pour l'export, retourne l'état précédent
-function _expandAllForExport() {
-    const prev = new Set(expandedTasks);
-    for (const t of tasks) if (hasChildren(t)) expandedTasks.add(t.id);
-    render();
-    return prev;
-}
-function _restoreExpandState(prev) { expandedTasks = prev; render(); }
 function showSaveIndicator() { const el = document.getElementById('saveIndicator'); el.classList.add('visible'); clearTimeout(saveTimeout); saveTimeout = setTimeout(() => el.classList.remove('visible'), 1500); }
 
 // RefList/ChoiceList helpers
@@ -333,23 +323,8 @@ function rebuildChildrenCache() {
         }
     }
 }
-const isRoot = (t) => !t?.parentTask;
-const getParent = (t) => t?.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
 const getChildren = (id) => childrenByParent.get(id) || [];
 const hasChildren = (t) => t && getChildren(t.id).length > 0;
-function getDepth(t) { let d = 0, cur = t, guard = 0; while (cur?.parentTask && guard++ < 32) { cur = tasks.find(x => x.id === cur.parentTask); d++; } return d; }
-// Itératif DFS pour éviter stack overflow
-function walkTree(roots, cb, depth = 0) {
-    const stack = roots.map(r => ({ task: r, depth: 0 }));
-    while (stack.length) {
-        const { task, depth: d } = stack.shift();
-        cb(task, d);
-        const kids = getChildren(task.id);
-        if (kids.length) {
-            for (let i = kids.length - 1; i >= 0; i--) stack.unshift({ task: kids[i], depth: d + 1 });
-        }
-    }
-}
 function getAllDescendants(id, acc = [], visited = new Set()) {
     if (visited.has(id)) return acc;  // WBS-FIX: anti-cycle
     visited.add(id);
@@ -717,8 +692,6 @@ function propagateDependencyDates(changedTaskId, visited = new Set()) {
 // ═══════════════════════════════════════════════════════════════════════
 function getStartOfWeek(d) { const r = new Date(d); const day = r.getDay(); r.setDate(r.getDate() - day + (day === 0 ? -6 : 1)); r.setHours(0, 0, 0, 0); return r; }
 function getStartOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1); }
-function getStartOfQuarter(d) { return new Date(d.getFullYear(), Math.floor(d.getMonth() / 3) * 3, 1); }
-function getStartOfSemester(d) { return new Date(d.getFullYear(), Math.floor(d.getMonth() / 6) * 6, 1); }
 function getStartOfYear(d) { return new Date(d.getFullYear(), 0, 1); }
 function getWeekNumber(d) { const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); const day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); const year = new Date(Date.UTC(t.getUTCFullYear(), 0, 1)); return Math.ceil((((t - year) / 86400000) + 1) / 7); }
 // Trimestre et semestre sont des fenêtres glissantes ancrées sur le mois courant, pas sur
@@ -737,13 +710,6 @@ function getTotalDays() {
     if (cfg.unit === 'week') return cfg.weeks * 7; 
     if (cfg.unit === 'month') return cfg.months * 30; // Approximation pour vue année
     return cfg.days; 
-}
-function getPixelsPerDay() { 
-    const cfg = VIEW_CONFIG[currentView]; 
-    if (cfg.unit === 'day') return cfg.cellWidth; 
-    if (cfg.unit === 'week') return cfg.cellWidth / 7; 
-    if (cfg.unit === 'month') return cfg.cellWidth / 30; // Approximation pour vue année
-    return cfg.cellWidth; 
 }
 
 // ═══════════════════════════════════════════════════════════════════════
@@ -792,6 +758,9 @@ function updatePeriodLabel() {
 // ═══════════════════════════════════════════════════════════════════════
 // SORTING & FILTERING
 // ═══════════════════════════════════════════════════════════════════════
+// Le tri n'a plus de sélecteur dans la barre d'outils, épurée en septembre : il reste une capacité
+// du moteur, pilotable par cette fonction, que les tests exercent. Sort à trancher avec le métier,
+// comme la checklist.
 function changeSortMode(mode) {
     sortMode = mode;
     sortTasks(); render();
@@ -858,7 +827,6 @@ function toggleFilter(key, val) {
     persistFilters();
     render();
 }
-function clearFilter(key) { filters[key] = []; synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
 function broadcastFilters() {
     if (gristReady && typeof grist !== 'undefined' && grist.setOption) {
         try { grist.setOption('filters', { project: filters.project, priority: filters.priority, assignee: filters.assignee, domaine: filters.domaine }); } 
