@@ -140,9 +140,12 @@ test('une ligne qui n est pas un projet annonce sa fiche a venir', async ({ page
 test('sans projet selectionne, l accueil invite a choisir une ligne du tableau', async ({ page }) => {
     await D.ouvrirFiche(page, null, null, { attendre: '.fiche-accueil' });
 
-    await expect(fiche(page).locator('.fiche-accueil')).toContainText('Sélectionnez une ligne');
+    await expect(fiche(page).locator('.fiche-accueil')).toContainText('Choisissez un projet dans le sélecteur ci-dessus');
     await expect(fiche(page).locator('.fiche-accueil-fleche')).toBeVisible();
     await expect(fiche(page).locator('.fiche-message')).toHaveCount(0);
+    // La flèche désigne le sélecteur, posé au-dessus du widget : elle ouvre la ligne.
+    expect(await page.evaluate(() => document.querySelector('.fiche-accueil-guide').firstElementChild.className))
+        .toBe('fiche-accueil-fleche');
 });
 
 // La colonne de gauche ne garde que ce qui identifie la ligne : Paul lit la feuille de route pour
