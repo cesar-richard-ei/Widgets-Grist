@@ -26,10 +26,10 @@ const chantiers = (page) => page.evaluate(() => window.grist.docApi.fetchTable('
 test('le menu des filtres propose les domaines du document, sans role renseigné', async ({ page }) => {
     await D.ouvrirGantt(page, documentMetier());
 
-    await page.locator('#filterGantt .filter-btn').click();
+    await page.locator('#filtreDomaine .filter-btn').click();
 
     for (const domaine of DOMAINES) {
-        await expect(page.locator('#filterAllMenu')).toContainText(domaine);
+        await expect(page.locator('#menuDomaine')).toContainText(domaine);
     }
 });
 
