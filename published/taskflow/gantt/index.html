@@ -569,6 +569,10 @@
         .filter-count { background: var(--primary); color: #fff; border-radius: 999px; min-width: 17px; height: 17px; padding: 0 4px; font-size: 0.62rem; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; margin-left: 4px; }
         .filter-menu.wide { min-width: 234px; max-height: 62vh; overflow-y: auto; padding: 4px; }
         .header-right .filter-menu { left: auto; right: 0; }
+        .fm-search-zone { position: sticky; top: 0; background: var(--card-bg); padding: 2px 2px 6px; z-index: 1; }
+        .fm-search { width: 100%; height: 30px; padding: 0 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); font-size: 0.78rem; }
+        .fm-search:focus { outline: none; border-color: var(--primary); }
+        .fm-vide { padding: 10px 8px; font-size: 0.76rem; color: var(--text-light); text-align: center; }
         .fm-group-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: .05em; color: var(--text-light); font-weight: 700; padding: 9px 8px 3px; }
         .fm-group-label.first { padding-top: 4px; }
         .filter-option.muted { color: var(--text-light); pointer-events: none; }
@@ -1511,7 +1515,7 @@
         function domainesConnus() {
             const vus = [];
             for (const m of team) if (m.Domaine && !vus.includes(m.Domaine)) vus.push(m.Domaine);
-            return vus.sort();
+            return vus.sort(parOrdreAlphabetique);
         }
         // Les domaines sont désignés par leur rang, pour n'avoir rien à échapper dans un attribut onclick.
         // Un domaine n'a pas de couleur a lui : la table des effectifs ne porte que celle des personnes.
@@ -2189,7 +2193,50 @@
             if (sortMode === 'priority') tasks.sort((a, b) => { const pa = getTaskPriority(a), pb = getTaskPriority(b); return pa !== pb ? pa - pb : dateDeTri(a) - dateDeTri(b); });
             else if (sortMode === 'date') tasks.sort((a, b) => dateDeTri(a) - dateDeTri(b));
         }
-        function toggleFilterMenu(id) { const m = document.querySelector('#' + id + ' .filter-menu'); const open = m.classList.contains('open'); document.querySelectorAll('.filter-menu').forEach(x => x.classList.remove('open')); if (!open) m.classList.add('open'); }
+        function toggleFilterMenu(id) {
+            const m = document.querySelector('#' + id + ' .filter-menu');
+            const open = m.classList.contains('open');
+            document.querySelectorAll('.filter-menu').forEach(x => x.classList.remove('open'));
+            if (open) return;
+            m.classList.add('open');
+            const champ = m.querySelector('.fm-search');
+            if (champ) { champ.value = ''; filtrerOptionsDeMenu(champ); champ.focus(); }
+        }
+
+        // Filtre les options sans redessiner le menu : la recherche en cours doit survivre au choix,
+        // sinon on ne peut pas en cocher deux d'affilee.
+        function filtrerOptionsDeMenu(champ) {
+            const menu = champ.closest('.filter-menu');
+            if (!menu) return;
+            const q = sansAccents(champ.value.trim());
+            let visibles = 0;
+            menu.querySelectorAll('.filter-option[data-filtre]').forEach(opt => {
+                const garde = !q || sansAccents(opt.textContent).indexOf(q) !== -1;
+                opt.style.display = garde ? '' : 'none';
+                if (garde) visibles++;
+            });
+            // Un separateur de domaine ne reste que s'il coiffe encore une ligne.
+            menu.querySelectorAll('.fm-group-label').forEach(label => {
+                let suivant = label.nextElementSibling, coiffe = false;
+                while (suivant && !suivant.classList.contains('fm-group-label')) {
+                    if (suivant.classList.contains('filter-option') && suivant.style.display !== 'none') { coiffe = true; break; }
+                    suivant = suivant.nextElementSibling;
+                }
+                label.style.display = coiffe ? '' : 'none';
+            });
+            const vide = menu.querySelector('.fm-vide');
+            if (vide) vide.style.display = visibles ? 'none' : '';
+        }
+
+        function toucheDansMenuDeFiltre(evenement, champ) {
+            const menu = champ.closest('.filter-menu');
+            if (evenement.key === 'Escape') { if (menu) menu.classList.remove('open'); return; }
+            if (evenement.key !== 'Enter' || !menu) return;
+            evenement.preventDefault();
+            const premiere = Array.from(menu.querySelectorAll('.filter-option[data-filtre]'))
+                .find(opt => opt.style.display !== 'none');
+            if (premiere) premiere.click();
+        }
         // GEN-02: Gestion des filtres avec arrays et synchronisation
         // Le menu est redessine a chaque bascule : l'etat des cases venait sinon du seul clic natif sur la
         // case, et cliquer le libelle posait le filtre sans cocher.
@@ -2210,21 +2257,50 @@
                 catch (e) { console.log('setOption not available'); }
             }
         }
+        const parOrdreAlphabetique = (a, b) => String(a || '').localeCompare(String(b || ''), 'fr', { sensitivity: 'base' });
+        const SANS_DOMAINE = 'Sans domaine';
+
+        const optionDeFiltre = (cle, valeur, appel, coche, couleur, libelle) =>
+            `<div class="filter-option" data-filtre="${cle}" data-valeur="${valeur}" onclick="${appel}">`
+            + `<input type="checkbox" ${coche ? 'checked' : ''}>`
+            + `<span class="dot" style="background:${couleurSure(couleur)}"></span>${libelle}</div>`;
+
+        // Les personnes se cherchent par equipe : chaque domaine annonce le sien, et ceux qui n'en ont pas
+        // ferment la liste plutot que de s'y melanger.
+        function optionsDeResponsables() {
+            const membres = team.filter(m => m.actif !== false);
+            if (!membres.length) return '<div class="filter-option muted">Aucun membre</div>';
+            const groupes = domainesConnus().concat(membres.some(m => !m.Domaine) ? [SANS_DOMAINE] : []);
+            return groupes.map((domaine, rang) => {
+                const dedans = membres
+                    .filter(m => (m.Domaine || SANS_DOMAINE) === domaine)
+                    .sort((a, b) => parOrdreAlphabetique(a.nom, b.nom));
+                if (!dedans.length) return '';
+                return `<div class="fm-group-label${rang === 0 ? ' first' : ''}">${escapeHtml(domaine)}</div>`
+                    + dedans.map(m => optionDeFiltre('responsable', m.id, `toggleFilter('responsable', ${m.id})`,
+                        filters.responsable.includes(m.id), getTeamMemberColor(m.id), escapeHtml(m.nom))).join('');
+            }).join('');
+        }
+
         function updateFilterMenus() {
             const domaines = domainesConnus();
-            const membres = team.filter(m => m.actif !== false);
             const contenus = {
                 project: projects.length
-                    ? projects.map(p => `<div class="filter-option" data-filtre="project" data-valeur="${p.id}" onclick="toggleFilter('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span class="dot" style="background:${couleurSure(p.couleur)}"></span>${escapeHtml(p.nom)}</div>`).join('')
+                    ? projects.slice().sort((a, b) => parOrdreAlphabetique(a.nom, b.nom))
+                        .map(p => optionDeFiltre('project', p.id, `toggleFilter('project', ${p.id})`,
+                            filters.project.includes(p.id), p.couleur, escapeHtml(p.nom))).join('')
                     : '<div class="filter-option muted">Aucun projet</div>',
-                domaine: domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeAttr(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}><span class="dot" style="background:${couleurSure(couleurDeDomaine(d))}"></span>${escapeHtml(d)}</div>`).join(''),
-                responsable: membres.length
-                    ? membres.map(m => `<div class="filter-option" data-filtre="responsable" data-valeur="${m.id}" onclick="toggleFilter('responsable', ${m.id})"><input type="checkbox" ${filters.responsable.includes(m.id)?'checked':''}><span class="dot" style="background:${couleurSure(getTeamMemberColor(m.id))}"></span>${escapeHtml(m.nom)}</div>`).join('')
-                    : '<div class="filter-option muted">Aucun membre</div>'
+                domaine: domaines.map((d, rang) => optionDeFiltre('domaine', escapeAttr(d), `basculerDomaine(${rang})`,
+                    filters.domaine.includes(d), couleurDeDomaine(d), escapeHtml(d))).join(''),
+                responsable: optionsDeResponsables()
             };
+            const recherche = '<div class="fm-search-zone"><input class="fm-search" type="text" placeholder="Rechercher"'
+                + ' oninput="filtrerOptionsDeMenu(this)" onkeydown="toucheDansMenuDeFiltre(event, this)"></div>';
             for (const facette of FACETTES) {
                 const menu = document.getElementById(facette.menu);
-                if (menu) menu.innerHTML = contenus[facette.cle] + `<div class="fm-foot"><span class="fm-clear" onclick="effacerFiltre('${facette.cle}')">Effacer</span></div>`;
+                if (menu) menu.innerHTML = recherche + contenus[facette.cle]
+                    + '<div class="fm-vide" style="display:none">Aucun résultat</div>'
+                    + `<div class="fm-foot"><span class="fm-clear" onclick="effacerFiltre('${facette.cle}')">Effacer</span></div>`;
             }
             // Sans colonne de domaine sur les effectifs, il n'y a rien à proposer : le filtre s'efface de la
             // barre plutôt que d'ouvrir un menu vide.
