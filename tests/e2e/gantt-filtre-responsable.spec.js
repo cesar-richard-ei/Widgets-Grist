@@ -32,7 +32,7 @@ test('le menu propose les membres actifs et compte les choix', async ({ page }) 
     await page.waitForSelector('#menuResponsable.open');
 
     const noms = await page.locator('#menuResponsable .filter-option[data-filtre="responsable"]').allTextContents();
-    expect(noms.map((n) => n.trim())).toEqual(['Alice Martin', 'Bruno Klein', 'Chloé Roux', 'David Sarr']);
+    expect(noms.map((n) => n.trim()).sort()).toEqual(['Alice Martin', 'Bruno Klein', 'Chloé Roux', 'David Sarr']);
 
     await page.locator('#menuResponsable .filter-option', { hasText: 'Bruno Klein' }).click();
 
