@@ -128,16 +128,11 @@ test('la poignée de glisser ne paraît qu en tri manuel', async ({ page }) => {
     await expect(page.locator('#taskList .drag-handle').first()).toBeVisible();
 });
 
-test('le compteur ne retient que les tâches affichées', async ({ page }) => {
+test('l en-tete de la colonne ne porte pas de compteur', async ({ page }) => {
     await D.ouvrirGantt(page);
-    const compteur = () => page.locator('#taskCount').textContent();
 
-    // Chantiers repliés : aucune tâche visible, et ni les bandeaux ni les chantiers ne comptent.
-    expect(await compteur()).toBe('0');
-
-    await D.toutDeplier(page);
-
-    expect(Number(await compteur())).toBe(await page.locator('#taskList .task-row[data-depth="1"], #taskList .task-row[data-depth="2"]').count());
+    await expect(page.locator('#taskCount')).toHaveCount(0);
+    await expect(page.locator('.task-list-header')).toHaveText('Tâches⊟');
 });
 
 test('le bouton replier-tout paraît avec la première branche dépliée et referme tout', async ({ page }) => {
