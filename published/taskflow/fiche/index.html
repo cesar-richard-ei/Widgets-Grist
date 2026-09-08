@@ -29,7 +29,7 @@
         * { box-sizing: border-box; }
         body {
             margin: 0; background: var(--fond); color: var(--texte);
-            font: 14px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
         }
         .fiche { padding: 0 0 24px; }
 
@@ -37,13 +37,13 @@
             background: var(--accent); color: #fff; padding: 47px 34px 36px;
             display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
         }
-        .fiche-titre { margin: 0; font-size: clamp(1.35rem, 2.81vw, 2.4rem); line-height: 1.15; font-weight: 800; letter-spacing: -0.015em; }
+        .fiche-titre { margin: 0; font-size: clamp(1.2rem, 2.1vw, 1.85rem); line-height: 1.15; font-weight: 800; letter-spacing: -0.015em; }
         /* La maquette pose le type comme une etiquette collee sur le bandeau, legerement de
            travers et debordant sur sa droite. */
         .fiche-type {
             margin-left: auto; margin-right: 29px; background: #fff; color: var(--accent);
             border-radius: 999px; padding: 4px 18px; font-weight: 800; line-height: 1.2;
-            font-size: clamp(1.15rem, 2.27vw, 2rem); white-space: nowrap;
+            font-size: clamp(0.95rem, 1.6vw, 1.35rem); white-space: nowrap;
             transform: rotate(3deg); box-shadow: 5px 6px 10px rgba(0, 0, 0, 0.16);
         }
 
@@ -53,27 +53,27 @@
         .fiche-colonne.large { min-width: 300px; }
         .fiche-trio { display: flex; gap: 30px; flex-wrap: wrap; margin-top: 4px; }
         .fiche-trio .fiche-bloc { flex: 1; min-width: 160px; }
-        .fiche-label { color: var(--texte-libelle); font-size: 1.25rem; margin-bottom: 8px; }
+        .fiche-label { color: var(--texte-libelle); font-size: 0.78rem; margin-bottom: 6px; }
         .fiche-valeur { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
         /* Les zones de saisie du metier ont un fond, les listes de personnes n'en ont pas. */
         .bloc-description .fiche-valeur, .fiche-trio .fiche-valeur {
             background: var(--fond-doux); border-radius: var(--rayon); padding: 15px 17px;
             width: 100%; display: block; white-space: pre-wrap;
-            font-size: 1.25rem; line-height: 1.45;
+            font-size: 0.95rem; line-height: 1.5;
         }
         .fiche-valeur .vide { color: var(--texte-doux); font-style: italic; }
 
         .fiche-personne {
             display: inline-flex; align-items: center; gap: 8px; background: var(--accent);
-            color: #fff; border-radius: 7px; padding: 2px 16px; font-weight: 400; font-size: 1.5rem; line-height: 1.15;
+            color: #fff; border-radius: 7px; padding: 3px 12px; font-weight: 400; font-size: 0.95rem; line-height: 1.3;
         }
         .fiche-lien { opacity: 0.9; flex: none; width: 20px; height: 20px; }
 
         .fiche-route { padding: 32px 34px 0; }
-        .fiche-route h2 { font-size: 1.2rem; font-weight: 800; margin: 0 0 16px; }
+        .fiche-route h2 { font-size: 0.78rem; font-weight: 800; margin: 0 0 12px; }
         .fiche-grille {
             border: 1px solid var(--trait); border-radius: var(--rayon); overflow: hidden;
-            margin: 0 -28px; --colonne: clamp(200px, 28.8%, 420px);
+            margin: 0 -28px; --colonne: clamp(200px, 28.8%, 420px); font-size: 0.76rem;
         }
         .fiche-entetes, .fiche-rang { display: flex; align-items: stretch; }
         .fiche-entetes { border-bottom: 1px solid var(--trait); }
@@ -83,29 +83,30 @@
             padding: 4px 10px; border-right: 1px solid var(--trait); overflow: hidden;
         }
         .fiche-ligne-tete { font-weight: 600; padding: 10px; align-items: flex-end; }
-        .fiche-compteur { margin-left: auto; color: var(--texte-doux); }
-        .fiche-marque { flex: none; width: 3px; align-self: stretch; border-radius: 2px; background: var(--teinte, #94a3b8); }
         .fiche-intitule { min-width: 0; flex: 1; }
-        .fiche-nom { display: block; font-weight: 700; font-size: 0.95rem; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Sans les dates, le titre dispose de deux lignes plutot que d'une coupe a l'ellipse. */
+        .fiche-nom {
+            display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+            font-weight: 700; line-height: 1.2; overflow: hidden;
+        }
         .fiche-rang:not(.est-chantier) .fiche-nom { font-weight: 500; }
-        .fiche-dates { display: block; color: var(--texte-doux); font-size: 0.7rem; line-height: 1.2; }
         .fiche-chevron {
             background: none; border: 0; cursor: pointer; color: var(--texte-doux);
-            font-size: 0.6rem; padding: 0 2px; line-height: 1; flex: none;
+            font-size: 0.48rem; padding: 0 2px; line-height: 1; flex: none;
         }
         .fiche-chevron-vide { width: 10px; flex: none; }
         .fiche-progression {
             background: var(--fond-doux); color: var(--texte-doux); border-radius: 4px;
-            padding: 2px 6px; font-size: 0.72rem; flex: none;
+            padding: 2px 6px; font-size: 0.58rem; flex: none;
         }
-        .fiche-filles { color: var(--texte-doux); font-size: 0.72rem; flex: none; }
+        .fiche-filles { color: var(--texte-doux); font-size: 0.58rem; flex: none; }
         .fiche-rang { border-bottom: 1px solid var(--trait); min-height: 36px; position: relative; background: transparent; }
         .fiche-rang:last-child { border-bottom: 0; }
         .fiche-piste { position: relative; flex: 1; }
         .fiche-piste-tete { display: flex; flex-direction: column; }
         .fiche-mois-ligne, .fiche-semaines { display: flex; }
         .fiche-mois, .fiche-semaine {
-            text-align: center; font-size: 0.75rem; color: var(--texte-doux);
+            text-align: center; font-size: 0.6rem; color: var(--texte-doux);
             padding: 4px 0; border-left: 1px solid var(--trait); overflow: hidden;
         }
         .fiche-mois { font-weight: 600; text-transform: capitalize; }
@@ -117,12 +118,6 @@
             background: var(--teinte, #94a3b8); overflow: hidden;
         }
         .fiche-avancee { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.28); }
-        .fiche-avatars { display: inline-flex; flex: none; }
-        .fiche-avatar {
-            width: 22px; height: 22px; border-radius: 50%; background: var(--teinte, #94a3b8); color: #fff;
-            font-size: 0.64rem; font-weight: 700; display: inline-flex; align-items: center;
-            justify-content: center; border: 2px solid var(--fond); margin-left: -7px;
-        }
 
         /* Le trait du jour et la colonne courante se mesurent sur la piste seule : portes par le
            corps entier, la colonne des libelles les decalerait de plusieurs semaines. */
@@ -143,8 +138,13 @@
             width: 54px; height: 54px; border-radius: 50%;
             background: var(--accent-clair); color: var(--accent);
         }
-        .fiche-bientot-titre { margin: 0; font-size: 1.3rem; font-weight: 800; letter-spacing: -0.01em; }
-        .fiche-bientot-texte { margin: 0; max-width: 44ch; color: var(--texte-doux); line-height: 1.5; }
+        .fiche-bientot-titre { margin: 0; font-size: 1.05rem; font-weight: 800; letter-spacing: -0.01em; }
+        .fiche-bientot-texte { margin: 0; max-width: 44ch; color: var(--texte-doux); font-size: 0.9rem; line-height: 1.5; }
+        .fiche-accueil-guide {
+            margin: 2px 0 0; display: inline-flex; align-items: center; gap: 10px;
+            color: var(--accent); font-weight: 700; font-size: 0.9rem;
+        }
+        .fiche-accueil-fleche { display: inline-flex; }
 
         @media (max-width: 760px) {
             .fiche-cadrage { flex-direction: column; gap: 22px; padding: 20px 16px 4px; }
@@ -701,6 +701,9 @@
             + '<path d="M18 13.4 18.8 15.6 21 16.4 18.8 17.2 18 19.4 17.2 17.2 15 16.4 17.2 15.6z"/>'
             + '</svg>';
 
+        const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" focusable="false">'
+            + '<path d="M4 12h14"/><path d="m12 6 6 6-6 6"/></svg>';
+
         let schemaMeta = null;
         let projet = null;
         let personnes = new Map();
@@ -782,8 +785,6 @@
             console.warn('[fiche] personne introuvable', ref.table, ref.id);
             return null;
         }
-        const initiales = (nom) => String(nom || '').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
-
         const lundiDe = (d) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); r.setHours(0, 0, 0, 0); return r; };
 
         /**
@@ -808,16 +809,9 @@
             for (let d = new Date(f.debut); d <= f.fin; d.setDate(d.getDate() + 7)) {
                 const debutSemaine = new Date(d);
                 const index = Math.min(Math.max((debutSemaine.getFullYear() - f.premier.getFullYear()) * 12 + debutSemaine.getMonth() - f.premier.getMonth(), 0), MOIS_TOTAL - 1);
-                out.push({ debut: debutSemaine, mois: index, semaine: numeroSemaine(debutSemaine) });
+                out.push({ debut: debutSemaine, mois: index });
             }
             return out;
-        }
-
-        function numeroSemaine(d) {
-            const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-            t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-            const debutAnnee = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-            return Math.ceil(((t - debutAnnee) / 86400000 + 1) / 7);
         }
 
         /**
@@ -855,7 +849,7 @@
                     id: 't' + t.id, chantier: false, titre: t.titre || 'Sans titre',
                     debut: gristVersDate(t.dateDebut), fin: gristVersDate(t.dateEcheance),
                     responsable: refPersonne('Tasks', 'Responsable', t.Responsable), progression: t.progression || 0,
-                    personnes: refsPersonnes('Tasks', 'assignees', t.assignees), parent: c.id
+                    parent: c.id
                 }));
             });
             return out;
@@ -876,21 +870,6 @@
                 if (!m) return '';
                 return '<span class="fiche-personne">' + (avecLien ? ICONE_LIEN : '') + echapper(m.nom) + '</span>';
             }).join('');
-        }
-
-        /** Les personnes posees sur une ligne, en pastilles rondes ; au-dela de trois, un compteur. */
-        function avatars(r) {
-            const ids = (r.personnes || []).slice();
-            if (r.responsable && !ids.some((x) => x.table === r.responsable.table && x.id === r.responsable.id)) ids.unshift(r.responsable);
-            if (!ids.length) return '';
-            const montres = ids.slice(0, 3).map((ref) => {
-                const m = membre(ref);
-                if (!m) return '';
-                return '<span class="fiche-avatar" style="--teinte:' + echapper(m.couleur || '#3e5de7') + '" title="' + echapper(m.nom || '') + '">'
-                    + echapper(initiales(m.nom)) + '</span>';
-            }).join('');
-            const reste = ids.length > 3 ? '<span class="fiche-avatar" style="--teinte:#64748b">+' + (ids.length - 3) + '</span>' : '';
-            return '<span class="fiche-avatars">' + montres + reste + '</span>';
         }
 
         function texteOuVide(v) {
@@ -946,7 +925,7 @@
             }
 
             const lundiCourant = lundiDe(f.today);
-            const semaines = cols.map((c) => '<div class="fiche-semaine' + (c.debut.getTime() === lundiCourant.getTime() ? ' courante' : '') + '">S' + c.semaine + '</div>').join('');
+            const semaines = cols.map((c) => '<div class="fiche-semaine' + (c.debut.getTime() === lundiCourant.getTime() ? ' courante' : '') + '"></div>').join('');
 
             const pourcent = (d) => (jours(f.debut, d) / f.duree) * 100;
             const aujourdhui = pourcent(f.today);
@@ -959,17 +938,11 @@
                     ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (replie ? '▶' : '▼') + '</button>'
                     : '<span class="fiche-chevron-vide"></span>';
                 const teinte = r.responsable && membre(r.responsable) ? (membre(r.responsable).couleur || '#3e5de7') : '#4a9ae0';
-                const periode = [r.debut, r.fin].every(Boolean)
-                    ? r.debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' → ' + r.fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-                    : '';
                 return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + '">'
                     + '<div class="fiche-ligne">' + chevron
-                    + '<span class="fiche-marque" style="--teinte:' + echapper(teinte) + '"></span>'
-                    + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span>'
-                    + (periode ? '<span class="fiche-dates">' + echapper(periode) + '</span>' : '') + '</span>'
+                    + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span></span>'
                     + '<span class="fiche-progression">' + Math.round(r.progression || 0) + '%</span>'
                     + (r.filles ? '<span class="fiche-filles">↳' + r.filles + '</span>' : '')
-                    + avatars(r)
                     + '</div>'
                     + '<div class="fiche-piste">'
                     + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '">'
@@ -981,7 +954,7 @@
             return '<section class="fiche-route">'
                 + '<h2>' + (nbChantiers > 1 ? 'Feuilles de route des ' + nbChantiers + ' chantiers associés' : 'Feuille de route du chantier associé') + '</h2>'
                 + '<div class="fiche-grille">'
-                + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Tâches<span class="fiche-compteur">' + rangs.filter((r) => !r.chantier).length + '</span></div>'
+                + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Chantiers et tâches</div>'
                 + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div><div class="fiche-semaines">' + semaines + '</div></div></div>'
                 + '<div class="fiche-corps">'
                 + '<div class="fiche-overlay fiche-fond"><div class="fiche-colonne-courante" style="left:' + colonneCourante.gauche.toFixed(2) + '%;width:' + colonneCourante.largeur.toFixed(2) + '%"></div></div>'
@@ -997,14 +970,26 @@
                 + '<span class="fiche-bientot-vignette" aria-hidden="true">' + ETINCELLES + '</span>'
                 + '<p class="fiche-bientot-titre">La fiche ' + echapper(categorie) + ' arrive bientôt !</p>'
                 + '<p class="fiche-bientot-texte">Une fiche adaptée à ' + echapper(projet.nom || 'cette ligne')
-                + ' est en préparation. En attendant, sélectionnez un projet pour afficher la sienne.</p>'
+                + ' est en préparation.</p>'
+                + '</div>';
+        }
+
+        // Sans selection, le widget n'a rien a montrer : plutot qu'une ligne de texte, la meme carte que la
+        // fiche a venir, avec la fleche qui designe le tableau ou cliquer.
+        function accueil() {
+            return '<div class="fiche-bientot fiche-accueil">'
+                + '<span class="fiche-bientot-vignette" aria-hidden="true">' + ETINCELLES + '</span>'
+                + '<p class="fiche-bientot-titre">Une fiche vous attend</p>'
+                + '<p class="fiche-bientot-texte">Cadrage, entourage et feuille de route des chantiers s’affichent ici.</p>'
+                + '<p class="fiche-accueil-guide"><span>Sélectionnez une ligne dans le tableau à droite</span>'
+                + '<span class="fiche-accueil-fleche" aria-hidden="true">' + FLECHE + '</span></p>'
                 + '</div>';
         }
 
         function rendre() {
             const racine = el('fiche');
             if (!projet) {
-                racine.innerHTML = '<p class="fiche-message">Sélectionnez un projet pour afficher sa fiche.</p>';
+                racine.innerHTML = accueil();
                 return;
             }
             const categorie = categorieDuProjet(projet);
