@@ -14,6 +14,9 @@ const ETINCELLES = '<svg viewBox="0 0 24 24" width="26" height="26" fill="curren
     + '<path d="M18 13.4 18.8 15.6 21 16.4 18.8 17.2 18 19.4 17.2 17.2 15 16.4 17.2 15.6z"/>'
     + '</svg>';
 
+const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" focusable="false">'
+    + '<path d="M4 12h14"/><path d="m12 6 6 6-6 6"/></svg>';
+
 let schemaMeta = null;
 let projet = null;
 let personnes = new Map();
@@ -310,14 +313,26 @@ function ficheAVenir(categorie) {
         + '<span class="fiche-bientot-vignette" aria-hidden="true">' + ETINCELLES + '</span>'
         + '<p class="fiche-bientot-titre">La fiche ' + echapper(categorie) + ' arrive bientôt !</p>'
         + '<p class="fiche-bientot-texte">Une fiche adaptée à ' + echapper(projet.nom || 'cette ligne')
-        + ' est en préparation. En attendant, sélectionnez un projet pour afficher la sienne.</p>'
+        + ' est en préparation.</p>'
+        + '</div>';
+}
+
+// Sans selection, le widget n'a rien a montrer : plutot qu'une ligne de texte, la meme carte que la
+// fiche a venir, avec la fleche qui designe le tableau ou cliquer.
+function accueil() {
+    return '<div class="fiche-bientot fiche-accueil">'
+        + '<span class="fiche-bientot-vignette" aria-hidden="true">' + ETINCELLES + '</span>'
+        + '<p class="fiche-bientot-titre">Une fiche vous attend</p>'
+        + '<p class="fiche-bientot-texte">Cadrage, entourage et feuille de route des chantiers s’affichent ici.</p>'
+        + '<p class="fiche-accueil-guide"><span>Sélectionnez une ligne dans le tableau à droite</span>'
+        + '<span class="fiche-accueil-fleche" aria-hidden="true">' + FLECHE + '</span></p>'
         + '</div>';
 }
 
 function rendre() {
     const racine = el('fiche');
     if (!projet) {
-        racine.innerHTML = '<p class="fiche-message">Sélectionnez un projet pour afficher sa fiche.</p>';
+        racine.innerHTML = accueil();
         return;
     }
     const categorie = categorieDuProjet(projet);

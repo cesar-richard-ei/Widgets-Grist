@@ -140,7 +140,16 @@ test('une ligne qui n est pas un projet annonce sa fiche a venir', async ({ page
 
     await expect(fiche(page).locator('.fiche-bientot-titre')).toContainText('La fiche Produit arrive bientôt');
     await expect(fiche(page).locator('.fiche-bientot-texte')).toContainText('Portail habilitations');
+    await expect(fiche(page).locator('.fiche-bientot-texte')).not.toContainText('En attendant');
     await expect(fiche(page).locator('.fiche-ligne')).toHaveCount(0);
+});
+
+test('sans projet selectionne, l accueil invite a choisir une ligne du tableau', async ({ page }) => {
+    await D.ouvrirFiche(page, null, null, { attendre: '.fiche-accueil' });
+
+    await expect(fiche(page).locator('.fiche-accueil')).toContainText('Sélectionnez une ligne');
+    await expect(fiche(page).locator('.fiche-accueil-fleche')).toBeVisible();
+    await expect(fiche(page).locator('.fiche-message')).toHaveCount(0);
 });
 
 // Le document du métier porte la catégorie en liste de choix, le modèle de référence en référence
