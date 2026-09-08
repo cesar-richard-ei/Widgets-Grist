@@ -60,35 +60,24 @@ test('le filtre par domaine s efface avec les autres', async ({ page }) => {
     await expect(D.ligne(page, 'Guide de prise en main')).toBeVisible();
 });
 
-test('sans domaine renseigne sur les effectifs, le groupe de filtre disparait', async ({ page }) => {
+test('sans domaine renseigne sur les effectifs, le filtre disparait de la barre', async ({ page }) => {
     const doc = D.documentCible();
     doc.Team.records.forEach((m) => { m.Domaine = null; });
     await D.ouvrirGantt(page, doc);
-    await page.locator('#filterGantt .filter-btn').click();
 
-    await expect(page.locator('#filterAllMenu')).not.toContainText('Domaines');
+    await expect(page.locator('#filtreDomaine')).toBeHidden();
 });
 
-// Les domaines fermaient le menu, sous les priorités et les assignés, alors qu'ils servent plus
-// souvent. Et leurs options n'avaient pas la pastille que portent projets et priorités.
 const ouvrirMenuFiltres = async (page) => {
-    await page.locator('#filterGantt .filter-btn').click();
-    await page.waitForSelector('#filterAllMenu.open');
+    await page.locator('#filtreDomaine .filter-btn').click();
+    await page.waitForSelector('#menuDomaine.open');
 };
-
-test('les domaines sont proposes avant les priorites', async ({ page }) => {
-    await D.ouvrirGantt(page);
-    await ouvrirMenuFiltres(page);
-
-    const groupes = await page.locator('#filterAllMenu .fm-group-label').allTextContents();
-    expect(groupes).toEqual(['Projets', 'Domaines', 'Priorités', 'Assignés']);
-});
 
 test('chaque domaine porte la couleur de son equipe', async ({ page }) => {
     await D.ouvrirGantt(page);
     await ouvrirMenuFiltres(page);
 
-    const pastilles = await page.locator('#filterAllMenu .filter-option[data-filtre="domaine"]')
+    const pastilles = await page.locator('#menuDomaine .filter-option[data-filtre="domaine"]')
         .evaluateAll((options) => options.map((o) => {
             const dot = o.querySelector('.dot');
             return [o.textContent.trim(), dot && dot.style.background];
@@ -106,10 +95,10 @@ test('un domaine ne peut pas sortir de son attribut', async ({ page }) => {
     doc.Team.records[0].Domaine = 'Pilotage" onmouseover="window.__injecte=1';
     doc.Team.records[0].couleur = 'red;" onmouseover="window.__injecte=1';
     await D.ouvrirGantt(page, doc);
-    await page.locator('#filterGantt .filter-btn').click();
-    await page.waitForSelector('#filterAllMenu.open');
+    await page.locator('#filtreDomaine .filter-btn').click();
+    await page.waitForSelector('#menuDomaine.open');
 
-    const option = page.locator('#filterAllMenu .filter-option[data-filtre="domaine"]', { hasText: 'Pilotage' });
+    const option = page.locator('#menuDomaine .filter-option[data-filtre="domaine"]', { hasText: 'Pilotage' });
     await expect(option).toHaveCount(1);
     expect(await option.getAttribute('onmouseover')).toBeNull();
     expect(await option.locator('.dot').getAttribute('onmouseover')).toBeNull();

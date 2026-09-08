@@ -47,30 +47,35 @@ try { groupesReplies = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_g
 let expandedTasks = new Set();
 try { expandedTasks = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_expanded') || '[]').map(Number).filter(n => !isNaN(n))); } catch (e) {}
 let sortableInstance = null;
-let filters = { project: [], assignee: [], priority: [], domaine: [] };  // GEN-02: Arrays pour compatibilité inter-widgets
+let filters = { project: [], domaine: [], responsable: [] };  // GEN-02: Arrays pour compatibilité inter-widgets
+// Un dropdown par facette dans la barre : le descripteur tient l'ordre et les cibles DOM, pour que
+// menus, compteurs et pastilles se construisent au même endroit.
+const FACETTES = [
+    { cle: 'project', dropdown: 'filtreProjet', menu: 'menuProjet' },
+    { cle: 'domaine', dropdown: 'filtreDomaine', menu: 'menuDomaine' },
+    { cle: 'responsable', dropdown: 'filtreResponsable', menu: 'menuResponsable' }
+];
 // Filtres cross-page : persistés en localStorage, cloisonnés par document (setOption reste par-section).
 let filterDocId = 'local';
 function filterStorageKey() { return 'taskflow_gantt_filters:' + filterDocId; }
 function persistFilters() {
-    try { localStorage.setItem(filterStorageKey(), JSON.stringify({ project: filters.project, assignee: filters.assignee, priority: filters.priority, domaine: filters.domaine })); } catch (e) {}
+    try { localStorage.setItem(filterStorageKey(), JSON.stringify({ project: filters.project, domaine: filters.domaine, responsable: filters.responsable })); } catch (e) {}
 }
 function hydrateFilters() {
     try {
         const s = JSON.parse(localStorage.getItem(filterStorageKey()) || 'null');
         if (!s) return;
         filters.project = Array.isArray(s.project) ? s.project : [];
-        filters.assignee = Array.isArray(s.assignee) ? s.assignee : [];
-        filters.priority = Array.isArray(s.priority) ? s.priority : [];
         filters.domaine = Array.isArray(s.domaine) ? s.domaine : [];
+        filters.responsable = Array.isArray(s.responsable) ? s.responsable : [];
     } catch (e) {}
 }
-// Vue appliquée : on retire les ids absents des données courantes (ex. autre page/table), la priorité reste universelle.
+// Vue appliquée : on retire les valeurs absentes des données courantes (ex. autre page/table).
 function effectiveFilters() {
     return {
         project: filters.project.filter(id => projects.some(p => p.id === id)),
-        assignee: filters.assignee.filter(id => team.some(m => m.id === id)),
-        priority: filters.priority,
-        domaine: filters.domaine.filter(d => domainesConnus().includes(d))
+        domaine: filters.domaine.filter(d => domainesConnus().includes(d)),
+        responsable: filters.responsable.filter(id => team.some(m => m.id === id))
     };
 }
 
@@ -774,21 +779,30 @@ function toggleFilter(key, val) {
 }
 function broadcastFilters() {
     if (gristReady && typeof grist !== 'undefined' && grist.setOption) {
-        try { grist.setOption('filters', { project: filters.project, priority: filters.priority, assignee: filters.assignee, domaine: filters.domaine }); } 
+        try { grist.setOption('filters', { project: filters.project, domaine: filters.domaine, responsable: filters.responsable }); } 
         catch (e) { console.log('setOption not available'); }
     }
 }
 function updateFilterMenus() {
-    const grp = (label, html, first) => '<div class="fm-group-label'+(first?' first':'')+'">'+label+'</div>'+html;
-    const projHtml = projects.length ? projects.map(p => `<div class="filter-option" data-filtre="project" data-valeur="${p.id}" onclick="toggleFilter('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span class="dot" style="background:${couleurSure(p.couleur)}"></span>${escapeHtml(p.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun projet</div>';
-    const prioHtml = [1,2,3,4].map(p => `<div class="filter-option" data-filtre="priority" data-valeur="${p}" onclick="toggleFilter('priority', ${p})"><input type="checkbox" ${filters.priority.includes(p)?'checked':''}><span class="dot" style="background:${PRIORITY_COLORS[p]}"></span>${PRIORITY_LABELS[p]}</div>`).join('');
-    const team2 = team.filter(m => m.actif !== false);
-    const assHtml = team2.length ? team2.map(m => `<div class="filter-option" data-filtre="assignee" data-valeur="${m.id}" onclick="toggleFilter('assignee', ${m.id})"><input type="checkbox" ${filters.assignee.includes(m.id)?'checked':''}>${escapeHtml(m.nom)}</div>`).join('') : '<div class="filter-option muted">Aucun membre</div>';
     const domaines = domainesConnus();
-    const domHtml = domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeAttr(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}><span class="dot" style="background:${couleurSure(couleurDeDomaine(d))}"></span>${escapeHtml(d)}</div>`).join('');
-    const total = filters.project.length + filters.priority.length + filters.assignee.length + filters.domaine.length;
-    const menu = document.getElementById('filterAllMenu');
-    if (menu) menu.innerHTML = grp('Projets', projHtml, true) + (domaines.length ? grp('Domaines', domHtml) : '') + grp('Priorités', prioHtml) + grp('Assignés', assHtml) + '<div class="fm-foot"><span class="fm-clear" onclick="clearAllGanttFilters()">Tout effacer</span></div>';
+    const membres = team.filter(m => m.actif !== false);
+    const contenus = {
+        project: projects.length
+            ? projects.map(p => `<div class="filter-option" data-filtre="project" data-valeur="${p.id}" onclick="toggleFilter('project', ${p.id})"><input type="checkbox" ${filters.project.includes(p.id)?'checked':''}><span class="dot" style="background:${couleurSure(p.couleur)}"></span>${escapeHtml(p.nom)}</div>`).join('')
+            : '<div class="filter-option muted">Aucun projet</div>',
+        domaine: domaines.map((d, rang) => `<div class="filter-option" data-filtre="domaine" data-valeur="${escapeAttr(d)}" onclick="basculerDomaine(${rang})"><input type="checkbox" ${filters.domaine.includes(d)?'checked':''}><span class="dot" style="background:${couleurSure(couleurDeDomaine(d))}"></span>${escapeHtml(d)}</div>`).join(''),
+        responsable: membres.length
+            ? membres.map(m => `<div class="filter-option" data-filtre="responsable" data-valeur="${m.id}" onclick="toggleFilter('responsable', ${m.id})"><input type="checkbox" ${filters.responsable.includes(m.id)?'checked':''}><span class="dot" style="background:${couleurSure(getTeamMemberColor(m.id))}"></span>${escapeHtml(m.nom)}</div>`).join('')
+            : '<div class="filter-option muted">Aucun membre</div>'
+    };
+    for (const facette of FACETTES) {
+        const menu = document.getElementById(facette.menu);
+        if (menu) menu.innerHTML = contenus[facette.cle] + `<div class="fm-foot"><span class="fm-clear" onclick="effacerFiltre('${facette.cle}')">Effacer</span></div>`;
+    }
+    // Sans colonne de domaine sur les effectifs, il n'y a rien à proposer : le filtre s'efface de la
+    // barre plutôt que d'ouvrir un menu vide.
+    const dropdownDomaine = document.getElementById('filtreDomaine');
+    if (dropdownDomaine) dropdownDomaine.hidden = !domaines.length;
     synchroniserCochesFiltres();
     updateFilterUI();
 }
@@ -797,22 +811,27 @@ function updateFilterMenus() {
 // ferme les menus ne le retrouve plus dans un .filter-dropdown : il referme tout. On remet donc
 // seulement les cases et le pied en phase avec les filtres.
 function synchroniserCochesFiltres() {
-    document.querySelectorAll('#filterAllMenu .filter-option[data-filtre]').forEach(opt => {
+    document.querySelectorAll('.filter-menu .filter-option[data-filtre]').forEach(opt => {
         const cle = opt.dataset.filtre;
         const valeur = cle === 'domaine' ? opt.dataset.valeur : Number(opt.dataset.valeur);
         const coche = opt.querySelector('input[type="checkbox"]');
         if (coche) coche.checked = filters[cle].includes(valeur);
     });
-    const pied = document.querySelector('#filterAllMenu .fm-foot');
-    const actifs = filters.project.length + filters.priority.length + filters.assignee.length + filters.domaine.length;
-    if (pied) pied.style.display = actifs ? '' : 'none';
+    for (const facette of FACETTES) {
+        const pied = document.querySelector('#' + facette.menu + ' .fm-foot');
+        if (pied) pied.style.display = filters[facette.cle].length ? '' : 'none';
+    }
 }
 
 function updateFilterUI() {
     const eff = effectiveFilters();
-    const total = eff.project.length + eff.priority.length + eff.assignee.length + eff.domaine.length;
-    const cnt = document.getElementById('filterCount'); if (cnt) { cnt.textContent = total; cnt.style.display = total ? 'inline-flex' : 'none'; }
-    const fbtn = document.querySelector('#filterGantt .filter-btn'); if (fbtn) fbtn.classList.toggle('has-filter', total > 0);
+    for (const facette of FACETTES) {
+        const n = eff[facette.cle].length;
+        const cnt = document.querySelector('#' + facette.dropdown + ' .filter-count');
+        if (cnt) { cnt.textContent = n ? String(n) : ''; cnt.style.display = n ? 'inline-flex' : 'none'; }
+        const bouton = document.querySelector('#' + facette.dropdown + ' .filter-btn');
+        if (bouton) bouton.classList.toggle('has-filter', n > 0);
+    }
     renderFilterChips();
 }
 function renderFilterChips() {
@@ -822,9 +841,8 @@ function renderFilterChips() {
     const eff = effectiveFilters();
     const chips = [];
     eff.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', p&&p.couleur)); });
-    eff.priority.forEach(v => chips.push(chip('priority', v, PRIORITY_LABELS[v], PRIORITY_COLORS[v])));
-    eff.assignee.forEach(id => { const m = team.find(x=>x.id===id); chips.push(chip('assignee', id, m?escapeHtml(m.nom):'Membre')); });
     eff.domaine.forEach(d => { const rang = domainesConnus().indexOf(d); chips.push(`<span class="fc-chip">${escapeHtml(d)}<span class="fc-x" title="Retirer" onclick="basculerDomaine(${rang})">${X}</span></span>`); });
+    eff.responsable.forEach(id => { const m = team.find(x=>x.id===id); chips.push(chip('responsable', id, m?escapeHtml(m.nom):'Membre', m&&getTeamMemberColor(id))); });
     if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = 'flex';
     bar.innerHTML = '<span class="fc-label">Filtres actifs</span>' + chips.join('') + '<span class="fc-clear-all" onclick="clearAllGanttFilters()">Tout effacer</span>';
@@ -832,9 +850,9 @@ function renderFilterChips() {
         function taskMatchesFilters(t, f) {
     f = f || effectiveFilters();
     if (f.project.length && !f.project.includes(t.projet)) return false;
-    if (f.assignee.length && !getAssigneesArray(t).some(a => f.assignee.includes(a))) return false;
-    if (f.priority.length && !f.priority.includes(getTaskPriority(t))) return false;
     if (f.domaine.length && !domainesDeLigne(t).some(d => f.domaine.includes(d))) return false;
+    // Le pilote de la ligne, pas ses participants : être assigné à une tâche ne la fait pas entrer.
+    if (f.responsable.length && !f.responsable.includes(t.Responsable)) return false;
     return true;
 }
 
@@ -917,12 +935,14 @@ function renderGanttSkeleton() {
     ov.innerHTML = '<div class="tf-gskel">'+rows+'</div>';
     ov.style.display = "flex";
 }
-function clearAllGanttFilters() { filters = { project: [], assignee: [], priority: [], domaine: [] }; synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
+function clearAllGanttFilters() { filters = { project: [], domaine: [], responsable: [] }; appliquerFiltres(); }
+function effacerFiltre(cle) { filters[cle] = []; appliquerFiltres(); }
+function appliquerFiltres() { synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
 function updateGanttOverlay() {
     const ov = document.getElementById("ganttOverlay"); if (!ov) return;
     if (currentVisible && currentVisible.length > 0) { ov.style.display = "none"; ov.innerHTML = ""; return; }
     const eff = effectiveFilters();
-    const hasFilters = eff.project.length || eff.assignee.length || eff.priority.length;
+    const hasFilters = FACETTES.some(facette => eff[facette.cle].length);
     const gicon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>';
     const search = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>';
     let html;
@@ -2942,8 +2962,8 @@ async function initGrist() {
                 if (!filtersBootstrapConsumed) { filtersBootstrapConsumed = true; return; }
                 const f = options.filters;
                 filters.project = Array.isArray(f.project) ? f.project : [];
-                filters.priority = Array.isArray(f.priority) ? f.priority : [];
-                filters.assignee = Array.isArray(f.assignee) ? f.assignee : [];
+                filters.domaine = Array.isArray(f.domaine) ? f.domaine : [];
+                filters.responsable = Array.isArray(f.responsable) ? f.responsable : [];
                 persistFilters();
                 updateFilterMenus();
                 render();
