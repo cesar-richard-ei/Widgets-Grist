@@ -35,7 +35,20 @@ test('la droite de la barre porte les trois filtres, la couleur puis l ajout', a
 
     const droite = await page.locator('.header-right > *').evaluateAll((els) => els.map((e) => e.id));
 
-    expect(droite).toEqual(['filtreProjet', 'filtreDomaine', 'filtreResponsable', 'zoneCouleur', 'zoneAjout']);
+    expect(droite).toEqual(['libelleFiltres', 'filtreProjet', 'filtreDomaine', 'filtreResponsable', 'zoneCouleur', 'zoneAjout']);
+});
+
+test('le libelle des filtres est ecrit comme la periode', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    await expect(page.locator('#libelleFiltres')).toHaveText('Filtres :');
+
+    const polices = await page.evaluate(() => ['#libelleFiltres', '#currentPeriod'].map((sel) => {
+        const s = getComputedStyle(document.querySelector(sel));
+        return [s.fontFamily, s.fontSize, s.fontWeight, s.letterSpacing].join('|');
+    }));
+
+    expect(polices[0]).toBe(polices[1]);
 });
 
 test('le dropdown unique de filtres a laisse la place a trois menus independants', async ({ page }) => {
