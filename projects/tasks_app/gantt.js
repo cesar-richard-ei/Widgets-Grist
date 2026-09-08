@@ -1063,8 +1063,6 @@ let currentVisible = [];
 function renderTaskList() {
     currentVisible = buildVisibleTasks();
     panelState.taskList = currentVisible.filter(v => v.task).map(v => v.task);
-    // Le compteur annonce des tâches : ni les bandeaux de projet ni les chantiers n'en sont.
-    document.getElementById('taskCount').textContent = panelState.taskList.filter(t => !estChantier(t)).length;
     const collapseBtn = document.getElementById('collapseAllBtn');
     if (collapseBtn) collapseBtn.style.display = tasks.some(t => hasChildren(t) && expandedTasks.has(t.id)) ? 'inline-flex' : 'none';
 

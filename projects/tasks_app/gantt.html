@@ -669,7 +669,7 @@
     <div class="main-content">
         <div class="gantt-wrapper" id="ganttWrapper">
             <div class="gantt-header">
-                <div class="task-list-header"><span style="display:inline-flex;align-items:center;gap:4px;"><span>Tâches</span><button id="collapseAllBtn" class="collapse-all-btn" onclick="collapseAll()" title="Replier toutes les tâches" aria-label="Replier toutes les tâches">⊟</button></span><span id="taskCount" style="font-size:0.7rem;color:var(--text-muted);">0</span></div>
+                <div class="task-list-header"><span style="display:inline-flex;align-items:center;gap:4px;"><span>Tâches</span><button id="collapseAllBtn" class="collapse-all-btn" onclick="collapseAll()" title="Replier toutes les tâches" aria-label="Replier toutes les tâches">⊟</button></span></div>
                 <div class="timeline-header" id="timelineHeader">
                     <div class="timeline-header-scroll" id="timelineHeaderScroll">
                         <div class="timeline-header-months" id="monthsHeader"></div>
@@ -2479,8 +2479,6 @@
         function renderTaskList() {
             currentVisible = buildVisibleTasks();
             panelState.taskList = currentVisible.filter(v => v.task).map(v => v.task);
-            // Le compteur annonce des tâches : ni les bandeaux de projet ni les chantiers n'en sont.
-            document.getElementById('taskCount').textContent = panelState.taskList.filter(t => !estChantier(t)).length;
             const collapseBtn = document.getElementById('collapseAllBtn');
             if (collapseBtn) collapseBtn.style.display = tasks.some(t => hasChildren(t) && expandedTasks.has(t.id)) ? 'inline-flex' : 'none';
 
