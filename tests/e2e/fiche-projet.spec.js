@@ -88,17 +88,10 @@ test('la ligne du jour tombe sur la colonne de la semaine courante', async ({ pa
 
     const ecart = await page.evaluate(() => {
         const trait = document.querySelector('.fiche-aujourdhui').getBoundingClientRect();
-        const semaines = Array.from(document.querySelectorAll('.fiche-semaine'));
-        const lundi = new Date();
-        lundi.setHours(0, 0, 0, 0);
-        lundi.setDate(lundi.getDate() - ((lundi.getDay() + 6) % 7));
-        const t = new Date(Date.UTC(lundi.getFullYear(), lundi.getMonth(), lundi.getDate()));
-        t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-        const numero = Math.ceil(((t - new Date(Date.UTC(t.getUTCFullYear(), 0, 1))) / 86400000 + 1) / 7);
-        const colonne = semaines.find((s) => s.textContent === 'S' + numero);
+        const colonne = document.querySelector('.fiche-semaine.courante');
         if (!colonne) return null;
         const c = colonne.getBoundingClientRect();
-        return { dans: trait.left >= c.left - 1 && trait.left <= c.right + 1, semaine: numero };
+        return { dans: trait.left >= c.left - 1 && trait.left <= c.right + 1 };
     });
 
     expect(ecart).not.toBeNull();
@@ -150,6 +143,67 @@ test('sans projet selectionne, l accueil invite a choisir une ligne du tableau',
     await expect(fiche(page).locator('.fiche-accueil')).toContainText('Sélectionnez une ligne');
     await expect(fiche(page).locator('.fiche-accueil-fleche')).toBeVisible();
     await expect(fiche(page).locator('.fiche-message')).toHaveCount(0);
+});
+
+// La colonne de gauche ne garde que ce qui identifie la ligne : Paul lit la feuille de route pour
+// des periodes, pas pour des dates au jour pres ni pour des personnes.
+test('la feuille de route ne garde que les titres dans sa colonne de gauche', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    await expect(fiche(page).locator('.fiche-dates')).toHaveCount(0);
+    await expect(fiche(page).locator('.fiche-avatars')).toHaveCount(0);
+    await expect(fiche(page).locator('.fiche-marque')).toHaveCount(0);
+    await expect(fiche(page).locator('.fiche-compteur')).toHaveCount(0);
+    await expect(fiche(page).locator('.fiche-ligne-tete')).toHaveText('Chantiers et tâches');
+});
+
+test('l en-tete de la fenetre ne numerote plus les semaines', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const semaines = await fiche(page).locator('.fiche-semaine').allTextContents();
+    expect(semaines.length).toBeGreaterThan(0);
+    expect(semaines.join('')).toBe('');
+});
+
+test('un titre long tient sur deux lignes', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Tasks.records.find((t) => t.id === 5).titre = 'Analyse de la plateforme applicative et cartographie complète des usages du datalab';
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const mesure = await page.evaluate(() => {
+        const nom = Array.from(document.querySelectorAll('.fiche-nom')).find((n) => n.textContent.startsWith('Analyse'));
+        const style = getComputedStyle(nom);
+        return { hauteur: nom.getBoundingClientRect().height, ligne: parseFloat(style.lineHeight) };
+    });
+
+    expect(Math.round(mesure.hauteur / mesure.ligne)).toBe(2);
+});
+
+test('les polices de la fiche suivent le standard du web', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const tailles = await page.evaluate(() => {
+        const px = (sel) => parseFloat(getComputedStyle(document.querySelector(sel)).fontSize);
+        return {
+            description: px('.bloc-description .fiche-valeur'), badge: px('.fiche-personne'),
+            libelle: px('.fiche-label'), section: px('.fiche-route h2')
+        };
+    });
+
+    expect(tailles.description).toBeLessThanOrEqual(16);
+    expect(tailles.badge).toBe(tailles.description);
+    expect(tailles.libelle).toBeLessThan(tailles.description);
+    expect(tailles.section).toBeLessThan(tailles.description);
+});
+
+test('la feuille de route ecrit plus petit que le reste de la fiche', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const maximum = await page.evaluate(() => Math.max(...Array.from(
+        document.querySelectorAll('.fiche-grille, .fiche-grille *'),
+        (e) => parseFloat(getComputedStyle(e).fontSize))));
+
+    expect(maximum).toBeLessThanOrEqual(13);
 });
 
 // Le document du métier porte la catégorie en liste de choix, le modèle de référence en référence
