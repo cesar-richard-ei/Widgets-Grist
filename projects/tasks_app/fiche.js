@@ -98,8 +98,6 @@ function membre(ref) {
     console.warn('[fiche] personne introuvable', ref.table, ref.id);
     return null;
 }
-const initiales = (nom) => String(nom || '').split(/\s+/).filter(Boolean).slice(0, 2).map((x) => x[0].toUpperCase()).join('');
-
 const lundiDe = (d) => { const r = new Date(d); r.setDate(r.getDate() - ((r.getDay() + 6) % 7)); r.setHours(0, 0, 0, 0); return r; };
 
 /**
@@ -124,16 +122,9 @@ function colonnes(f) {
     for (let d = new Date(f.debut); d <= f.fin; d.setDate(d.getDate() + 7)) {
         const debutSemaine = new Date(d);
         const index = Math.min(Math.max((debutSemaine.getFullYear() - f.premier.getFullYear()) * 12 + debutSemaine.getMonth() - f.premier.getMonth(), 0), MOIS_TOTAL - 1);
-        out.push({ debut: debutSemaine, mois: index, semaine: numeroSemaine(debutSemaine) });
+        out.push({ debut: debutSemaine, mois: index });
     }
     return out;
-}
-
-function numeroSemaine(d) {
-    const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-    t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
-    const debutAnnee = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
-    return Math.ceil(((t - debutAnnee) / 86400000 + 1) / 7);
 }
 
 /**
@@ -171,7 +162,7 @@ function lignes() {
             id: 't' + t.id, chantier: false, titre: t.titre || 'Sans titre',
             debut: gristVersDate(t.dateDebut), fin: gristVersDate(t.dateEcheance),
             responsable: refPersonne('Tasks', 'Responsable', t.Responsable), progression: t.progression || 0,
-            personnes: refsPersonnes('Tasks', 'assignees', t.assignees), parent: c.id
+            parent: c.id
         }));
     });
     return out;
@@ -192,21 +183,6 @@ function pastilles(refs, avecLien) {
         if (!m) return '';
         return '<span class="fiche-personne">' + (avecLien ? ICONE_LIEN : '') + echapper(m.nom) + '</span>';
     }).join('');
-}
-
-/** Les personnes posees sur une ligne, en pastilles rondes ; au-dela de trois, un compteur. */
-function avatars(r) {
-    const ids = (r.personnes || []).slice();
-    if (r.responsable && !ids.some((x) => x.table === r.responsable.table && x.id === r.responsable.id)) ids.unshift(r.responsable);
-    if (!ids.length) return '';
-    const montres = ids.slice(0, 3).map((ref) => {
-        const m = membre(ref);
-        if (!m) return '';
-        return '<span class="fiche-avatar" style="--teinte:' + echapper(m.couleur || '#3e5de7') + '" title="' + echapper(m.nom || '') + '">'
-            + echapper(initiales(m.nom)) + '</span>';
-    }).join('');
-    const reste = ids.length > 3 ? '<span class="fiche-avatar" style="--teinte:#64748b">+' + (ids.length - 3) + '</span>' : '';
-    return '<span class="fiche-avatars">' + montres + reste + '</span>';
 }
 
 function texteOuVide(v) {
@@ -262,7 +238,7 @@ function feuilleDeRoute() {
     }
 
     const lundiCourant = lundiDe(f.today);
-    const semaines = cols.map((c) => '<div class="fiche-semaine' + (c.debut.getTime() === lundiCourant.getTime() ? ' courante' : '') + '">S' + c.semaine + '</div>').join('');
+    const semaines = cols.map((c) => '<div class="fiche-semaine' + (c.debut.getTime() === lundiCourant.getTime() ? ' courante' : '') + '"></div>').join('');
 
     const pourcent = (d) => (jours(f.debut, d) / f.duree) * 100;
     const aujourdhui = pourcent(f.today);
@@ -275,17 +251,11 @@ function feuilleDeRoute() {
             ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (replie ? '▶' : '▼') + '</button>'
             : '<span class="fiche-chevron-vide"></span>';
         const teinte = r.responsable && membre(r.responsable) ? (membre(r.responsable).couleur || '#3e5de7') : '#4a9ae0';
-        const periode = [r.debut, r.fin].every(Boolean)
-            ? r.debut.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) + ' → ' + r.fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })
-            : '';
         return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + '">'
             + '<div class="fiche-ligne">' + chevron
-            + '<span class="fiche-marque" style="--teinte:' + echapper(teinte) + '"></span>'
-            + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span>'
-            + (periode ? '<span class="fiche-dates">' + echapper(periode) + '</span>' : '') + '</span>'
+            + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span></span>'
             + '<span class="fiche-progression">' + Math.round(r.progression || 0) + '%</span>'
             + (r.filles ? '<span class="fiche-filles">↳' + r.filles + '</span>' : '')
-            + avatars(r)
             + '</div>'
             + '<div class="fiche-piste">'
             + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '">'
@@ -297,7 +267,7 @@ function feuilleDeRoute() {
     return '<section class="fiche-route">'
         + '<h2>' + (nbChantiers > 1 ? 'Feuilles de route des ' + nbChantiers + ' chantiers associés' : 'Feuille de route du chantier associé') + '</h2>'
         + '<div class="fiche-grille">'
-        + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Tâches<span class="fiche-compteur">' + rangs.filter((r) => !r.chantier).length + '</span></div>'
+        + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Chantiers et tâches</div>'
         + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div><div class="fiche-semaines">' + semaines + '</div></div></div>'
         + '<div class="fiche-corps">'
         + '<div class="fiche-overlay fiche-fond"><div class="fiche-colonne-courante" style="left:' + colonneCourante.gauche.toFixed(2) + '%;width:' + colonneCourante.largeur.toFixed(2) + '%"></div></div>'
