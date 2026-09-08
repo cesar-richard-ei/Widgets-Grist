@@ -47,6 +47,7 @@
         .view-controls .btn { border: none; background: transparent; padding: 5px 10px; border-radius: 4px; color: var(--text); }  /* BUG-03: color explicite */
         .view-controls .btn.active { background: var(--primary); color: white; }
         .current-period { font-weight: 600; font-size: 0.85rem; min-width: 140px; text-align: center; }
+        .libelle-filtres { font-weight: 600; font-size: 0.85rem; }
         .sort-selector select { padding: 5px 8px; border: 1px solid var(--border); border-radius: 5px; font-size: 0.72rem; background: var(--card-bg); }
 
         /* Filters (integrated in header) */
@@ -557,7 +558,7 @@
         .header-right { margin-left: auto; }
         .btn, .filter-btn { white-space: nowrap; }
         .btn-nav { width: 34px; padding: 0; justify-content: center; }
-        .current-period { font-weight: 650; font-size: 0.95rem; letter-spacing: -0.01em; white-space: nowrap; }
+        .current-period, .libelle-filtres { font-weight: 650; font-size: 0.95rem; letter-spacing: -0.01em; white-space: nowrap; }
         .view-controls { display: inline-flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
         .view-controls .btn { border: none; background: transparent; box-shadow: none; height: 28px; padding: 0 11px; color: var(--text-muted); }
         .view-controls .btn:hover { background: rgba(127,127,127,.08); }
@@ -590,7 +591,7 @@
             .header { padding: 8px 12px; flex-wrap: nowrap; overflow-x: auto; }
             .header-left, .header-center, .header-right { flex-wrap: nowrap; gap: 6px; }
             .header-right { margin-left: 0; }
-            .current-period { font-size: 0.82rem; }
+            .current-period, .libelle-filtres { font-size: 0.82rem; }
             .view-controls { overflow-x: auto; max-width: 100%; }
             .btn, .filter-btn { min-height: 38px; }
             :root { --task-list-width: 132px; --cell-width: 26px; }
@@ -641,6 +642,7 @@
             </div>
         </div>
         <div class="header-right">
+            <span class="libelle-filtres" id="libelleFiltres">Filtres :</span>
             <div class="filter-dropdown" id="filtreProjet">
                 <button class="filter-btn" onclick="toggleFilterMenu('filtreProjet')">Projet<span class="filter-count" style="display:none"></span></button>
                 <div class="filter-menu wide" id="menuProjet"></div>
