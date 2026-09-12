@@ -98,6 +98,30 @@ test('la ligne du jour tombe sur la colonne de la semaine courante', async ({ pa
     expect(ecart.dans).toBe(true);
 });
 
+// La feuille de route defile quand ses chantiers depassent la hauteur offerte : le trait du jour
+// doit couvrir toute la liste, pas la seule hauteur visible au chargement.
+test('la ligne du jour descend jusqu au dernier rang, feuille de route défilante', async ({ page }) => {
+    const doc = D.documentCible();
+    for (let i = 0; i < 24; i++) {
+        doc.Tasks.records.push({
+            id: 100 + i, titre: 'Lot ' + (i + 1), chantier: 2,
+            dateDebut: D.j(-3), dateEcheance: D.j(12), statut: 'todo', type: 'tache', priorite: '3'
+        });
+    }
+
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const bas = await page.evaluate(() => {
+        const rangs = document.querySelectorAll('.fiche-rang');
+        return {
+            trait: document.querySelector('.fiche-aujourdhui').getBoundingClientRect().bottom,
+            dernier: rangs[rangs.length - 1].getBoundingClientRect().bottom
+        };
+    });
+
+    expect(bas.trait).toBeGreaterThanOrEqual(bas.dernier - 1);
+});
+
 // La colonne de la semaine courante est un fond. Peinte au-dessus, elle coupe les barres en deux :
 // elle doit donc précéder les lignes, là où le trait du jour les suit.
 test('la colonne de la semaine courante se peint sous les lignes', async ({ page }) => {

@@ -77,7 +77,10 @@
         }
         .fiche-entetes, .fiche-rang { display: flex; align-items: stretch; }
         .fiche-entetes { border-bottom: 1px solid var(--trait); }
-        .fiche-corps { position: relative; max-height: 62vh; overflow-y: auto; min-height: 120px; }
+        .fiche-corps { max-height: 62vh; overflow-y: auto; }
+        /* Les calques se mesurent sur la pile et non sur la zone de defilement : ancres a celle-ci,
+           ils s'arretent a sa hauteur visible et laissent nus les rangs atteints en defilant. */
+        .fiche-pile { position: relative; min-height: 120px; }
         .fiche-ligne {
             flex: 0 0 var(--colonne); display: flex; align-items: center; gap: 8px;
             padding: 4px 10px; border-right: 1px solid var(--trait); overflow: hidden;
@@ -956,11 +959,11 @@
                 + '<div class="fiche-grille">'
                 + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Chantiers et tâches</div>'
                 + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div><div class="fiche-semaines">' + semaines + '</div></div></div>'
-                + '<div class="fiche-corps">'
+                + '<div class="fiche-corps"><div class="fiche-pile">'
                 + '<div class="fiche-overlay fiche-fond"><div class="fiche-colonne-courante" style="left:' + colonneCourante.gauche.toFixed(2) + '%;width:' + colonneCourante.largeur.toFixed(2) + '%"></div></div>'
                 + corps
                 + '<div class="fiche-overlay"><div class="fiche-aujourdhui" style="left:' + aujourdhui.toFixed(2) + '%"></div></div>'
-                + '</div></div></section>';
+                + '</div></div></div></section>';
         }
 
         // Une categorie sans fiche annonce celle qui vient, plutot que de renvoyer l'utilisateur a ce
