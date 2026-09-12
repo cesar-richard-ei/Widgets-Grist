@@ -269,11 +269,11 @@ function feuilleDeRoute() {
         + '<div class="fiche-grille">'
         + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Chantiers et tâches</div>'
         + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div><div class="fiche-semaines">' + semaines + '</div></div></div>'
-        + '<div class="fiche-corps">'
+        + '<div class="fiche-corps"><div class="fiche-pile">'
         + '<div class="fiche-overlay fiche-fond"><div class="fiche-colonne-courante" style="left:' + colonneCourante.gauche.toFixed(2) + '%;width:' + colonneCourante.largeur.toFixed(2) + '%"></div></div>'
         + corps
         + '<div class="fiche-overlay"><div class="fiche-aujourdhui" style="left:' + aujourdhui.toFixed(2) + '%"></div></div>'
-        + '</div></div></section>';
+        + '</div></div></div></section>';
 }
 
 // Une categorie sans fiche annonce celle qui vient, plutot que de renvoyer l'utilisateur a ce
