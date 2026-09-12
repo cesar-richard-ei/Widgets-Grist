@@ -180,7 +180,7 @@ function avecLiens(doc, liens) {
 
 /**
  * Ouvre un widget sur un document donné.
- * options : { theme, largeur, hauteur, reglages, refuser, optionsSection, attendre }
+ * options : { theme, largeur, hauteur, reglages, refuser, optionsSection, attendre, retarder }
  */
 async function ouvrir(page, widget, doc, options) {
     const o = options || {};
@@ -189,9 +189,18 @@ async function ouvrir(page, widget, doc, options) {
     // La vraie API Grist écraserait le simulacre.
     await page.route('**/grist-plugin-api.js', (route) => route.abort());
     await page.addInitScript({ path: CHEMIN_SIMULACRE });
-    await page.addInitScript(([document, reglages, refusee, optionsSection, gristConfig, bloquee]) => {
+    await page.addInitScript(([document, reglages, refusee, optionsSection, gristConfig, bloquee, retard]) => {
         const config = Object.assign({}, gristConfig || {}, optionsSection ? { options: optionsSection } : {});
         window.grist = window.createFakeGrist(document, Object.keys(config).length ? config : undefined);
+        // Le simulacre repond dans la microtache qui suit l'appel, la ou Grist passe par le cadre
+        // parent et met plusieurs images a repondre. Ce retard rend au widget une ouverture ou il
+        // dessine avant d'avoir ses donnees, comme sur un poste du metier.
+        if (retard) {
+            const vraie = window.grist.docApi.fetchTable.bind(window.grist.docApi);
+            window.grist.docApi.fetchTable = (nom) => new Promise((resoudre, rejeter) => {
+                setTimeout(() => vraie(nom).then(resoudre, rejeter), retard);
+            });
+        }
         if (refusee || bloquee) {
             const vraie = window.grist.docApi.fetchTable.bind(window.grist.docApi);
             window.grist.docApi.fetchTable = (nom) => {
@@ -213,7 +222,7 @@ async function ouvrir(page, widget, doc, options) {
                 sessionStorage.setItem('__preparation', '1');
             }
         } catch (e) { /* stockage indisponible */ }
-    }, [doc || documentCible(), o.reglages || {}, o.refuser || null, o.optionsSection || null, o.grist || null, o.bloquer || null]);
+    }, [doc || documentCible(), o.reglages || {}, o.refuser || null, o.optionsSection || null, o.grist || null, o.bloquer || null, o.retarder || 0]);
     await page.goto('http://localhost:3001/tasks_app/' + widget + '.html');
     if (o.attendre !== false) await page.waitForSelector(o.attendre || '#taskList .task-row');
 }

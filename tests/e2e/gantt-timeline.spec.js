@@ -52,6 +52,20 @@ test('à l ouverture, la ligne du jour est calée près du bord gauche', async (
     await expect.poll(() => ecartAuCalage(page)).toBeCloseTo(0, 0);
 });
 
+// La plage n'atteint son bord gauche définitif qu'une fois les tâches lues : un calage posé sur la
+// grille encore vide laisse le défilement sur une plage qui s'étend ensuite derrière lui.
+test('à l ouverture, la ligne du jour est calée même quand la plage remonte loin', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Tasks.records.push({
+        id: 7, titre: 'Étude préalable', chantier: 1, dateDebut: D.j(-1000), dateEcheance: D.j(-900),
+        statut: 'done', type: 'tache', priorite: '3'
+    });
+
+    await D.ouvrirGantt(page, doc, { largeur: 900, retarder: 120 });
+
+    await expect.poll(() => ecartAuCalage(page)).toBeCloseTo(0, 0);
+});
+
 for (const vue of VUES) {
     test('la vue ' + vue + ' se cale sur le jour et remonte jusqu à la tâche la plus ancienne', async ({ page }) => {
         await D.ouvrirGantt(page);
