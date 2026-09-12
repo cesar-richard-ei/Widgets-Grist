@@ -93,7 +93,13 @@ function tableEquipe() {
 }
 
 function tableCategories() {
-    return { columns: { Categorie: { type: 'Text' } }, records: [{ id: 1, Categorie: 'Produit' }, { id: 2, Categorie: 'Projet' }] };
+    return {
+        columns: { Categorie: { type: 'Text' } },
+        records: [
+            { id: 1, Categorie: 'Produit' }, { id: 2, Categorie: 'Projet' },
+            { id: 3, Categorie: 'Offre de service' }, { id: 4, Categorie: 'Produit de données' }
+        ]
+    };
 }
 
 /**
