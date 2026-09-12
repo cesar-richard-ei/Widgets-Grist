@@ -1463,6 +1463,9 @@
         let currentView = 'semester';
         let viewStartDate = new Date();
         let ganttNowAligned = false;
+        // Les tâches sont lues après le premier rendu : tant qu'elles manquent, la plage dessinée n'est pas
+        // celle du document, et le calage posé dessus ne vaut pas.
+        let tachesLues = false;
         // La plage dessinée recule jusqu'à la tâche la plus ancienne : déplacer la fenêtre ne change donc
         // pas ce que la grille couvre, et seul le défilement montre la période demandée. Armé par navigate,
         // consommé au rendu, quand la grille a ses dimensions définitives.
@@ -2795,7 +2798,10 @@
                             todayPx: todayOffset * pxPerDay,
                             visibleWidth: sc.clientWidth
                         });
-                        ganttNowAligned = true;
+                        // La plage recule jusqu'à la tâche la plus ancienne : acquérir le calage avant que
+                        // les tâches soient lues le fige sur une plage qui s'étend ensuite vers la gauche,
+                        // et le défilement retenu désigne alors la première année du document.
+                        ganttNowAligned = tachesLues;
                     }
                 }
             }
@@ -4409,6 +4415,7 @@
             // le bandeau. Table absente sur un document qui ne la porte pas : le bandeau garde le nom seul.
             categoriesProjet = convert(brutCategories);
             gristReady = true;
+            tachesLues = true;
             fusionnerChantiers(brutChantiers);
             entretenirOptionResponsable();
             rebuildChildrenCache();
@@ -4514,6 +4521,7 @@
                 { id: 13, titre: 'Tests unitaires API', priorite: '2', projet: 1, dateDebut: day(6), dateEcheance: day(10), progression: 0, statut: 'todo', type: 'tache', assignees: ['L', 2], estimationH: 8, parentTask: 2 }
             ];
 
+            tachesLues = true;
             rebuildChildrenCache();
             sortTasks();
             hydrateFilters();
