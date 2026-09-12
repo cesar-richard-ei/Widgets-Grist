@@ -4,7 +4,14 @@
 // Le widget est lié à la table Projects et ne travaille que sur l'enregistrement sélectionné.
 // Lecture seule : rien ne s'y crée, ne s'y modifie ni ne s'y supprime.
 
-const CATEGORIE_FICHE = 'Projet';
+// Une catégorie par gabarit. La teinte est celle du bandeau dans la maquette, et la feuille de
+// route ne concerne pas toutes les catégories : le Produit n'en a pas. Une catégorie absente d'ici
+// n'a pas encore de fiche et annonce celle qui vient.
+const GABARITS = {
+    'Projet': { teinte: '#1e78d3', feuilleDeRoute: true },
+    'Produit': { teinte: '#781476', feuilleDeRoute: false },
+    'Offre de service': { teinte: '#7f5604', feuilleDeRoute: true }
+};
 const NOMS_DATE_CHANTIER = { debut: ['Debut', 'Date_debut'], fin: ['Fin', 'Date_fin'] };
 const MOIS_AVANT = 1;   // la fenêtre s'ouvre au premier jour du mois précédent
 const MOIS_TOTAL = 6;
@@ -305,11 +312,17 @@ function rendre() {
         return;
     }
     const categorie = categorieDuProjet(projet);
-    if (categorie && categorie !== CATEGORIE_FICHE) {
+    // Sans catégorie lisible, on sert la fiche par défaut : un document qui ne porte pas la colonne
+    // n'a pas à se retrouver devant une annonce de fiche à venir.
+    const gabarit = categorie ? GABARITS[categorie] : GABARITS['Projet'];
+    if (!gabarit) {
+        racine.style.removeProperty('--teinte-fiche');
         racine.innerHTML = enTete() + ficheAVenir(categorie);
         return;
     }
-    racine.innerHTML = enTete() + messageDeRefus() + cadrage() + feuilleDeRoute();
+    racine.style.setProperty('--teinte-fiche', gabarit.teinte);
+    racine.innerHTML = enTete() + messageDeRefus() + cadrage()
+        + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
     racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
         const id = Number(b.dataset.chantier);
         if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
