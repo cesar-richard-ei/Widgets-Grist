@@ -3205,49 +3205,6 @@ new ResizeObserver(() => {
     if (renduRedimensionnement !== null) return;
     renduRedimensionnement = requestAnimationFrame(() => { renduRedimensionnement = null; render(); });
 }).observe(document.getElementById('timelineScroll'));
-// Décorateur panneau (look « Propriétés / B ») : icône devant chaque libellé, sans toucher au rendu
-(function(){
-    var P={
-        statut:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
-        priorite:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
-        date:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-        projet:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
-        couleur:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>',
-        parent:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>',
-        assigne:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
-        charge:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
-        progression:'<svg class="tf-pic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>'
-    };
-    function pic(txt){ var t=(txt||'').toLowerCase();
-        if(t.indexOf('statut')>=0)return P.statut;
-        if(t.indexOf('priorit')>=0)return P.priorite;
-        if(t.indexOf('date')>=0)return P.date;
-        if(t.indexOf('projet')>=0)return P.projet;
-        if(t.indexOf('couleur')>=0)return P.couleur;
-        if(t.indexOf('parent')>=0)return P.parent;
-        if(t.indexOf('assign')>=0||t.indexOf('particip')>=0||t.indexOf('quipe')>=0)return P.assigne;
-        if(t.indexOf('charge')>=0)return P.charge;
-        if(t.indexOf('progress')>=0)return P.progression;
-        return ''; }
-    function collapse(c){
-        ['status-selector','priority-selector'].forEach(function(cls){
-            c.querySelectorAll('.prop-value .'+cls+':not(.tfc)').forEach(function(sel){
-                sel.classList.add('tfc');
-                sel.addEventListener('click', function(ev){
-                    if(!sel.classList.contains('tfo')){ ev.stopPropagation(); ev.preventDefault();
-                        document.querySelectorAll('.tfc.tfo').forEach(function(o){ o.classList.remove('tfo'); });
-                        sel.classList.add('tfo'); }
-                }, true);
-            });
-        });
-    }
-    function deco(){ var c=document.getElementById('panelContent'); if(!c)return;
-        c.querySelectorAll('.prop-label:not([data-dec])').forEach(function(l){ l.setAttribute('data-dec','1'); var s=pic(l.textContent); if(s)l.insertAdjacentHTML('afterbegin',s); });
-        /* collapse(c) désactivé — structure A : sélecteurs déployés */ }
-    var c=document.getElementById('panelContent');
-    if(c){ try{ new MutationObserver(deco).observe(c,{childList:true}); }catch(e){} deco(); }
-    document.addEventListener('click', function(ev){ document.querySelectorAll('.tfc.tfo').forEach(function(o){ if(!o.contains(ev.target)) o.classList.remove('tfo'); }); });
-})();
 renderGanttSkeleton();  // 06 · squelette pendant le chargement
 // Repli auto vers données d'exemple si Grist n'a pas répondu au handshake sous 2.8s
 // (aperçu / hors-ligne). Des lectures lentes ne comptent pas : Grist est là, on attend.
