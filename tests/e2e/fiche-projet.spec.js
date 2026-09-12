@@ -88,7 +88,7 @@ test('la ligne du jour tombe sur la colonne de la semaine courante', async ({ pa
 
     const ecart = await page.evaluate(() => {
         const trait = document.querySelector('.fiche-aujourdhui').getBoundingClientRect();
-        const colonne = document.querySelector('.fiche-semaine.courante');
+        const colonne = document.querySelector('.fiche-colonne-courante');
         if (!colonne) return null;
         const c = colonne.getBoundingClientRect();
         return { dans: trait.left >= c.left - 1 && trait.left <= c.right + 1 };
@@ -184,12 +184,12 @@ test('la feuille de route ne garde que les titres dans sa colonne de gauche', as
     await expect(fiche(page).locator('.fiche-ligne-tete')).toHaveText('Chantiers et tâches');
 });
 
-test('l en-tete de la fenetre ne numerote plus les semaines', async ({ page }) => {
+test('l en-tete de la fenetre s arrete aux mois', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
 
-    const semaines = await fiche(page).locator('.fiche-semaine').allTextContents();
-    expect(semaines.length).toBeGreaterThan(0);
-    expect(semaines.join('')).toBe('');
+    await expect(fiche(page).locator('.fiche-mois')).toHaveCount(6);
+    await expect(fiche(page).locator('.fiche-semaines')).toHaveCount(0);
+    await expect(fiche(page).locator('.fiche-semaine')).toHaveCount(0);
 });
 
 test('un titre long tient sur deux lignes', async ({ page }) => {

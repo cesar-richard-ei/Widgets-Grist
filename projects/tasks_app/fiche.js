@@ -238,7 +238,6 @@ function feuilleDeRoute() {
     }
 
     const lundiCourant = lundiDe(f.today);
-    const semaines = cols.map((c) => '<div class="fiche-semaine' + (c.debut.getTime() === lundiCourant.getTime() ? ' courante' : '') + '"></div>').join('');
 
     const pourcent = (d) => (jours(f.debut, d) / f.duree) * 100;
     const aujourdhui = pourcent(f.today);
@@ -268,7 +267,7 @@ function feuilleDeRoute() {
         + '<h2>' + (nbChantiers > 1 ? 'Feuilles de route des ' + nbChantiers + ' chantiers associés' : 'Feuille de route du chantier associé') + '</h2>'
         + '<div class="fiche-grille">'
         + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Chantiers et tâches</div>'
-        + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div><div class="fiche-semaines">' + semaines + '</div></div></div>'
+        + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div></div></div>'
         + '<div class="fiche-corps"><div class="fiche-pile">'
         + '<div class="fiche-overlay fiche-fond"><div class="fiche-colonne-courante" style="left:' + colonneCourante.gauche.toFixed(2) + '%;width:' + colonneCourante.largeur.toFixed(2) + '%"></div></div>'
         + corps
