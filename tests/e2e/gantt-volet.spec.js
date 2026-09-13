@@ -188,3 +188,33 @@ test('la recherche accentuée trouve toujours', async ({ page }) => {
 
     expect(await optionsVisibles(page, 'responsableSelect')).toEqual(['Chloé Roux']);
 });
+
+// Les titres de sections se lisaient sur deux presentations : un bandeau grise pour les uns, un
+// libelle sur fond normal precede d'une icone pour les autres. Le volet n'en porte plus qu'une.
+const titresDeSection = (page) => page.evaluate(() => Array.from(
+    document.querySelectorAll('#panelContent .panel-section-title, #panelContent .props-list > .prop-row > .prop-label'))
+    .map((el) => {
+        const bandeau = el.classList.contains('panel-section-title') ? el.parentElement : el;
+        return {
+            texte: el.textContent.trim(),
+            fond: getComputedStyle(bandeau).backgroundColor,
+            icone: Boolean(el.querySelector('svg'))
+        };
+    }));
+
+test('les titres de sections partagent une seule presentation', async ({ page }) => {
+    await ouvrirTache(page);
+
+    const titres = await titresDeSection(page);
+
+    expect(titres.length).toBeGreaterThan(5);
+    expect(new Set(titres.map((t) => t.fond)).size).toBe(1);
+});
+
+test('aucun titre de section ne porte d icone', async ({ page }) => {
+    await ouvrirTache(page);
+
+    const titres = await titresDeSection(page);
+
+    expect(titres.filter((t) => t.icone).map((t) => t.texte)).toEqual([]);
+});
