@@ -4,6 +4,10 @@ name: Pages
 # La racine sert la derniere release, /dev/ suit main : les deux sont reconstruits a chaque appel.
 on:
   workflow_call:
+  # Rattrape la release publiee a la main : celle de release.yml passe par GITHUB_TOKEN et n'emet
+  # aucun evenement.
+  release:
+    types: [published]
 
 permissions:
   contents: read
