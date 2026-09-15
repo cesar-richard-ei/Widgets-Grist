@@ -323,13 +323,14 @@ d'autre : `main` n'est pas tagué, et la racine n'est mise à jour que par une r
 
 ### `pages.yml` — construction et déploiement du site
 
-Workflow réutilisable, sans déclencheur propre. Il est appelé par `ci.yml` après les tests sur `main`
-et par `release.yml` après la création d'une release. Les deux appelants publient par le même chemin,
-il n'y a donc pas deux constructions à garder synchronisées.
+Workflow réutilisable, appelé par `ci.yml` après les tests sur `main` et par `release.yml` après la
+création d'une release. Il écoute en plus l'événement `release: published`, qui rattrape les releases
+publiées à la main depuis l'interface. Tous les chemins passent par la même construction, il n'y a donc
+pas deux recettes à garder synchronisées.
 
 | Chemin | Contenu | Mis à jour par |
 |--------|---------|----------------|
-| `/` | dernière release | exécution de `release.yml` |
+| `/` | dernière release | exécution de `release.yml`, ou release publiée à la main |
 | `/dev/` | nightly | push sur `main` |
 
 Chaque exécution reconstruit le site entier, la racine depuis le tag de la dernière release, `/dev/`
@@ -372,8 +373,9 @@ jobs de test et de construction du site.
 
 **Une release créée par un workflow ne déclenche aucun autre workflow**, puisqu'elle est émise avec le
 `GITHUB_TOKEN` du dépôt. C'est pourquoi `release.yml` appelle `pages.yml` lui-même plutôt que de
-s'appuyer sur l'événement `release`. Corollaire : créer une release à la main depuis l'interface ne
-republie rien, il faut passer par le workflow.
+s'appuyer sur l'événement `release`. Ce même événement couvre le cas inverse : une release publiée à la
+main depuis l'interface republie la racine sans passer par le workflow. Les deux chemins ne se
+recouvrent donc jamais.
 
 ### Lint JavaScript
 
