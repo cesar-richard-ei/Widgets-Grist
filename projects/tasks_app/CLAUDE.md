@@ -15,7 +15,7 @@ Guide de développement pour la suite de widgets **TaskFlow** (Grist).
 | Calendar | `calendar.html` | v15 | Calendrier mensuel/hebdo/compact avec barres adaptatives |
 | Dashboard | `dashboard.html` | v16 | Dashboard composable avec composants configurables |
 | **Plan** | `plan.html` | v16 | **Plan de charge** : heatmap capacité/charge par personne, prévu/réalisé/reste/dispo, timeline, allocation éditable (**opt-in**, voir plus bas) |
-| **Fiche** | `fiche.html` | v16 | **Fiche d'un projet** : cadrage (responsable, sponsors, contributeurs clés, description, budget, commanditaires) puis feuille de route de ses chantiers sur six mois. Lecture seule, lié à `Projects` |
+| **Fiche** | `fiche.html` | v16 | **Fiche d'un projet** : cadrage (responsable, sponsors, contributeurs clés, description, budget, commanditaires) puis feuille de route de ses chantiers sur six mois. Description éditable, lié à `Projects` |
 
 Chaque widget est un **fichier HTML autonome** avec CSS et JS inline. Pas de framework — vanilla JS/HTML5/CSS3.
 
@@ -258,12 +258,20 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 ### Fiche (v16) — fiche d'un projet
 
 Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistrement sélectionné, reçu par
-`onRecord`. Lecture seule de bout en bout, aucune écriture, aucun volet, aucune poignée.
+`onRecord`. Aucun volet, aucune poignée : la description est le seul champ qui s'écrit.
 
-- **Périmètre.** Seule une ligne de catégorie `Projet` ouvre une fiche ; un produit ou une offre de
-  service affiche un message qui nomme sa catégorie. La catégorie se porte tantôt en `Ref` vers une
-  table, tantôt en `Choice` selon les documents : la valeur suffit à trancher, un identifiant étant
-  un nombre et un choix une chaîne.
+- **Périmètre.** Les catégories `Projet`, `Produit` et `Offre de service` ouvrent une fiche, le
+  Produit sans feuille de route ; une autre catégorie affiche un message qui la nomme. La catégorie
+  se porte tantôt en `Ref` vers une table, tantôt en `Choice` selon les documents : la valeur suffit
+  à trancher, un identifiant étant un nombre et un choix une chaîne.
+- **Description éditable.** Écrite au `blur` dans `Projects.Description`, seulement si la colonne
+  existe et n'est pas calculée ; sinon le bloc reste en lecture. Un rendu déclenché par `onRecords`
+  pendant la saisie restitue le texte, le focus et la sélection. Le champ éditable a son propre fond
+  (`--fond-saisie`), distinct des blocs en lecture seule.
+- **Statut.** Pastille « WIP » fixe dans l'en-tête, en attendant une colonne de statut sur `Projects`.
+- **Bandeau de domaine.** Un chantier dont le responsable porte un `Team.Domaine` reçoit une bande à
+  la couleur de ce domaine, nom compris, sur sa ligne et sa piste. La couleur vient de
+  `TF.couleurDeDomaine`, la même règle que le filtre Domaine et le bandeau du Gantt.
 - **Cadrage.** Responsable, sponsors et contributeurs clés en pastilles, description, budget alloué,
   commanditaires et deadline. Une colonne vide se dit « Non renseigné » plutôt que de laisser un blanc.
 - **Feuille de route.** Les chantiers du projet, chacun suivi de ses tâches, sur une fenêtre fixe de
@@ -568,6 +576,13 @@ lorsque celui-ci n'a pas de couleur, la couleur du projet reprend la main : sans
 Il se prolonge sur la timeline (`.grid-row.piste-groupe`), même teinte et même hauteur, collé en
 haut comme son pendant de gauche puisque les deux colonnes défilent de concert. Le trait qui
 séparait le bandeau de sa première ligne a été retiré, la teinte suffit à marquer la rupture.
+
+### Bandeau de domaine sur les chantiers (Gantt)
+
+Une ligne chantier dont le responsable porte un `Team.Domaine` reçoit en haut une bande de 12 px à
+la couleur du domaine, nom écrit dedans, prolongée sans texte sur sa piste (`.grid-row.avec-domaine`),
+le reste du rang teinté à 12 %. La hauteur du rang ne change pas : les barres se posent à l'index de
+la ligne. La couleur vient de `TF.couleurDeDomaine`, partagée avec la fiche.
 
 ### Questions posées à l'utilisateur
 

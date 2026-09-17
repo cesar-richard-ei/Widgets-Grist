@@ -1114,8 +1114,17 @@
                 };
             }
 
+            // Un domaine n'a pas de couleur a lui : la table des effectifs ne porte que celle des personnes.
+            // On prend celle du premier membre qui le porte, l'ordre des effectifs faisant foi.
+            function couleurDeDomaine(equipe, domaine) {
+                const membre = (equipe || []).find(function (m) { return m.Domaine === domaine; });
+                if (!membre) return '#6366f1';
+                return membre.couleur || '#3e5de7';
+            }
+
             return {
                 DEFAULT_STATUSES: DEFAULT_STATUSES,
+                couleurDeDomaine: couleurDeDomaine,
                 computeTimelineScale: computeTimelineScale,
                 computeBarGeometry: computeBarGeometry,
                 computeDependencyPath: computeDependencyPath,

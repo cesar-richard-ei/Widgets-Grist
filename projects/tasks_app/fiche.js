@@ -2,7 +2,7 @@
 
 // Fiche d'un projet : son cadrage, puis la feuille de route de ses chantiers.
 // Le widget est lié à la table Projects et ne travaille que sur l'enregistrement sélectionné.
-// Lecture seule : rien ne s'y crée, ne s'y modifie ni ne s'y supprime.
+// Rien ne s'y crée ni ne s'y supprime : seule la description se modifie, quand le document le permet.
 
 // Une catégorie par gabarit. La teinte est celle du bandeau dans la maquette, et la feuille de
 // route ne concerne pas toutes les catégories : le Produit n'en a pas. Une catégorie absente d'ici
@@ -27,6 +27,9 @@ const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stro
 let schemaMeta = null;
 let projet = null;
 let personnes = new Map();
+// Lignes de chaque table de personnes, dans l'ordre du document : la couleur d'un domaine est celle
+// de son premier membre.
+let equipes = new Map();
 let chantiers = [];
 let taches = [];
 let categories = [];
@@ -180,16 +183,53 @@ function bloc(classe, libelle, contenu) {
         + '<div class="fiche-valeur">' + (contenu || '<span class="vide">Non renseigné</span>') + '</div></div>';
 }
 
-const ICONE_LIEN = '<svg class="fiche-lien" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">'
-    + '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg>';
-
-function pastilles(refs, avecLien) {
+function pastilles(refs) {
     if (!refs.length) return '';
     return refs.map((ref) => {
         const m = membre(ref);
         if (!m) return '';
-        return '<span class="fiche-personne">' + (avecLien ? ICONE_LIEN : '') + echapper(m.nom) + '</span>';
+        return '<span class="fiche-personne">' + echapper(m.nom) + '</span>';
     }).join('');
+}
+
+// Une colonne calculée ou absente ne s'écrit pas : Grist refuserait l'écriture entière.
+function colonneEcrivable(tableId, colId) {
+    if (!schemaMeta) return false;
+    const t = (schemaMeta.tables || []).find((x) => x.tableId === tableId);
+    const c = t && (schemaMeta.cols || []).find((x) => x.parentId === t.id && x.colId === colId);
+    return Boolean(c && !c.isFormula);
+}
+
+function blocDescription() {
+    if (!colonneEcrivable('Projects', 'Description')) {
+        return bloc('bloc-description', 'Description', texteOuVide(projet.Description));
+    }
+    return '<div class="fiche-bloc bloc-description"><label class="fiche-label" for="saisie-description">Description</label>'
+        + '<div class="fiche-valeur"><textarea id="saisie-description" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
+        + echapper(projet.Description == null ? '' : projet.Description) + '</textarea></div></div>';
+}
+
+async function enregistrerDescription(champ) {
+    const valeur = champ.value;
+    if (!projet || valeur === (projet.Description == null ? '' : String(projet.Description))) return;
+    try {
+        await grist.docApi.applyUserActions([['UpdateRecord', 'Projects', projet.id, { Description: valeur }]]);
+        projet.Description = valeur;
+    } catch (e) {
+        console.error(LOG, 'description refusée :', (e && e.message) || e);
+        const valeurChamp = champ.closest('.fiche-valeur');
+        if (valeurChamp && !valeurChamp.querySelector('.fiche-erreur')) {
+            valeurChamp.insertAdjacentHTML('beforeend', '<p class="fiche-erreur">Description non enregistrée : '
+                + echapper((e && e.message) || e) + '</p>');
+        }
+    }
+}
+
+// Domaine du responsable d'un chantier, à la couleur que le Gantt donne à ce domaine.
+function domaineDuChantier(r) {
+    const m = r.chantier && r.responsable ? membre(r.responsable) : null;
+    if (!m || !m.Domaine) return null;
+    return { nom: m.Domaine, couleur: TF.couleurDeDomaine(equipes.get(r.responsable.table) || [], m.Domaine) };
 }
 
 function texteOuVide(v) {
@@ -206,6 +246,7 @@ function enTete() {
     const type = texteOuVide(projet.Type);
     return '<header class="fiche-entete">'
         + '<h1 class="fiche-titre">' + echapper(projet.nom || 'Sans titre') + '</h1>'
+        + '<span class="fiche-statut">WIP</span>'
         + (type ? '<span class="fiche-type">' + type + '</span>' : '')
         + '</header>';
 }
@@ -214,11 +255,11 @@ function cadrage() {
     return '<section class="fiche-cadrage">'
         + '<div class="fiche-colonne">'
         + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean)))
-        + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor), true))
-        + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles), true))
+        + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
+        + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
         + '</div>'
         + '<div class="fiche-colonne large">'
-        + bloc('bloc-description', 'Description', texteOuVide(projet.Description))
+        + blocDescription()
         + '<div class="fiche-trio">'
         + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
         + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
@@ -257,13 +298,18 @@ function feuilleDeRoute() {
             ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (replie ? '▶' : '▼') + '</button>'
             : '<span class="fiche-chevron-vide"></span>';
         const teinte = r.responsable && membre(r.responsable) ? (membre(r.responsable).couleur || '#3e5de7') : '#4a9ae0';
-        return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + '">'
-            + '<div class="fiche-ligne">' + chevron
+        const domaine = domaineDuChantier(r);
+        const bandeau = (avecNom) => (domaine
+            ? '<span class="bandeau-domaine" style="background-color:' + echapper(domaine.couleur) + '">' + (avecNom ? echapper(domaine.nom) : '') + '</span>'
+            : '');
+        return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + (domaine ? ' avec-domaine' : '') + '"'
+            + (domaine ? ' style="--teinte-domaine:' + echapper(domaine.couleur) + '"' : '') + '>'
+            + '<div class="fiche-ligne">' + bandeau(true) + chevron
             + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span></span>'
             + '<span class="fiche-progression">' + Math.round(r.progression || 0) + '%</span>'
             + (r.filles ? '<span class="fiche-filles">↳' + r.filles + '</span>' : '')
             + '</div>'
-            + '<div class="fiche-piste">'
+            + '<div class="fiche-piste">' + bandeau(false)
             + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '">'
                 + (r.progression ? '<span class="fiche-avancee" style="width:' + Math.min(Math.max(r.progression, 0), 100) + '%"></span>' : '')
                 + '</span>' : '')
@@ -271,7 +317,6 @@ function feuilleDeRoute() {
     }).join('');
 
     return '<section class="fiche-route">'
-        + '<h2>' + (nbChantiers > 1 ? 'Feuilles de route des ' + nbChantiers + ' chantiers associés' : 'Feuille de route du chantier associé') + '</h2>'
         + '<div class="fiche-grille">'
         + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Chantiers et tâches</div>'
         + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div></div></div>'
@@ -305,6 +350,8 @@ function accueil() {
         + '</div>';
 }
 
+let rendu = false;
+
 function rendre() {
     const racine = el('fiche');
     if (!projet) {
@@ -321,8 +368,24 @@ function rendre() {
         return;
     }
     racine.style.setProperty('--teinte-fiche', gabarit.teinte);
+    // Une relecture des tables redessine la fiche : la saisie en cours y survit, curseur compris.
+    const actif = document.activeElement;
+    const enCours = actif && actif.id === 'saisie-description'
+        ? { valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
+        : null;
+    rendu = true;
     racine.innerHTML = enTete() + messageDeRefus() + cadrage()
         + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
+    rendu = false;
+    const saisie = el('saisie-description');
+    if (saisie) {
+        if (enCours) {
+            saisie.value = enCours.valeur;
+            saisie.focus();
+            saisie.setSelectionRange(enCours.debut, enCours.fin);
+        }
+        saisie.addEventListener('blur', () => { if (!rendu) enregistrerDescription(saisie); });
+    }
     racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
         const id = Number(b.dataset.chantier);
         if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
@@ -382,7 +445,9 @@ const tablesDePersonnes = () => Array.from(new Set(
 
 function indexerPersonnes(tables, lots) {
     personnes = new Map();
+    equipes = new Map();
     tables.forEach((table, i) => {
+        equipes.set(table, lots[i]);
         if (!lots[i].length) console.warn(LOG, 'aucune personne lue dans', table);
         lots[i].forEach((m) => {
             personnes.set(table + ':' + m.id, m);

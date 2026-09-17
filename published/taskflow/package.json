@@ -56,7 +56,7 @@
       "name": "TaskFlow Fiche projet",
       "url": "fiche/",
       "accessLevel": "full",
-      "description": "Fiche d'un projet en lecture seule : cadrage et feuille de route de ses chantiers sur six mois"
+      "description": "Fiche d'un projet : cadrage, description éditable et feuille de route de ses chantiers sur six mois"
     }
   ]
 }
