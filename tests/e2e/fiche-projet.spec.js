@@ -274,21 +274,21 @@ test('les polices de la fiche suivent le standard du web', async ({ page }) => {
         const px = (sel) => parseFloat(getComputedStyle(document.querySelector(sel)).fontSize);
         return {
             description: px('.bloc-description .fiche-valeur'), badge: px('.fiche-personne'),
-            libelle: px('.fiche-label'), section: px('.fiche-route h2')
+            libelle: px('.fiche-label')
         };
     });
 
     expect(tailles.description).toBeLessThanOrEqual(16);
     expect(tailles.badge).toBe(tailles.description);
     expect(tailles.libelle).toBeLessThan(tailles.description);
-    expect(tailles.section).toBeLessThan(tailles.description);
 });
 
+// L'en-tête de colonne fait exception : le métier l'a voulu plus lisible que les rangs.
 test('la feuille de route ecrit plus petit que le reste de la fiche', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
 
     const maximum = await page.evaluate(() => Math.max(...Array.from(
-        document.querySelectorAll('.fiche-grille, .fiche-grille *'),
+        document.querySelectorAll('.fiche-grille, .fiche-grille *:not(.fiche-ligne-tete)'),
         (e) => parseFloat(getComputedStyle(e).fontSize))));
 
     expect(maximum).toBeLessThanOrEqual(13);
@@ -357,4 +357,105 @@ test('la fiche se lit dans la table, quelle que soit la forme servie', async ({ 
     await expect(fiche(page).locator('.bloc-responsable')).toContainText('Chloé Roux');
     await expect(fiche(page).locator('.bloc-sponsors')).toContainText('Alice Martin');
     await expect(fiche(page).locator('.fiche-titre')).toHaveText('Datalab');
+});
+
+test('les pastilles de personnes n ont ni icone de lien ni coins arrondis au-dela de 2 px', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    await expect(fiche(page).locator('.fiche-lien')).toHaveCount(0);
+    const rayons = await fiche(page).locator('.fiche-personne').evaluateAll((els) =>
+        els.map((e) => parseFloat(getComputedStyle(e).borderTopLeftRadius)));
+    expect(rayons.length).toBeGreaterThan(0);
+    rayons.forEach((r) => expect(r).toBeLessThanOrEqual(2));
+});
+
+test('la feuille de route ne porte plus de titre au-dessus des chantiers', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    await expect(fiche(page).locator('.fiche-grille')).toBeVisible();
+    await expect(fiche(page).locator('.fiche-route h2')).toHaveCount(0);
+});
+
+test('l en-tete de colonne Chantiers et taches ecrit plus grand que les rangs', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const tailles = await page.evaluate(() => ({
+        tete: parseFloat(getComputedStyle(document.querySelector('.fiche-ligne-tete')).fontSize),
+        rang: parseFloat(getComputedStyle(document.querySelector('.fiche-rang .fiche-nom')).fontSize),
+        description: parseFloat(getComputedStyle(document.querySelector('.bloc-description .fiche-valeur')).fontSize)
+    }));
+
+    expect(tailles.tete).toBeGreaterThan(tailles.rang);
+    expect(tailles.tete).toBeLessThanOrEqual(tailles.description);
+});
+
+test('l en-tete annonce le statut du projet en WIP', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    await expect(fiche(page).locator('.fiche-entete .fiche-statut')).toHaveText('WIP');
+});
+
+// Le chantier porte en bandeau le domaine de son responsable, a la couleur que le Gantt donne a ce
+// domaine : Chloé porte « Expérience », en ocre.
+test('un chantier porte en bandeau le domaine de son responsable', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const rang = fiche(page).locator('.fiche-rang.est-chantier', { hasText: 'Guides utilisateurs' });
+    await expect(rang.locator('.fiche-ligne .bandeau-domaine')).toHaveText('Expérience');
+    await expect(rang.locator('.fiche-ligne .bandeau-domaine')).toHaveCSS('background-color', 'rgb(245, 158, 11)');
+    await expect(rang.locator('.fiche-piste .bandeau-domaine')).toHaveCount(1);
+    await expect(fiche(page).locator('.fiche-rang:not(.est-chantier) .bandeau-domaine')).toHaveCount(0);
+});
+
+test('un chantier sans responsable garde un rang sans bandeau', async ({ page }) => {
+    const doc = D.documentCible();
+    delete doc.Chantiers.records.find((c) => c.id === 2).Responsable;
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.fiche-rang.est-chantier')).toHaveCount(1);
+    await expect(fiche(page).locator('.bandeau-domaine')).toHaveCount(0);
+});
+
+const descriptionEnBase = (page) => page.evaluate(() => window.grist.docApi.fetchTable('Projects')
+    .then((t) => t.Description[t.id.indexOf(2)]));
+
+test('la description s edite depuis la fiche et part en base', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const champ = fiche(page).locator('.bloc-description textarea');
+    await expect(champ).toHaveValue('Mettre un bac à sable à disposition des équipes.');
+    await champ.fill('Ouvrir le datalab à toutes les équipes.');
+    await champ.blur();
+
+    await expect.poll(() => descriptionEnBase(page)).toBe('Ouvrir le datalab à toutes les équipes.');
+    await expect(fiche(page).locator('.bloc-description textarea')).toHaveValue('Ouvrir le datalab à toutes les équipes.');
+});
+
+// Une relecture des tables pendant la saisie redessine la fiche : le texte en cours ne doit pas
+// disparaître sous l'utilisateur.
+test('une relecture pendant la saisie ne perd pas le texte en cours', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const champ = fiche(page).locator('.bloc-description textarea');
+    await champ.fill('Texte en cours de frappe');
+    await page.evaluate(() => window.grist.docApi.applyUserActions([['UpdateRecord', 'Projects', 2, { Budget_alloue: '10 k€' }]]));
+
+    await expect(fiche(page).locator('.bloc-budget')).toContainText('10 k€');
+    await expect(fiche(page).locator('.bloc-description textarea')).toHaveValue('Texte en cours de frappe');
+    await expect(fiche(page).locator('.bloc-description textarea')).toBeFocused();
+});
+
+test('une description calculee reste en lecture seule', async ({ page }) => {
+    const doc = D.colonneCalculee(D.documentCible(), 'Projects', 'Description');
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.bloc-description textarea')).toHaveCount(0);
+    await expect(fiche(page).locator('.bloc-description')).toContainText('bac à sable');
+});
+
+test('un champ editable se distingue des champs en lecture seule', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const fond = (sel) => fiche(page).locator(sel).evaluate((e) => getComputedStyle(e).backgroundColor);
+    expect(await fond('.bloc-description textarea')).not.toBe(await fond('.bloc-budget .fiche-valeur'));
 });

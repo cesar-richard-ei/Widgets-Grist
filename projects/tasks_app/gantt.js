@@ -90,12 +90,16 @@ function domainesConnus() {
     return vus.sort(parOrdreAlphabetique);
 }
 // Les domaines sont désignés par leur rang, pour n'avoir rien à échapper dans un attribut onclick.
-// Un domaine n'a pas de couleur a lui : la table des effectifs ne porte que celle des personnes.
-// On prend celle du premier membre qui le porte, l'ordre des effectifs faisant foi.
-function couleurDeDomaine(d) {
-    const membre = team.find(m => m.Domaine === d);
-    return membre ? getTeamMemberColor(membre.id) : '#6366f1';
+const couleurDeDomaine = (d) => TF.couleurDeDomaine(team, d);
+
+// Domaine du responsable d'un chantier, affiché en bandeau sur sa ligne et sa piste.
+function domaineDeChantier(t) {
+    if (!estChantier(t) || !t.Responsable) return null;
+    const m = team.find(x => x.id === t.Responsable);
+    return m && m.Domaine ? m.Domaine : null;
 }
+const bandeauDomaine = (domaine) => '<span class="bandeau-domaine" style="background-color:' +
+    escapeAttr(couleurDeDomaine(domaine)) + '">' + escapeHtml(domaine) + '</span>';
 
 function basculerDomaine(rang) {
     const d = domainesConnus()[rang];
@@ -1192,9 +1196,12 @@ function renderTaskList() {
             ? '<span class="tree-chevron' + (expandedTasks.has(t.id) ? ' expanded' : '') + '" onclick="event.stopPropagation();toggleExpand(' + t.id + ')" title="' + (expandedTasks.has(t.id) ? 'Replier' : 'Déplier') + '">▶</span>'
             : '<span class="tree-chevron-placeholder"></span>';
         const indent = depth * 18;
-        const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : ''].filter(Boolean).join(' ');
+        const domaine = domaineDeChantier(t);
+        const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', domaine ? 'avec-domaine' : ''].filter(Boolean).join(' ');
 
-        html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px">' +
+        html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px' +
+            (domaine ? ';background-image:' + aplatDeTeinte(couleurDeDomaine(domaine), 0.12) : '') + '">' +
+            (domaine ? bandeauDomaine(domaine) : '') +
             (sortMode === 'manual' ? '<span class="drag-handle">☰</span>' : '') +
             chevron +
             '<div class="task-info">' +
@@ -1328,7 +1335,13 @@ function renderTimeline() {
                 aplatDeTeinte(groupe.couleur, 0.2) + '"></div>';
             return;
         }
-        gridHtml += '<div class="grid-row"></div>';
+        // Bande et teinte en fond : la grille ne porte aucun élément dans ses rangs.
+        const domaine = domaineDeChantier(ft[iLigne]);
+        const couleur = domaine ? escapeAttr(couleurDeDomaine(domaine)) : '';
+        gridHtml += domaine
+            ? '<div class="grid-row avec-domaine" data-id="' + ft[iLigne].id + '" style="background-image:linear-gradient(' +
+                couleur + ', ' + couleur + '), ' + aplatDeTeinte(couleurDeDomaine(domaine), 0.12) + '"></div>'
+            : '<div class="grid-row"></div>';
     });
 
     const grid = document.getElementById('timelineGrid');

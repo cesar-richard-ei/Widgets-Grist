@@ -452,3 +452,33 @@ test('changer le projet ne retire pas les autres rattachements du chantier', asy
         return c.Projets[c.id.indexOf(1)];
     })).toEqual(['L', 3, 2]);
 });
+
+// Bruno, responsable du « Socle technique », porte le domaine « Socle technique », en vert : le
+// bandeau le reprend sur la ligne et sur la piste, a la couleur des pastilles du filtre Domaine.
+test('un chantier porte en bandeau le domaine de son responsable', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    const ligne = D.ligne(page, 'Socle technique');
+    await expect(ligne.locator('.bandeau-domaine')).toHaveText('Socle technique');
+    await expect(ligne.locator('.bandeau-domaine')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
+    const id = await ligne.getAttribute('data-id');
+    const piste = page.locator('#timelineGrid .grid-row[data-id="' + id + '"]');
+    await expect(piste).toHaveClass(/avec-domaine/);
+    expect(await piste.evaluate((e) => getComputedStyle(e).backgroundImage)).toContain('rgb(16, 185, 129)');
+});
+
+test('une tache ne porte pas de bandeau de domaine', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+
+    await expect(D.ligne(page, 'Cadrage des outils').locator('.bandeau-domaine')).toHaveCount(0);
+});
+
+test('un chantier dont le responsable n a pas de domaine reste sans bandeau', async ({ page }) => {
+    const doc = D.documentCible();
+    delete doc.Team.records.find((m) => m.id === 2).Domaine;
+    await D.ouvrirGantt(page, doc);
+
+    await expect(D.ligne(page, 'Socle technique')).toBeVisible();
+    await expect(D.ligne(page, 'Socle technique').locator('.bandeau-domaine')).toHaveCount(0);
+});
