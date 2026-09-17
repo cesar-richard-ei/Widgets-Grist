@@ -15,6 +15,7 @@
             --trait: #e5e7eb;
             --accent: #1e78d3;
             --accent-clair: #eaf1fd;
+            --fond-saisie: #eef4fc;
             --aujourdhui: #ef4444;
             --rayon: 6px;
         }
@@ -22,7 +23,7 @@
             :root {
                 --fond: #0b1220; --fond-doux: #16213a; --texte: #e5e7eb; --texte-doux: #94a3b8;
                 --texte-libelle: #cbd5e1;
-                --trait: #1e293b; --accent-clair: #16213a;
+                --trait: #1e293b; --accent-clair: #16213a; --fond-saisie: #1b2a47;
             }
         }
         * { box-sizing: border-box; }
@@ -37,6 +38,10 @@
         .fiche-entete {
             background: var(--teinte-fiche, var(--accent)); color: #fff; padding: 47px 34px 36px;
             display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+        }
+        .fiche-statut {
+            border: 1.5px solid rgba(255, 255, 255, 0.85); border-radius: 2px; padding: 1px 8px;
+            font-size: 0.72rem; font-weight: 800; letter-spacing: 0.08em; line-height: 1.4;
         }
         .fiche-titre { margin: 0; font-size: clamp(1.2rem, 2.1vw, 1.85rem); line-height: 1.15; font-weight: 800; letter-spacing: -0.015em; }
         /* La maquette pose le type comme une etiquette collee sur le bandeau, legerement de
@@ -63,12 +68,22 @@
             font-size: 0.95rem; line-height: 1.5;
         }
         .fiche-valeur .vide { color: var(--texte-doux); font-style: italic; }
+        /* Un champ qui se modifie porte un fond a peine plus bleute que ceux en lecture seule. */
+        .bloc-description .fiche-valeur:has(.fiche-saisie) { background: none; padding: 0; }
+        .fiche-saisie {
+            display: block; width: 100%; min-height: 6.5em; resize: vertical; margin: 0;
+            background: var(--fond-saisie); color: var(--texte); border: 1px solid transparent;
+            border-radius: var(--rayon); padding: 15px 17px; font: inherit; font-size: 0.95rem; line-height: 1.5;
+        }
+        .fiche-saisie:hover { border-color: var(--trait); }
+        .fiche-saisie:focus { outline: none; border-color: var(--accent); }
+        .fiche-saisie::placeholder { color: var(--texte-doux); font-style: italic; }
+        .fiche-erreur { margin: 6px 0 0; color: #b45309; font-size: 0.8rem; }
 
         .fiche-personne {
             display: inline-flex; align-items: center; gap: 8px; background: var(--teinte-fiche, var(--accent));
-            color: #fff; border-radius: 7px; padding: 3px 12px; font-weight: 400; font-size: 0.95rem; line-height: 1.3;
+            color: #fff; border-radius: 2px; padding: 3px 12px; font-weight: 400; font-size: 0.95rem; line-height: 1.3;
         }
-        .fiche-lien { opacity: 0.9; flex: none; width: 20px; height: 20px; }
 
         .fiche-route { padding: 32px 34px 0; }
         .fiche-route h2 { font-size: 0.78rem; font-weight: 800; margin: 0 0 12px; }
@@ -86,7 +101,7 @@
             flex: 0 0 var(--colonne); display: flex; align-items: center; gap: 8px;
             padding: 4px 10px; border-right: 1px solid var(--trait); overflow: hidden;
         }
-        .fiche-ligne-tete { font-weight: 600; padding: 10px; align-items: flex-end; }
+        .fiche-ligne-tete { font-weight: 700; font-size: 0.9rem; padding: 12px 10px; align-items: flex-end; }
         .fiche-intitule { min-width: 0; flex: 1; }
         /* Sans les dates, le titre dispose de deux lignes plutot que d'une coupe a l'ellipse. */
         .fiche-nom {
@@ -107,6 +122,16 @@
         .fiche-rang { border-bottom: 1px solid var(--trait); min-height: 36px; position: relative; background: transparent; }
         .fiche-rang:last-child { border-bottom: 0; }
         .fiche-piste { position: relative; flex: 1; }
+        /* Bandeau du domaine du responsable sur un chantier, sur la ligne comme sur la piste. */
+        .fiche-rang.avec-domaine { background-color: color-mix(in srgb, var(--teinte-domaine) 12%, transparent); min-height: 46px; }
+        .fiche-rang.avec-domaine .fiche-ligne { position: relative; padding-top: 16px; }
+        .fiche-rang.avec-domaine .fiche-barre { top: calc(50% + 6px); }
+        .bandeau-domaine {
+            position: absolute; left: 0; right: 0; top: 0; height: 12px; padding-left: 10px;
+            color: #fff; font-size: 0.53rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+            line-height: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .fiche-piste .bandeau-domaine { padding-left: 0; }
         .fiche-piste-tete { display: flex; flex-direction: column; }
         .fiche-mois-ligne { display: flex; }
         .fiche-mois {
@@ -653,8 +678,17 @@
                 };
             }
 
+            // Un domaine n'a pas de couleur a lui : la table des effectifs ne porte que celle des personnes.
+            // On prend celle du premier membre qui le porte, l'ordre des effectifs faisant foi.
+            function couleurDeDomaine(equipe, domaine) {
+                const membre = (equipe || []).find(function (m) { return m.Domaine === domaine; });
+                if (!membre) return '#6366f1';
+                return membre.couleur || '#3e5de7';
+            }
+
             return {
                 DEFAULT_STATUSES: DEFAULT_STATUSES,
+                couleurDeDomaine: couleurDeDomaine,
                 computeTimelineScale: computeTimelineScale,
                 computeBarGeometry: computeBarGeometry,
                 computeDependencyPath: computeDependencyPath,
@@ -690,7 +724,7 @@
 
         // Fiche d'un projet : son cadrage, puis la feuille de route de ses chantiers.
         // Le widget est lié à la table Projects et ne travaille que sur l'enregistrement sélectionné.
-        // Lecture seule : rien ne s'y crée, ne s'y modifie ni ne s'y supprime.
+        // Rien ne s'y crée ni ne s'y supprime : seule la description se modifie, quand le document le permet.
 
         // Une catégorie par gabarit. La teinte est celle du bandeau dans la maquette, et la feuille de
         // route ne concerne pas toutes les catégories : le Produit n'en a pas. Une catégorie absente d'ici
@@ -715,6 +749,9 @@
         let schemaMeta = null;
         let projet = null;
         let personnes = new Map();
+        // Lignes de chaque table de personnes, dans l'ordre du document : la couleur d'un domaine est celle
+        // de son premier membre.
+        let equipes = new Map();
         let chantiers = [];
         let taches = [];
         let categories = [];
@@ -868,16 +905,53 @@
                 + '<div class="fiche-valeur">' + (contenu || '<span class="vide">Non renseigné</span>') + '</div></div>';
         }
 
-        const ICONE_LIEN = '<svg class="fiche-lien" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">'
-            + '<path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"></path><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"></path></svg>';
-
-        function pastilles(refs, avecLien) {
+        function pastilles(refs) {
             if (!refs.length) return '';
             return refs.map((ref) => {
                 const m = membre(ref);
                 if (!m) return '';
-                return '<span class="fiche-personne">' + (avecLien ? ICONE_LIEN : '') + echapper(m.nom) + '</span>';
+                return '<span class="fiche-personne">' + echapper(m.nom) + '</span>';
             }).join('');
+        }
+
+        // Une colonne calculée ou absente ne s'écrit pas : Grist refuserait l'écriture entière.
+        function colonneEcrivable(tableId, colId) {
+            if (!schemaMeta) return false;
+            const t = (schemaMeta.tables || []).find((x) => x.tableId === tableId);
+            const c = t && (schemaMeta.cols || []).find((x) => x.parentId === t.id && x.colId === colId);
+            return Boolean(c && !c.isFormula);
+        }
+
+        function blocDescription() {
+            if (!colonneEcrivable('Projects', 'Description')) {
+                return bloc('bloc-description', 'Description', texteOuVide(projet.Description));
+            }
+            return '<div class="fiche-bloc bloc-description"><label class="fiche-label" for="saisie-description">Description</label>'
+                + '<div class="fiche-valeur"><textarea id="saisie-description" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
+                + echapper(projet.Description == null ? '' : projet.Description) + '</textarea></div></div>';
+        }
+
+        async function enregistrerDescription(champ) {
+            const valeur = champ.value;
+            if (!projet || valeur === (projet.Description == null ? '' : String(projet.Description))) return;
+            try {
+                await grist.docApi.applyUserActions([['UpdateRecord', 'Projects', projet.id, { Description: valeur }]]);
+                projet.Description = valeur;
+            } catch (e) {
+                console.error(LOG, 'description refusée :', (e && e.message) || e);
+                const valeurChamp = champ.closest('.fiche-valeur');
+                if (valeurChamp && !valeurChamp.querySelector('.fiche-erreur')) {
+                    valeurChamp.insertAdjacentHTML('beforeend', '<p class="fiche-erreur">Description non enregistrée : '
+                        + echapper((e && e.message) || e) + '</p>');
+                }
+            }
+        }
+
+        // Domaine du responsable d'un chantier, à la couleur que le Gantt donne à ce domaine.
+        function domaineDuChantier(r) {
+            const m = r.chantier && r.responsable ? membre(r.responsable) : null;
+            if (!m || !m.Domaine) return null;
+            return { nom: m.Domaine, couleur: TF.couleurDeDomaine(equipes.get(r.responsable.table) || [], m.Domaine) };
         }
 
         function texteOuVide(v) {
@@ -894,6 +968,7 @@
             const type = texteOuVide(projet.Type);
             return '<header class="fiche-entete">'
                 + '<h1 class="fiche-titre">' + echapper(projet.nom || 'Sans titre') + '</h1>'
+                + '<span class="fiche-statut">WIP</span>'
                 + (type ? '<span class="fiche-type">' + type + '</span>' : '')
                 + '</header>';
         }
@@ -902,11 +977,11 @@
             return '<section class="fiche-cadrage">'
                 + '<div class="fiche-colonne">'
                 + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean)))
-                + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor), true))
-                + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles), true))
+                + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
+                + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
                 + '</div>'
                 + '<div class="fiche-colonne large">'
-                + bloc('bloc-description', 'Description', texteOuVide(projet.Description))
+                + blocDescription()
                 + '<div class="fiche-trio">'
                 + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
                 + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
@@ -945,13 +1020,18 @@
                     ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (replie ? '▶' : '▼') + '</button>'
                     : '<span class="fiche-chevron-vide"></span>';
                 const teinte = r.responsable && membre(r.responsable) ? (membre(r.responsable).couleur || '#3e5de7') : '#4a9ae0';
-                return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + '">'
-                    + '<div class="fiche-ligne">' + chevron
+                const domaine = domaineDuChantier(r);
+                const bandeau = (avecNom) => (domaine
+                    ? '<span class="bandeau-domaine" style="background-color:' + echapper(domaine.couleur) + '">' + (avecNom ? echapper(domaine.nom) : '') + '</span>'
+                    : '');
+                return '<div class="fiche-rang' + (r.chantier ? ' est-chantier' : '') + (domaine ? ' avec-domaine' : '') + '"'
+                    + (domaine ? ' style="--teinte-domaine:' + echapper(domaine.couleur) + '"' : '') + '>'
+                    + '<div class="fiche-ligne">' + bandeau(true) + chevron
                     + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span></span>'
                     + '<span class="fiche-progression">' + Math.round(r.progression || 0) + '%</span>'
                     + (r.filles ? '<span class="fiche-filles">↳' + r.filles + '</span>' : '')
                     + '</div>'
-                    + '<div class="fiche-piste">'
+                    + '<div class="fiche-piste">' + bandeau(false)
                     + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '">'
                         + (r.progression ? '<span class="fiche-avancee" style="width:' + Math.min(Math.max(r.progression, 0), 100) + '%"></span>' : '')
                         + '</span>' : '')
@@ -959,7 +1039,6 @@
             }).join('');
 
             return '<section class="fiche-route">'
-                + '<h2>' + (nbChantiers > 1 ? 'Feuilles de route des ' + nbChantiers + ' chantiers associés' : 'Feuille de route du chantier associé') + '</h2>'
                 + '<div class="fiche-grille">'
                 + '<div class="fiche-entetes"><div class="fiche-ligne fiche-ligne-tete">Chantiers et tâches</div>'
                 + '<div class="fiche-piste fiche-piste-tete"><div class="fiche-mois-ligne">' + mois.join('') + '</div></div></div>'
@@ -993,6 +1072,8 @@
                 + '</div>';
         }
 
+        let rendu = false;
+
         function rendre() {
             const racine = el('fiche');
             if (!projet) {
@@ -1009,8 +1090,24 @@
                 return;
             }
             racine.style.setProperty('--teinte-fiche', gabarit.teinte);
+            // Une relecture des tables redessine la fiche : la saisie en cours y survit, curseur compris.
+            const actif = document.activeElement;
+            const enCours = actif && actif.id === 'saisie-description'
+                ? { valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
+                : null;
+            rendu = true;
             racine.innerHTML = enTete() + messageDeRefus() + cadrage()
                 + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
+            rendu = false;
+            const saisie = el('saisie-description');
+            if (saisie) {
+                if (enCours) {
+                    saisie.value = enCours.valeur;
+                    saisie.focus();
+                    saisie.setSelectionRange(enCours.debut, enCours.fin);
+                }
+                saisie.addEventListener('blur', () => { if (!rendu) enregistrerDescription(saisie); });
+            }
             racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
                 const id = Number(b.dataset.chantier);
                 if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
@@ -1070,7 +1167,9 @@
 
         function indexerPersonnes(tables, lots) {
             personnes = new Map();
+            equipes = new Map();
             tables.forEach((table, i) => {
+                equipes.set(table, lots[i]);
                 if (!lots[i].length) console.warn(LOG, 'aucune personne lue dans', table);
                 lots[i].forEach((m) => {
                     personnes.set(table + ':' + m.id, m);
