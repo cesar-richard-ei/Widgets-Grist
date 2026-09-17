@@ -258,7 +258,7 @@ const toGristChoiceList  = (arr) => arr?.length ? ['L', ...arr] : null;
 ### Fiche (v16) — fiche d'un projet
 
 Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistrement sélectionné, reçu par
-`onRecord`. Aucun volet, aucune poignée : la description est le seul champ qui s'écrit.
+`onRecord`. Aucun volet, aucune poignée : seules la description et l'actualité s'écrivent.
 
 - **Périmètre.** Les catégories `Projet`, `Produit` et `Offre de service` ouvrent une fiche, le
   Produit sans feuille de route ; une autre catégorie affiche un message qui la nomme. La catégorie
@@ -268,6 +268,8 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   existe et n'est pas calculée ; sinon le bloc reste en lecture. Un rendu déclenché par `onRecords`
   pendant la saisie restitue le texte, le focus et la sélection. Le champ éditable a son propre fond
   (`--fond-saisie`), distinct des blocs en lecture seule.
+- **Actualité.** Même mécanique sur `Projects.Actualites`, sans historisation. Colonne posée par le
+  métier : sans elle, le bloc n'apparaît pas.
 - **Statut.** Pastille « WIP » fixe dans l'en-tête, en attendant une colonne de statut sur `Projects`.
 - **Bandeau de domaine.** Un chantier dont le responsable porte un `Team.Domaine` reçoit une bande à
   la couleur de ce domaine, nom compris, sur sa ligne et sa piste. La couleur vient de
