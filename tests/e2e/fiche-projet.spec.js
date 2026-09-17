@@ -459,3 +459,41 @@ test('un champ editable se distingue des champs en lecture seule', async ({ page
     const fond = (sel) => fiche(page).locator(sel).evaluate((e) => getComputedStyle(e).backgroundColor);
     expect(await fond('.bloc-description textarea')).not.toBe(await fond('.bloc-budget .fiche-valeur'));
 });
+
+const avecActualites = () => {
+    const doc = D.documentCible();
+    doc.Projects.columns.Actualites = { type: 'Text' };
+    doc.Projects.records.find((p) => p.id === DATALAB).Actualites = 'Ouverture aux équipes en octobre.';
+    return doc;
+};
+
+test('l actualite du projet s affiche et s edite quand la colonne existe', async ({ page }) => {
+    await D.ouvrirFiche(page, avecActualites(), DATALAB);
+
+    const champ = fiche(page).locator('.bloc-actualites textarea');
+    await expect(champ).toHaveValue('Ouverture aux équipes en octobre.');
+    await champ.fill('Ouverture repoussée à novembre.');
+    await champ.blur();
+
+    await expect.poll(() => page.evaluate(() => window.grist.docApi.fetchTable('Projects')
+        .then((t) => t.Actualites[t.id.indexOf(2)]))).toBe('Ouverture repoussée à novembre.');
+});
+
+test('sans colonne actualite, la fiche n en montre pas', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    await expect(fiche(page).locator('.bloc-description')).toBeVisible();
+    await expect(fiche(page).locator('.bloc-actualites')).toHaveCount(0);
+});
+
+test('une saisie d actualite survit a une relecture des tables', async ({ page }) => {
+    await D.ouvrirFiche(page, avecActualites(), DATALAB);
+
+    const champ = fiche(page).locator('.bloc-actualites textarea');
+    await champ.fill('Brouillon en cours');
+    await page.evaluate(() => window.grist.docApi.applyUserActions([['UpdateRecord', 'Projects', 2, { Budget_alloue: '12 k€' }]]));
+
+    await expect(fiche(page).locator('.bloc-budget')).toContainText('12 k€');
+    await expect(fiche(page).locator('.bloc-actualites textarea')).toHaveValue('Brouillon en cours');
+    await expect(fiche(page).locator('.bloc-actualites textarea')).toBeFocused();
+});

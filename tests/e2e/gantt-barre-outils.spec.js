@@ -77,3 +77,20 @@ test('la priorite n est plus un filtre du gantt', async ({ page }) => {
     expect(await page.evaluate(() => Object.keys(filters).sort())).toEqual(['domaine', 'project', 'responsable']);
     await expect(page.locator('.filter-option[data-filtre="priority"]')).toHaveCount(0);
 });
+
+test('le filtre Projet ne porte plus de pastille de couleur', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await page.locator('#filtreProjet .filter-btn').click();
+
+    await expect(page.locator('#menuProjet .filter-option').first()).toBeVisible();
+    await expect(page.locator('#menuProjet .dot')).toHaveCount(0);
+});
+
+test('le selecteur de couleur nomme le mode sans le mot Couleur et se signale actif', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    const libelles = await page.locator('#colorSelect option').allTextContents();
+    expect(libelles.length).toBeGreaterThan(0);
+    libelles.forEach((l) => expect(l).not.toMatch(/couleur/i));
+    await expect(page.locator('#colorSelect')).toHaveCSS('border-top-color', 'rgb(62, 93, 231)');
+});
