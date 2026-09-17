@@ -839,7 +839,7 @@ const SANS_DOMAINE = 'Sans domaine';
 const optionDeFiltre = (cle, valeur, appel, coche, couleur, libelle) =>
     `<div class="filter-option" data-filtre="${cle}" data-valeur="${valeur}" onclick="${appel}">`
     + `<input type="checkbox" ${coche ? 'checked' : ''}>`
-    + `<span class="dot" style="background:${couleurSure(couleur)}"></span>${libelle}</div>`;
+    + (couleur ? `<span class="dot" style="background:${couleurSure(couleur)}"></span>` : '') + `${libelle}</div>`;
 
 // Les personnes se cherchent par equipe : chaque domaine annonce le sien, et ceux qui n'en ont pas
 // ferment la liste plutot que de s'y melanger.
@@ -864,7 +864,7 @@ function updateFilterMenus() {
         project: projects.length
             ? projects.slice().sort((a, b) => parOrdreAlphabetique(a.nom, b.nom))
                 .map(p => optionDeFiltre('project', p.id, `toggleFilter('project', ${p.id})`,
-                    filters.project.includes(p.id), p.couleur, escapeHtml(p.nom))).join('')
+                    filters.project.includes(p.id), null, escapeHtml(p.nom))).join('')
             : '<div class="filter-option muted">Aucun projet</div>',
         domaine: domaines.map((d, rang) => optionDeFiltre('domaine', escapeAttr(d), `basculerDomaine(${rang})`,
             filters.domaine.includes(d), couleurDeDomaine(d), escapeHtml(d))).join(''),
@@ -919,7 +919,7 @@ function renderFilterChips() {
     const chip = (key, val, label, color) => { const dot = color ? `<span class="fc-dot" style="background:${couleurSure(color)}"></span>` : ''; return `<span class="fc-chip">${dot}${label}<span class="fc-x" title="Retirer" onclick="toggleFilter('${key}', ${val})">${X}</span></span>`; };
     const eff = effectiveFilters();
     const chips = [];
-    eff.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', p&&p.couleur)); });
+    eff.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', null)); });
     eff.domaine.forEach(d => { const rang = domainesConnus().indexOf(d); chips.push(`<span class="fc-chip">${escapeHtml(d)}<span class="fc-x" title="Retirer" onclick="basculerDomaine(${rang})">${X}</span></span>`); });
     eff.responsable.forEach(id => { const m = team.find(x=>x.id===id); chips.push(chip('responsable', id, m?escapeHtml(m.nom):'Membre', m&&getTeamMemberColor(id))); });
     if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }

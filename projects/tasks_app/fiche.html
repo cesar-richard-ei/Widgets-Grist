@@ -922,26 +922,35 @@
             return Boolean(c && !c.isFormula);
         }
 
-        function blocDescription() {
-            if (!colonneEcrivable('Projects', 'Description')) {
-                return bloc('bloc-description', 'Description', texteOuVide(projet.Description));
+        // Champs de Projects modifiables depuis la fiche. L'actualité n'existe que si le document porte la
+        // colonne : elle n'est pas historisée, la saisie remplace la précédente.
+        const SAISIES = [
+            { colonne: 'Description', classe: 'bloc-description', libelle: 'Description', facultative: false },
+            { colonne: 'Actualites', classe: 'bloc-actualites', libelle: 'Actualité', facultative: true }
+        ];
+        const idSaisie = (s) => 'saisie-' + s.colonne.toLowerCase();
+
+        function blocSaisie(s) {
+            if (!colonneEcrivable('Projects', s.colonne)) {
+                if (s.facultative) return '';
+                return bloc(s.classe, s.libelle, texteOuVide(projet[s.colonne]));
             }
-            return '<div class="fiche-bloc bloc-description"><label class="fiche-label" for="saisie-description">Description</label>'
-                + '<div class="fiche-valeur"><textarea id="saisie-description" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
-                + echapper(projet.Description == null ? '' : projet.Description) + '</textarea></div></div>';
+            return '<div class="fiche-bloc ' + s.classe + '"><label class="fiche-label" for="' + idSaisie(s) + '">' + echapper(s.libelle) + '</label>'
+                + '<div class="fiche-valeur"><textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
+                + echapper(projet[s.colonne] == null ? '' : projet[s.colonne]) + '</textarea></div></div>';
         }
 
-        async function enregistrerDescription(champ) {
+        async function enregistrerSaisie(s, champ) {
             const valeur = champ.value;
-            if (!projet || valeur === (projet.Description == null ? '' : String(projet.Description))) return;
+            if (!projet || valeur === (projet[s.colonne] == null ? '' : String(projet[s.colonne]))) return;
             try {
-                await grist.docApi.applyUserActions([['UpdateRecord', 'Projects', projet.id, { Description: valeur }]]);
-                projet.Description = valeur;
+                await grist.docApi.applyUserActions([['UpdateRecord', 'Projects', projet.id, { [s.colonne]: valeur }]]);
+                projet[s.colonne] = valeur;
             } catch (e) {
-                console.error(LOG, 'description refusée :', (e && e.message) || e);
+                console.error(LOG, s.libelle, 'refusée :', (e && e.message) || e);
                 const valeurChamp = champ.closest('.fiche-valeur');
                 if (valeurChamp && !valeurChamp.querySelector('.fiche-erreur')) {
-                    valeurChamp.insertAdjacentHTML('beforeend', '<p class="fiche-erreur">Description non enregistrée : '
+                    valeurChamp.insertAdjacentHTML('beforeend', '<p class="fiche-erreur">' + echapper(s.libelle) + ' non enregistrée : '
                         + echapper((e && e.message) || e) + '</p>');
                 }
             }
@@ -981,7 +990,7 @@
                 + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
                 + '</div>'
                 + '<div class="fiche-colonne large">'
-                + blocDescription()
+                + SAISIES.map(blocSaisie).join('')
                 + '<div class="fiche-trio">'
                 + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
                 + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
@@ -1092,22 +1101,23 @@
             racine.style.setProperty('--teinte-fiche', gabarit.teinte);
             // Une relecture des tables redessine la fiche : la saisie en cours y survit, curseur compris.
             const actif = document.activeElement;
-            const enCours = actif && actif.id === 'saisie-description'
-                ? { valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
+            const enCours = actif && actif.classList && actif.classList.contains('fiche-saisie')
+                ? { id: actif.id, valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
                 : null;
             rendu = true;
             racine.innerHTML = enTete() + messageDeRefus() + cadrage()
                 + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
             rendu = false;
-            const saisie = el('saisie-description');
-            if (saisie) {
-                if (enCours) {
+            SAISIES.forEach((s) => {
+                const saisie = el(idSaisie(s));
+                if (!saisie) return;
+                if (enCours && enCours.id === saisie.id) {
                     saisie.value = enCours.valeur;
                     saisie.focus();
                     saisie.setSelectionRange(enCours.debut, enCours.fin);
                 }
-                saisie.addEventListener('blur', () => { if (!rendu) enregistrerDescription(saisie); });
-            }
+                saisie.addEventListener('blur', () => { if (!rendu) enregistrerSaisie(s, saisie); });
+            });
             racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
                 const id = Number(b.dataset.chantier);
                 if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
