@@ -369,6 +369,16 @@ test('les pastilles de personnes n ont ni icone de lien ni coins arrondis au-del
     rayons.forEach((r) => expect(r).toBeLessThanOrEqual(2));
 });
 
+test('les pastilles de personnes ont le meme retrait sur les quatre cotes', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const retraits = await fiche(page).locator('.fiche-personne').first().evaluate((e) => {
+        const s = getComputedStyle(e);
+        return [s.paddingTop, s.paddingRight, s.paddingBottom, s.paddingLeft];
+    });
+    expect(new Set(retraits).size).toBe(1);
+});
+
 test('la feuille de route ne porte plus de titre au-dessus des chantiers', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
 
