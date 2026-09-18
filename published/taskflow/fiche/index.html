@@ -977,7 +977,7 @@
             const type = texteOuVide(projet.Type);
             return '<header class="fiche-entete">'
                 + '<h1 class="fiche-titre">' + echapper(projet.nom || 'Sans titre') + '</h1>'
-                + '<span class="fiche-statut">WIP</span>'
+                //TODO: Add statut :  + '<span class="fiche-statut">WIP</span>'
                 + (type ? '<span class="fiche-type">' + type + '</span>' : '')
                 + '</header>';
         }
