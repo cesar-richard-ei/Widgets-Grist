@@ -996,6 +996,7 @@ function render() {
     // relachement (voir les ecouteurs mousedown/mouseup plus bas).
     if (gesteSourisEnCours) { renduEnAttente = true; return; }
     updatePeriodLabel();
+    ancrerDefilement();
     computeEffectiveRange();
     renderTimelineHeader();
     renderTaskList();
@@ -1031,6 +1032,29 @@ function updateGanttOverlay() {
         html = '<div class="tf-empty"><span class="tf-empty-glyph">'+gicon+'</span><div class="tf-empty-title">Aucune tâche à planifier</div><div class="tf-empty-sub">Créez une première tâche avec des dates pour la voir apparaître sur la timeline.</div><button class="tf-empty-btn primary" onclick="openCreatePanel()"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Nouvelle tâche</button></div>';
     }
     ov.innerHTML = html; ov.style.display = "flex";
+}
+
+// Date qui touche le bord gauche de la timeline, relevée avant que la plage ne soit recalculée.
+// Le défilement se mesure en pixels : un filtre qui fait entrer une tâche ancienne recule la borne
+// gauche de plusieurs années, et les mêmes pixels désignent alors 2020. On note donc la date, pour
+// la remettre au même endroit une fois la nouvelle plage connue.
+let ancrageDefilement = null;
+
+// L'ancrage vaut aussi quand le défilement est à zéro : c'est même le cas qui a été remonté quatre
+// fois. Un filtre étroit tient dans la largeur, l'utilisateur est collé à gauche sur le mois
+// courant, et le filtre suivant ramène une tâche de 2020 juste devant lui.
+function ancrerDefilement() {
+    const sc = document.getElementById('timelineScroll');
+    ancrageDefilement = sc && tachesLues && effectivePxPerDay > 0
+        ? addDays(effectiveStart, sc.scrollLeft / effectivePxPerDay)
+        : null;
+}
+
+function rendreLAncrage(start, pxPerDay) {
+    const sc = document.getElementById('timelineScroll');
+    if (!sc || !ancrageDefilement || !(pxPerDay > 0)) return;
+    const vise = getDaysDiff(start, ancrageDefilement) * pxPerDay;
+    sc.scrollLeft = Math.min(Math.max(Math.round(vise), 0), Math.max(sc.scrollWidth - sc.clientWidth, 0));
 }
 
 // Calcule la plage effective = période vue étendue uniquement pour les tâches qui la chevauchent.
@@ -1349,6 +1373,8 @@ function renderTimeline() {
     grid.style.width = totalWidth + 'px';
     grid.style.height = (ft.length * 44) + 'px';
     peindreFondGrille(grid, cfg.unit, start, totalDays, numCells, effectiveCellWidth);
+
+    rendreLAncrage(start, pxPerDay);
 
     if (calerSurFenetre) {
         const sc = document.getElementById('timelineScroll');
