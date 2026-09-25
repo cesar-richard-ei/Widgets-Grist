@@ -1037,7 +1037,8 @@ function updateGanttOverlay() {
 // Date qui touche le bord gauche de la timeline, relevée avant que la plage ne soit recalculée.
 // Le défilement se mesure en pixels : un filtre qui fait entrer une tâche ancienne recule la borne
 // gauche de plusieurs années, et les mêmes pixels désignent alors 2020. On note donc la date, pour
-// la remettre au même endroit une fois la nouvelle plage connue.
+// la remettre au même endroit une fois la nouvelle plage connue. La fraction de jour est gardée à
+// part : addDays la tronque, et chaque rendu reculait le défilement jusqu'au début du jour.
 let ancrageDefilement = null;
 
 // L'ancrage vaut aussi quand le défilement est à zéro : c'est même le cas qui a été remonté quatre
@@ -1045,15 +1046,18 @@ let ancrageDefilement = null;
 // courant, et le filtre suivant ramène une tâche de 2020 juste devant lui.
 function ancrerDefilement() {
     const sc = document.getElementById('timelineScroll');
-    ancrageDefilement = sc && tachesLues && effectivePxPerDay > 0
-        ? addDays(effectiveStart, sc.scrollLeft / effectivePxPerDay)
-        : null;
+    if (!sc || !tachesLues || !(effectivePxPerDay > 0)) {
+        ancrageDefilement = null;
+        return;
+    }
+    const jours = sc.scrollLeft / effectivePxPerDay;
+    ancrageDefilement = { jour: addDays(effectiveStart, Math.floor(jours)), fraction: jours - Math.floor(jours) };
 }
 
 function rendreLAncrage(start, pxPerDay) {
     const sc = document.getElementById('timelineScroll');
     if (!sc || !ancrageDefilement || !(pxPerDay > 0)) return;
-    const vise = getDaysDiff(start, ancrageDefilement) * pxPerDay;
+    const vise = (getDaysDiff(start, ancrageDefilement.jour) + ancrageDefilement.fraction) * pxPerDay;
     sc.scrollLeft = Math.min(Math.max(Math.round(vise), 0), Math.max(sc.scrollWidth - sc.clientWidth, 0));
 }
 

@@ -48,3 +48,21 @@ test('poser un filtre qui fait entrer une tache ancienne ne remonte pas dans le 
 
     expect(await dateAuBordGauche(page)).toBe(avant);
 });
+
+// L'ancrage passe par une date : arrondie au jour, elle ramenait le défilement au début du jour à
+// chaque rendu, une demi-colonne en vue mois, dès qu'un redimensionnement suivait le calage.
+test('un rendu sans changement de plage laisse le defilement en place', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await page.locator('.view-controls .btn[data-view="month"]').click();
+    await D.attendreRendu(page);
+    const milieuDeJour = await page.evaluate(() => {
+        const sc = document.getElementById('timelineScroll');
+        sc.scrollLeft = Math.round(10.5 * effectivePxPerDay);
+        return sc.scrollLeft;
+    });
+
+    await page.evaluate(() => render());
+    await D.attendreRendu(page);
+
+    expect(await page.evaluate(() => document.getElementById('timelineScroll').scrollLeft)).toBe(milieuDeJour);
+});
