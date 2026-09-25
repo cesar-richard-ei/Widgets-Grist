@@ -268,9 +268,12 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   existe et n'est pas calculée ; sinon le bloc reste en lecture. Un rendu déclenché par `onRecords`
   pendant la saisie restitue le texte, le focus et la sélection. Le champ éditable a son propre fond
   (`--fond-saisie`), distinct des blocs en lecture seule.
-- **Actualité.** Même mécanique sur `Projects.Actualites`, sans historisation. Colonne posée par le
-  métier : sans elle, le bloc n'apparaît pas.
-- **Statut.** Pastille « WIP » fixe dans l'en-tête, en attendant une colonne de statut sur `Projects`.
+- **Actualités.** Encart teinté à la couleur de la fiche, entre le bandeau et le cadrage, sur
+  `Projects.Actualites`. Éditable comme la description, sans historisation. Masqué quand la ligne
+  n'a pas d'actualité ou que le document n'a pas la colonne.
+- **Statut.** `Projects.Statut`, premier bloc de la colonne de gauche comme sur la maquette Figma :
+  pastille aux couleurs du choix Grist, texte noir quand seul le fond est défini, comme Grist.
+  Masqué quand la ligne n'a pas de statut ou que le document n'a pas la colonne.
 - **Bandeau de domaine.** Un chantier dont le responsable porte un `Team.Domaine` reçoit une bande à
   la couleur de ce domaine, nom compris, sur sa ligne et sa piste. La couleur vient de
   `TF.couleurDeDomaine`, la même règle que le filtre Domaine et le bandeau du Gantt.

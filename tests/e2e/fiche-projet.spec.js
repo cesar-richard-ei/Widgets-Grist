@@ -399,10 +399,60 @@ test('l en-tete de colonne Chantiers et taches ecrit plus grand que les rangs', 
     expect(tailles.tete).toBeLessThanOrEqual(tailles.description);
 });
 
-test('l en-tete annonce le statut du projet en WIP', async ({ page }) => {
+const avecStatut = (valeur) => {
+    const doc = D.documentCible();
+    doc.Projects.columns.Statut = {
+        type: 'Choice',
+        widgetOptions: JSON.stringify({
+            choices: ['En cadrage', 'En réalisation'],
+            choiceOptions: { 'En réalisation': { fillColor: '#C8F0D2', textColor: '#1C6B34' } }
+        })
+    };
+    doc.Projects.records.find((p) => p.id === DATALAB).Statut = valeur;
+    return doc;
+};
+
+test('le statut du projet ouvre le cadrage, aux couleurs de son choix', async ({ page }) => {
+    await D.ouvrirFiche(page, avecStatut('En réalisation'), DATALAB);
+
+    const pastille = fiche(page).locator('.fiche-colonne').first().locator('.fiche-bloc').first().locator('.fiche-statut');
+    await expect(pastille).toHaveText('En réalisation');
+    await expect(pastille).toHaveCSS('background-color', 'rgb(200, 240, 210)');
+    await expect(pastille).toHaveCSS('color', 'rgb(28, 107, 52)');
+    await expect(fiche(page).locator('.fiche-entete .fiche-statut')).toHaveCount(0);
+});
+
+test('un statut sans couleur definie garde une pastille neutre', async ({ page }) => {
+    await D.ouvrirFiche(page, avecStatut('En cadrage'), DATALAB);
+
+    await expect(fiche(page).locator('.bloc-statut .fiche-statut')).toHaveText('En cadrage');
+});
+
+// Grist écrit en noir un choix qui n'a qu'une couleur de fond : la pastille fait de même.
+test('un statut qui n a qu une couleur de fond s ecrit en noir', async ({ page }) => {
+    const doc = avecStatut('En cadrage');
+    doc.Projects.columns.Statut.widgetOptions = JSON.stringify({
+        choices: ['En cadrage'], choiceOptions: { 'En cadrage': { fillColor: '#FEF47A' } }
+    });
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const pastille = fiche(page).locator('.bloc-statut .fiche-statut');
+    await expect(pastille).toHaveCSS('background-color', 'rgb(254, 244, 122)');
+    await expect(pastille).toHaveCSS('color', 'rgb(0, 0, 0)');
+});
+
+test('sans statut renseigne, la fiche n en montre pas', async ({ page }) => {
+    await D.ouvrirFiche(page, avecStatut(''), DATALAB);
+
+    await expect(fiche(page).locator('.bloc-responsable')).toBeVisible();
+    await expect(fiche(page).locator('.bloc-statut')).toHaveCount(0);
+});
+
+test('sans colonne statut, la fiche n en montre pas', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
 
-    await expect(fiche(page).locator('.fiche-entete .fiche-statut')).toHaveText('WIP');
+    await expect(fiche(page).locator('.bloc-responsable')).toBeVisible();
+    await expect(fiche(page).locator('.bloc-statut')).toHaveCount(0);
 });
 
 // Le chantier porte en bandeau le domaine de son responsable, a la couleur que le Gantt donne a ce
@@ -487,6 +537,23 @@ test('l actualite du projet s affiche et s edite quand la colonne existe', async
 
     await expect.poll(() => page.evaluate(() => window.grist.docApi.fetchTable('Projects')
         .then((t) => t.Actualites[t.id.indexOf(2)]))).toBe('Ouverture repoussée à novembre.');
+});
+
+test('une actualite vide ne s affiche pas', async ({ page }) => {
+    const doc = avecActualites();
+    doc.Projects.records.find((p) => p.id === DATALAB).Actualites = '';
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.bloc-description')).toBeVisible();
+    await expect(fiche(page).locator('.bloc-actualites')).toHaveCount(0);
+});
+
+test('l actualite se lit entre l en-tete et le cadrage', async ({ page }) => {
+    await D.ouvrirFiche(page, avecActualites(), DATALAB);
+
+    const ordre = await fiche(page).evaluate((f) => Array.from(f.children).map((e) => e.className));
+    expect(ordre.findIndex((c) => c.includes('bloc-actualites'))).toBe(ordre.findIndex((c) => c.includes('fiche-entete')) + 1);
+    expect(ordre.findIndex((c) => c.includes('fiche-cadrage'))).toBeGreaterThan(ordre.findIndex((c) => c.includes('bloc-actualites')));
 });
 
 test('sans colonne actualite, la fiche n en montre pas', async ({ page }) => {

@@ -2,7 +2,7 @@
 
 // Fiche d'un projet : son cadrage, puis la feuille de route de ses chantiers.
 // Le widget est lié à la table Projects et ne travaille que sur l'enregistrement sélectionné.
-// Rien ne s'y crée ni ne s'y supprime : seule la description se modifie, quand le document le permet.
+// Rien ne s'y crée ni ne s'y supprime : seules la description et l'actualité se modifient, quand le document le permet.
 
 // Une catégorie par gabarit. La teinte est celle du bandeau dans la maquette, et la feuille de
 // route ne concerne pas toutes les catégories : le Produit n'en a pas. Une catégorie absente d'ici
@@ -23,6 +23,9 @@ const ETINCELLES = '<svg viewBox="0 0 24 24" width="26" height="26" fill="curren
 
 const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" focusable="false">'
     + '<path d="M12 20V5"/><path d="m6 11 6-6 6 6"/></svg>';
+
+const MEGAPHONE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">'
+    + '<path d="m3 11 15-6v14L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>';
 
 let schemaMeta = null;
 let projet = null;
@@ -192,30 +195,65 @@ function pastilles(refs) {
     }).join('');
 }
 
+function colonneMeta(tableId, colId) {
+    if (!schemaMeta) return null;
+    const t = (schemaMeta.tables || []).find((x) => x.tableId === tableId);
+    return (t && (schemaMeta.cols || []).find((x) => x.parentId === t.id && x.colId === colId)) || null;
+}
+
 // Une colonne calculée ou absente ne s'écrit pas : Grist refuserait l'écriture entière.
 function colonneEcrivable(tableId, colId) {
-    if (!schemaMeta) return false;
-    const t = (schemaMeta.tables || []).find((x) => x.tableId === tableId);
-    const c = t && (schemaMeta.cols || []).find((x) => x.parentId === t.id && x.colId === colId);
+    const c = colonneMeta(tableId, colId);
     return Boolean(c && !c.isFormula);
 }
 
-// Champs de Projects modifiables depuis la fiche. L'actualité n'existe que si le document porte la
-// colonne : elle n'est pas historisée, la saisie remplace la précédente.
-const SAISIES = [
-    { colonne: 'Description', classe: 'bloc-description', libelle: 'Description', facultative: false },
-    { colonne: 'Actualites', classe: 'bloc-actualites', libelle: 'Actualité', facultative: true }
-];
-const idSaisie = (s) => 'saisie-' + s.colonne.toLowerCase();
+// Champs de Projects modifiables depuis la fiche. L'actualité n'est pas historisée, la saisie
+// remplace la précédente ; vide ou sans colonne, elle ne s'affiche pas.
+const DESCRIPTION = { colonne: 'Description', classe: 'bloc-description', libelle: 'Description' };
+const ACTUALITES = { colonne: 'Actualites', classe: 'bloc-actualites', libelle: 'Actualités' };
+const SAISIES = [DESCRIPTION, ACTUALITES];
+const idSaisie = (s) => 'saisie-' + s.classe;
+
+function champSaisie(s) {
+    return '<textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
+        + echapper(projet[s.colonne] == null ? '' : projet[s.colonne]) + '</textarea>';
+}
 
 function blocSaisie(s) {
-    if (!colonneEcrivable('Projects', s.colonne)) {
-        if (s.facultative) return '';
-        return bloc(s.classe, s.libelle, texteOuVide(projet[s.colonne]));
-    }
+    if (!colonneEcrivable('Projects', s.colonne)) return bloc(s.classe, s.libelle, texteOuVide(projet[s.colonne]));
     return '<div class="fiche-bloc ' + s.classe + '"><label class="fiche-label" for="' + idSaisie(s) + '">' + echapper(s.libelle) + '</label>'
-        + '<div class="fiche-valeur"><textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
-        + echapper(projet[s.colonne] == null ? '' : projet[s.colonne]) + '</textarea></div></div>';
+        + '<div class="fiche-valeur">' + champSaisie(s) + '</div></div>';
+}
+
+function blocActualites() {
+    const s = ACTUALITES;
+    const texte = texteOuVide(projet[s.colonne]);
+    if (!texte) return '';
+    const titre = MEGAPHONE + echapper(s.libelle);
+    const contenu = colonneEcrivable('Projects', s.colonne)
+        ? '<label class="fiche-actualites-titre" for="' + idSaisie(s) + '">' + titre + '</label>' + champSaisie(s)
+        : '<p class="fiche-actualites-titre">' + titre + '</p><p class="fiche-actualites-texte">' + texte + '</p>';
+    return '<section class="fiche-actualites ' + s.classe + '">' + contenu + '</section>';
+}
+
+// Grist écrit en noir un choix qui n'a qu'une couleur de fond.
+function couleursDuChoix(colonne, valeur) {
+    let options = {};
+    try {
+        options = (JSON.parse((colonne && colonne.widgetOptions) || '{}').choiceOptions || {})[valeur] || {};
+    } catch (e) {
+        console.warn(LOG, 'options illisibles sur', colonne.colId);
+    }
+    const style = (options.fillColor ? 'background-color:' + options.fillColor + ';' : '')
+        + (options.textColor || options.fillColor ? 'color:' + (options.textColor || '#000000') + ';' : '');
+    return style ? ' style="' + echapper(style) + '"' : '';
+}
+
+function blocStatut() {
+    const valeur = texteOuVide(projet.Statut);
+    if (!valeur) return '';
+    return bloc('bloc-statut', 'Statut', '<span class="fiche-statut"'
+        + couleursDuChoix(colonneMeta('Projects', 'Statut'), projet.Statut) + '>' + valeur + '</span>');
 }
 
 async function enregistrerSaisie(s, champ) {
@@ -255,7 +293,6 @@ function enTete() {
     const type = texteOuVide(projet.Type);
     return '<header class="fiche-entete">'
         + '<h1 class="fiche-titre">' + echapper(projet.nom || 'Sans titre') + '</h1>'
-        + '<span class="fiche-statut">WIP</span>'
         + (type ? '<span class="fiche-type">' + type + '</span>' : '')
         + '</header>';
 }
@@ -263,12 +300,13 @@ function enTete() {
 function cadrage() {
     return '<section class="fiche-cadrage">'
         + '<div class="fiche-colonne">'
+        + blocStatut()
         + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean)))
         + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
         + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
         + '</div>'
         + '<div class="fiche-colonne large">'
-        + SAISIES.map(blocSaisie).join('')
+        + blocSaisie(DESCRIPTION)
         + '<div class="fiche-trio">'
         + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
         + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
@@ -383,7 +421,7 @@ function rendre() {
         ? { id: actif.id, valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
         : null;
     rendu = true;
-    racine.innerHTML = enTete() + messageDeRefus() + cadrage()
+    racine.innerHTML = enTete() + messageDeRefus() + blocActualites() + cadrage()
         + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
     rendu = false;
     SAISIES.forEach((s) => {
