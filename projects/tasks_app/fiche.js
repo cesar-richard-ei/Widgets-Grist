@@ -24,9 +24,6 @@ const ETINCELLES = '<svg viewBox="0 0 24 24" width="26" height="26" fill="curren
 const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" focusable="false">'
     + '<path d="M12 20V5"/><path d="m6 11 6-6 6 6"/></svg>';
 
-const MEGAPHONE = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" focusable="false" aria-hidden="true">'
-    + '<path d="m3 11 15-6v14L3 13z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>';
-
 let schemaMeta = null;
 let projet = null;
 let personnes = new Map();
@@ -225,16 +222,7 @@ function blocSaisie(s) {
         + '<div class="fiche-valeur">' + champSaisie(s) + '</div></div>';
 }
 
-function blocActualites() {
-    const s = ACTUALITES;
-    const texte = texteOuVide(projet[s.colonne]);
-    if (!texte) return '';
-    const titre = MEGAPHONE + echapper(s.libelle);
-    const contenu = colonneEcrivable('Projects', s.colonne)
-        ? '<label class="fiche-actualites-titre" for="' + idSaisie(s) + '">' + titre + '</label>' + champSaisie(s)
-        : '<p class="fiche-actualites-titre">' + titre + '</p><p class="fiche-actualites-texte">' + texte + '</p>';
-    return '<section class="fiche-actualites ' + s.classe + '">' + contenu + '</section>';
-}
+const blocActualites = () => (texteOuVide(projet[ACTUALITES.colonne]) ? blocSaisie(ACTUALITES) : '');
 
 // Grist écrit en noir un choix qui n'a qu'une couleur de fond.
 function couleursDuChoix(colonne, valeur) {
@@ -307,6 +295,7 @@ function cadrage() {
         + '</div>'
         + '<div class="fiche-colonne large">'
         + blocSaisie(DESCRIPTION)
+        + blocActualites()
         + '<div class="fiche-trio">'
         + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
         + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
@@ -421,7 +410,7 @@ function rendre() {
         ? { id: actif.id, valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
         : null;
     rendu = true;
-    racine.innerHTML = enTete() + messageDeRefus() + blocActualites() + cadrage()
+    racine.innerHTML = enTete() + messageDeRefus() + cadrage()
         + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
     rendu = false;
     SAISIES.forEach((s) => {

@@ -660,7 +660,17 @@
             </div>
         </div>
         <div class="header-right">
-            <span class="libelle-filtres" id="libelleFiltres">Filtres :</span>
+            <span class="libelle-filtres" id="libelleCouleurs">Couleurs</span>
+            <div class="sort-selector" id="zoneCouleur">
+                <select id="colorSelect" onchange="changeColorMode(this.value)" title="Couleur des barres">
+                    <option value="responsable">Responsable</option>
+                    <option value="priority">Priorité</option>
+                    <option value="project">Projet</option>
+                    <option value="assignee">Assigné</option>
+                    <option value="status">Statut</option>
+                </select>
+            </div>
+            <span class="libelle-filtres" id="libelleFiltres">Filtres</span>
             <div class="filter-dropdown" id="filtreProjet">
                 <button class="filter-btn" onclick="toggleFilterMenu('filtreProjet')">Projet<span class="filter-count" style="display:none"></span></button>
                 <div class="filter-menu wide" id="menuProjet"></div>
@@ -672,15 +682,6 @@
             <div class="filter-dropdown" id="filtreResponsable">
                 <button class="filter-btn" onclick="toggleFilterMenu('filtreResponsable')">Responsable<span class="filter-count" style="display:none"></span></button>
                 <div class="filter-menu wide" id="menuResponsable"></div>
-            </div>
-            <div class="sort-selector" id="zoneCouleur">
-                <select id="colorSelect" onchange="changeColorMode(this.value)" title="Couleur des barres">
-                    <option value="responsable">Responsable</option>
-                    <option value="priority">Priorité</option>
-                    <option value="project">Projet</option>
-                    <option value="assignee">Assigné</option>
-                    <option value="status">Statut</option>
-                </select>
             </div>
             <div class="zone-ajout" id="zoneAjout">
                 <button class="btn primary" id="btnAjouter" onclick="ouvrirMenuAjout(event)">+ Ajouter</button>
