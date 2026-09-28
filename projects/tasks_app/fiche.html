@@ -67,7 +67,7 @@
         /* Un champ qui se modifie porte un fond a peine plus bleute que ceux en lecture seule. */
         .bloc-description .fiche-valeur:has(.fiche-saisie), .bloc-actualites .fiche-valeur:has(.fiche-saisie) { background: none; padding: 0; }
         .fiche-saisie {
-            display: block; width: 100%; min-height: 6.5em; resize: vertical; margin: 0;
+            display: block; width: 100%; resize: none; overflow: hidden; margin: 0;
             background: var(--fond-saisie); color: var(--texte); border: 1px solid transparent;
             border-radius: var(--rayon); padding: 15px 17px; font: inherit; font-size: 0.95rem; line-height: 1.5;
         }
@@ -1105,7 +1105,7 @@
         const idSaisie = (s) => 'saisie-' + s.classe;
 
         function champSaisie(s) {
-            return '<textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
+            return '<textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="1" placeholder="Non renseigné">'
                 + echapper(projet[s.colonne] == null ? '' : projet[s.colonne]) + '</textarea>';
         }
 
@@ -1135,6 +1135,13 @@
             if (!valeur) return '';
             return bloc('bloc-statut', 'Statut', '<span class="fiche-statut"'
                 + couleursDuChoix(colonneMeta('Projects', 'Statut'), projet.Statut) + '>' + valeur + '</span>');
+        }
+
+        function ajusterHauteur(champ) {
+            // Rendue dans une iframe masquée, la case n'a pas encore de hauteur à mesurer.
+            if (!champ.scrollHeight) return;
+            champ.style.height = 'auto';
+            champ.style.height = (champ.scrollHeight + champ.offsetHeight - champ.clientHeight) + 'px';
         }
 
         async function enregistrerSaisie(s, champ) {
@@ -1315,6 +1322,8 @@
                     saisie.setSelectionRange(enCours.debut, enCours.fin);
                 }
                 saisie.addEventListener('blur', () => { if (!rendu) enregistrerSaisie(s, saisie); });
+                saisie.addEventListener('input', () => ajusterHauteur(saisie));
+                ajusterHauteur(saisie);
             });
             racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
                 const id = Number(b.dataset.chantier);
@@ -1433,6 +1442,7 @@
                 // Grist ne notifie que la table du widget : une modification dans les chantiers, les tâches
                 // ou les effectifs passerait inaperçue sans cette relecture.
                 grist.onRecords(async () => await charger(projet, true));
+                window.addEventListener('resize', () => document.querySelectorAll('.fiche-saisie').forEach(ajusterHauteur));
             } catch (e) {
                 el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s’ouvre depuis un document Grist.</p>';
             }

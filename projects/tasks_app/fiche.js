@@ -217,7 +217,7 @@ const SAISIES = [DESCRIPTION, ACTUALITES];
 const idSaisie = (s) => 'saisie-' + s.classe;
 
 function champSaisie(s) {
-    return '<textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="4" placeholder="Non renseigné">'
+    return '<textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="1" placeholder="Non renseigné">'
         + echapper(projet[s.colonne] == null ? '' : projet[s.colonne]) + '</textarea>';
 }
 
@@ -247,6 +247,13 @@ function blocStatut() {
     if (!valeur) return '';
     return bloc('bloc-statut', 'Statut', '<span class="fiche-statut"'
         + couleursDuChoix(colonneMeta('Projects', 'Statut'), projet.Statut) + '>' + valeur + '</span>');
+}
+
+function ajusterHauteur(champ) {
+    // Rendue dans une iframe masquée, la case n'a pas encore de hauteur à mesurer.
+    if (!champ.scrollHeight) return;
+    champ.style.height = 'auto';
+    champ.style.height = (champ.scrollHeight + champ.offsetHeight - champ.clientHeight) + 'px';
 }
 
 async function enregistrerSaisie(s, champ) {
@@ -427,6 +434,8 @@ function rendre() {
             saisie.setSelectionRange(enCours.debut, enCours.fin);
         }
         saisie.addEventListener('blur', () => { if (!rendu) enregistrerSaisie(s, saisie); });
+        saisie.addEventListener('input', () => ajusterHauteur(saisie));
+        ajusterHauteur(saisie);
     });
     racine.querySelectorAll('.fiche-chevron').forEach((b) => b.addEventListener('click', () => {
         const id = Number(b.dataset.chantier);
@@ -545,6 +554,7 @@ function demarrer() {
         // Grist ne notifie que la table du widget : une modification dans les chantiers, les tâches
         // ou les effectifs passerait inaperçue sans cette relecture.
         grist.onRecords(async () => await charger(projet, true));
+        window.addEventListener('resize', () => document.querySelectorAll('.fiche-saisie').forEach(ajusterHauteur));
     } catch (e) {
         el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s’ouvre depuis un document Grist.</p>';
     }
