@@ -61,6 +61,10 @@
         .filter-option:hover { background: var(--bg); }
         .filter-option.active { background: var(--primary-light); color: var(--primary); }
         .filter-option .dot { width: 8px; height: 8px; border-radius: 50%; }
+        /* Un libellé sur plusieurs lignes garde sa case et sa pastille en face de la première. */
+        .filter-option[data-filtre] { align-items: flex-start; }
+        .filter-option[data-filtre] > input { flex: none; margin-top: calc((1lh - 13px) / 2); margin-bottom: 0; }
+        .filter-option[data-filtre] > .dot { flex: none; margin-top: calc((1lh - 8px) / 2); }
         .active-filters { display: flex; gap: 6px; flex-wrap: wrap; }
         .filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--primary-light); color: var(--primary); border-radius: 12px; font-size: 0.7rem; font-weight: 500; }
         .filter-chip button { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 0.8rem; padding: 0; margin-left: 2px; }
