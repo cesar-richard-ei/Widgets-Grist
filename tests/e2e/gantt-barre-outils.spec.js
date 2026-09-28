@@ -94,3 +94,14 @@ test('le selecteur de couleur nomme le mode sans le mot Couleur et se signale ac
     libelles.forEach((l) => expect(l).not.toMatch(/couleur/i));
     await expect(page.locator('#colorSelect')).toHaveCSS('border-top-color', 'rgb(62, 93, 231)');
 });
+
+test('les menus de filtre font 320 px de large', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    for (const filtre of ['filtreProjet', 'filtreDomaine', 'filtreResponsable']) {
+        await page.locator('#' + filtre + ' .filter-btn').click();
+        const menu = page.locator('#' + filtre + ' .filter-menu');
+        await expect(menu).toHaveClass(/open/);
+        expect(await menu.evaluate((m) => m.getBoundingClientRect().width)).toBe(320);
+    }
+});
