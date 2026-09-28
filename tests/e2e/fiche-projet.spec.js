@@ -623,3 +623,28 @@ test('un chantier affiche la progression de ses taches, comme le Gantt', async (
     const remplissage = await rang.locator('.fiche-avancee').evaluate((e) => e.style.width);
     expect(remplissage).toBe('55%');
 });
+
+// Description et actualité prennent la hauteur de leur texte : tout se lit sans défiler dans la
+// case, et une ligne seule ne laisse pas de grand vide.
+test('les cases description et actualite s adaptent a leur contenu', async ({ page }) => {
+    const doc = avecActualites();
+    const datalab = doc.Projects.records.find((p) => p.id === DATALAB);
+    datalab.Description = Array.from({ length: 9 }, (_, i) => 'Paragraphe ' + (i + 1) + ' de la description.').join('\n\n');
+    datalab.Actualites = 'Une ligne.';
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const mesure = (sel) => fiche(page).locator(sel).evaluate((e) => ({ hauteur: e.clientHeight, contenu: e.scrollHeight }));
+    const description = await mesure('.bloc-description textarea');
+    const actualite = await mesure('.bloc-actualites textarea');
+    expect(description.contenu).toBeLessThanOrEqual(description.hauteur);
+    expect(description.hauteur).toBeGreaterThan(300);
+    expect(actualite.hauteur).toBeLessThan(70);
+
+    const champ = fiche(page).locator('.bloc-actualites textarea');
+    await champ.click();
+    await champ.press('End');
+    await champ.pressSequentially('\nDeuxième ligne\nTroisième ligne');
+    const apres = await mesure('.bloc-actualites textarea');
+    expect(apres.hauteur).toBeGreaterThan(actualite.hauteur);
+    expect(apres.contenu).toBeLessThanOrEqual(apres.hauteur);
+});
