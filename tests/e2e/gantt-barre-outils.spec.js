@@ -126,3 +126,17 @@ test('la case du filtre projet s aligne sur la premiere ligne du nom', async ({ 
     expect(mesure.lignes).toBeGreaterThan(1);
     expect(mesure.ecart).toBeLessThanOrEqual(1.5);
 });
+
+// Les flèches et le sélecteur de couleur prennent la taille des autres boutons de la barre.
+test('les fleches et le selecteur de couleur ont la hauteur des autres boutons', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    const hauteur = (sel) => page.locator(sel).first().evaluate((e) => e.getBoundingClientRect().height);
+    const reference = await hauteur('#btnAjouter');
+
+    expect(await hauteur('.header-left .btn')).toBe(reference);
+    expect(await hauteur('.btn-nav')).toBe(reference);
+    expect(await hauteur('#colorSelect')).toBe(reference);
+    const fleche = await page.locator('.btn-nav').first().evaluate((e) => e.getBoundingClientRect());
+    expect(fleche.width).toBe(fleche.height);
+});
