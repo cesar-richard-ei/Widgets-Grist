@@ -108,37 +108,45 @@ test('les menus de filtre font 320 px de large', async ({ page }) => {
     }
 });
 
-// Un nom de projet sur deux lignes garde sa case en face de la première, pas au milieu du bloc.
-test('la case du filtre projet s aligne sur la premiere ligne du nom', async ({ page }) => {
+// Un nom de projet sur deux lignes garde sa case au niveau de la première : centrée sur ses
+// minuscules, comme l'œil lit la ligne, et non sur la hauteur de ligne qui la ferait remonter.
+test('la case du filtre projet est au niveau de la premiere ligne du nom', async ({ page }) => {
     const doc = D.documentCible();
-    doc.Projects.records[0].nom = 'Portail des habilitations et des accès aux entrepôts de données de santé';
+    doc.Projects.records[0].nom = '[A cadrer] Développement de la stack technique de la base centrale et de ses entrepôts';
     await D.ouvrirGantt(page, doc);
     await page.locator('#filtreProjet .filter-btn').click();
 
-    const option = page.locator('#menuProjet .filter-option', { hasText: 'Portail' });
+    const option = page.locator('#menuProjet .filter-option', { hasText: 'stack technique' });
     const mesure = await option.evaluate((opt) => {
         const texte = Array.from(opt.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
         const range = document.createRange();
         range.selectNodeContents(texte);
-        const lignes = range.getClientRects();
-        const caseACocher = opt.querySelector('input').getBoundingClientRect();
-        return { lignes: lignes.length, ecart: Math.abs((caseACocher.top + caseACocher.height / 2) - (lignes[0].top + lignes[0].height / 2)) };
+        const lignes = range.getClientRects().length;
+        // Repère posé devant le texte : son bas est la ligne de base, sa hauteur celle des minuscules.
+        const repere = document.createElement('span');
+        repere.style.cssText = 'display:inline-block;width:0;height:1ex;vertical-align:baseline';
+        opt.insertBefore(repere, texte);
+        const r = repere.getBoundingClientRect();
+        repere.remove();
+        const c = opt.querySelector('input').getBoundingClientRect();
+        return { lignes, ecart: Math.abs((c.top + c.height / 2) - (r.bottom - r.height / 2)) };
     });
 
     expect(mesure.lignes).toBeGreaterThan(1);
-    expect(mesure.ecart).toBeLessThanOrEqual(1.5);
+    expect(mesure.ecart).toBeLessThanOrEqual(0.75);
 });
 
-// Les flèches et le sélecteur de couleur prennent la taille des autres boutons de la barre.
-test('les fleches et le selecteur de couleur ont la hauteur des autres boutons', async ({ page }) => {
-    await D.ouvrirGantt(page);
+// Tous les contrôles de la barre ont la même hauteur et le même alignement, sans exception.
+for (const largeur of [1440, 500]) test('tous les controles de la barre ont la meme hauteur et le meme alignement a ' + largeur + ' px', async ({ page }) => {
+    await D.ouvrirGantt(page, null, { largeur: largeur });
 
-    const hauteur = (sel) => page.locator(sel).first().evaluate((e) => e.getBoundingClientRect().height);
-    const reference = await hauteur('#btnAjouter');
+    const boites = await page.evaluate(() => ['.header-left .btn', '.btn-nav', '.view-controls', '.filter-btn', '#colorSelect', '#btnAjouter']
+        .map((sel) => { const b = document.querySelector(sel).getBoundingClientRect(); return { sel, haut: b.top, hauteur: b.height }; }));
 
-    expect(await hauteur('.header-left .btn')).toBe(reference);
-    expect(await hauteur('.btn-nav')).toBe(reference);
-    expect(await hauteur('#colorSelect')).toBe(reference);
+    boites.forEach((b) => {
+        expect(b.hauteur, b.sel).toBe(boites[0].hauteur);
+        expect(b.haut, b.sel).toBe(boites[0].haut);
+    });
     const fleche = await page.locator('.btn-nav').first().evaluate((e) => e.getBoundingClientRect());
     expect(fleche.width).toBe(fleche.height);
 });

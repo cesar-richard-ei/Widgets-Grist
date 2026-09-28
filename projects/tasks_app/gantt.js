@@ -98,17 +98,14 @@ function domaineDeChantier(t) {
     const m = team.find(x => x.id === t.Responsable);
     return m && m.Domaine ? m.Domaine : null;
 }
-// Hauteurs en pixels, reprises de --row-height et --bandeau-domaine dans gantt.html. Le bandeau est
-// une bande à part au-dessus de la ligne du chantier : la ligne grandit d'autant, des deux côtés.
+// Reprennent --row-height et --bandeau-domaine de gantt.html.
 const HAUTEUR_LIGNE = 44;
 const HAUTEUR_BANDEAU_DOMAINE = 24;
 
-// Géométrie verticale des lignes affichées, seule source des positions de la timeline.
 function geometrieDesLignes() {
     const hauteurs = currentVisible.map(v => HAUTEUR_LIGNE
         + (!v.groupe && v.task && domaineDeChantier(v.task) ? HAUTEUR_BANDEAU_DOMAINE : 0));
     const g = TF.geometrieDesLignes(hauteurs);
-    // Haut de la partie de la ligne qui porte la barre, sous le bandeau éventuel.
     g.hautContenu = (i) => g.hauts[i] + hauteurs[i] - HAUTEUR_LIGNE;
     return g;
 }

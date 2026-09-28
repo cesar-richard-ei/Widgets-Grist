@@ -61,10 +61,10 @@
         .filter-option:hover { background: var(--bg); }
         .filter-option.active { background: var(--primary-light); color: var(--primary); }
         .filter-option .dot { width: 8px; height: 8px; border-radius: 50%; }
-        /* Un libellé sur plusieurs lignes garde sa case et sa pastille en face de la première. */
-        .filter-option[data-filtre] { align-items: flex-start; }
-        .filter-option[data-filtre] > input { flex: none; margin-top: calc((1lh - 13px) / 2); margin-bottom: 0; }
-        .filter-option[data-filtre] > .dot { flex: none; margin-top: calc((1lh - 8px) / 2); }
+        .filter-option[data-filtre] { display: block; --retrait: 19px; padding-left: calc(8px + var(--retrait)); text-indent: calc(-1 * var(--retrait)); }
+        .filter-option[data-filtre]:has(> .dot) { --retrait: 33px; }
+        .filter-option[data-filtre] > input { width: 13px; height: 13px; margin: 0 6px 0 0; vertical-align: middle; }
+        .filter-option[data-filtre] > .dot { display: inline-block; margin-right: 6px; vertical-align: middle; }
         .active-filters { display: flex; gap: 6px; flex-wrap: wrap; }
         .filter-chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--primary-light); color: var(--primary); border-radius: 12px; font-size: 0.7rem; font-weight: 500; }
         .filter-chip button { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 0.8rem; padding: 0; margin-left: 2px; }
@@ -122,8 +122,7 @@
             padding: 2px 6px; border-radius: 4px; background: var(--card-bg); color: var(--text-muted); border: 1px solid var(--border); }
         .groupe-nom { font-size: 0.8rem; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .task-row:hover { background: var(--bg); }
-        /* Bandeau du domaine du responsable sur un chantier : une bande à part au-dessus de la ligne,
-           qui grandit d'autant à gauche comme sur la timeline. Hauteur reprise par gantt.js. */
+        /* --bandeau-domaine est repris par HAUTEUR_BANDEAU_DOMAINE dans gantt.js. */
         .task-row.avec-domaine { position: relative; height: calc(var(--row-height) + var(--bandeau-domaine)); padding-top: var(--bandeau-domaine); }
         .grid-row.avec-domaine { height: calc(var(--row-height) + var(--bandeau-domaine)); background-size: 100% var(--bandeau-domaine), 100% 100%; background-repeat: no-repeat; }
         .bandeau-domaine { position: absolute; left: 0; right: 0; top: 0; height: var(--bandeau-domaine); padding: 6px 0 6px 12px; box-sizing: border-box;
@@ -566,13 +565,15 @@
         .header-right { margin-left: auto; }
         .btn, .filter-btn { white-space: nowrap; }
         .btn-nav { width: 34px; padding: 0; justify-content: center; }
-        .header-left .btn, #btnAjouter { height: 34px; }
+        :root { --hauteur-controle: 34px; }
+        .header-left .btn, .view-controls, .filter-btn, #colorSelect, #btnAjouter { height: var(--hauteur-controle); box-sizing: border-box; }
+        .view-controls .btn { height: 100%; }
         .current-period, .libelle-filtres { font-weight: 650; font-size: 0.95rem; letter-spacing: -0.01em; white-space: nowrap; }
         .view-controls { display: inline-flex; gap: 2px; background: var(--surface-2); padding: 3px; border-radius: 9px; }
         .view-controls .btn { border: none; background: transparent; box-shadow: none; height: 28px; padding: 0 11px; color: var(--text-muted); }
         .view-controls .btn:hover { background: rgba(127,127,127,.08); }
         .view-controls .btn.active { background: var(--card-bg); color: var(--primary); box-shadow: var(--shadow); }
-        .sort-selector select, #colorSelect { height: 34px; border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); font-size: 0.74rem; padding: 0 8px; }
+        .sort-selector select, #colorSelect { border-radius: 8px; border: 1px solid var(--border); background: var(--card-bg); color: var(--text); font-size: 0.74rem; padding: 0 8px; }
         /* Un mode de couleur est toujours actif : le selecteur porte l'habit d'un filtre pose. */
         #colorSelect { border-color: var(--primary); color: var(--primary); background: var(--p-50); }
         .filter-btn.has-filter, .filter-btn.active { background: var(--p-50); border-color: var(--primary); color: var(--primary); }
@@ -602,13 +603,14 @@
 
         /* ═════ Responsive mobile (widget embarqué étroit) ═════ */
         @media (max-width: 560px) {
-            /* Barre sur une seule ligne, ce qui dépasse se rattrape au défilement horizontal. */
             .header { padding: 8px 12px; flex-wrap: nowrap; overflow-x: auto; }
             .header-left, .header-center, .header-right { flex-wrap: nowrap; gap: 6px; }
-            .header-right { margin-left: 0; }
+            .header-right { margin-left: 0; order: 0; width: auto; margin-top: 0; padding-top: 0; border-top: 0; }
             .current-period, .libelle-filtres { font-size: 0.82rem; }
             .view-controls { overflow-x: auto; max-width: 100%; }
-            .btn, .filter-btn, #colorSelect { min-height: 38px; }
+            .btn { min-height: 38px; }
+            :root { --hauteur-controle: 38px; }
+            .view-controls .btn { min-height: 0; }
             .btn-nav { width: 38px; }
             :root { --task-list-width: 132px; --cell-width: 26px; }
             /* Panneau → feuille glissant du bas (bottom-sheet) */
@@ -1244,8 +1246,6 @@
             /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
              * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
              * Entrée : { start:Date, depEnd:Date, depStart:Date, tStart:Date, depIdx, tIdx, pxPerDay, lien, y1, y2 }
-             * `y1` et `y2`, centres des deux lignes, remplacent le calcul par le rang quand les lignes
-             * n'ont pas toutes la même hauteur.
              * `lien` vaut 'fin' (défaut, fin du prédécesseur) ou 'debut' (son début) : les deux arrivent
              * sur le début du successeur, seule l'origine change.
              * Sortie : { x1, y1, x2, y2, midX, pathD, arrowPoints }
@@ -1266,7 +1266,6 @@
                 };
             }
 
-            // Haut de chaque ligne, cumul des hauteurs de celles qui la précèdent.
             function geometrieDesLignes(hauteurs) {
                 const hauts = [];
                 let total = 0;
@@ -1562,17 +1561,14 @@
             const m = team.find(x => x.id === t.Responsable);
             return m && m.Domaine ? m.Domaine : null;
         }
-        // Hauteurs en pixels, reprises de --row-height et --bandeau-domaine dans gantt.html. Le bandeau est
-        // une bande à part au-dessus de la ligne du chantier : la ligne grandit d'autant, des deux côtés.
+        // Reprennent --row-height et --bandeau-domaine de gantt.html.
         const HAUTEUR_LIGNE = 44;
         const HAUTEUR_BANDEAU_DOMAINE = 24;
 
-        // Géométrie verticale des lignes affichées, seule source des positions de la timeline.
         function geometrieDesLignes() {
             const hauteurs = currentVisible.map(v => HAUTEUR_LIGNE
                 + (!v.groupe && v.task && domaineDeChantier(v.task) ? HAUTEUR_BANDEAU_DOMAINE : 0));
             const g = TF.geometrieDesLignes(hauteurs);
-            // Haut de la partie de la ligne qui porte la barre, sous le bandeau éventuel.
             g.hautContenu = (i) => g.hauts[i] + hauteurs[i] - HAUTEUR_LIGNE;
             return g;
         }
