@@ -103,7 +103,7 @@
             flex: 0 0 var(--colonne); display: flex; align-items: center; gap: 8px;
             padding: 4px 10px; border-right: 1px solid var(--trait); overflow: hidden;
         }
-        .fiche-ligne-tete { font-weight: 700; font-size: 0.9rem; padding: 12px 10px; align-items: flex-end; }
+        .fiche-ligne-tete { font-weight: 700; font-size: 0.9rem; padding: 12px 10px; align-items: center; }
         .fiche-intitule { min-width: 0; flex: 1; }
         /* Sans les dates, le titre dispose de deux lignes plutot que d'une coupe a l'ellipse. */
         .fiche-nom {
@@ -135,9 +135,9 @@
         }
         .fiche-piste .bandeau-domaine { padding-left: 0; }
         .fiche-piste-tete { display: flex; flex-direction: column; }
-        .fiche-mois-ligne { display: flex; }
+        .fiche-mois-ligne { display: flex; flex: 1; }
         .fiche-mois {
-            text-align: center; font-size: 0.6rem; color: var(--texte-doux); font-weight: 600;
+            display: flex; align-items: center; justify-content: center; font-size: 0.6rem; color: var(--texte-doux); font-weight: 600;
             text-transform: capitalize; padding: 4px 0; border-left: 1px solid var(--trait); overflow: hidden;
         }
 

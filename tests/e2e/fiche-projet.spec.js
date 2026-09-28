@@ -582,3 +582,29 @@ test('une saisie d actualite survit a une relecture des tables', async ({ page }
     await expect(fiche(page).locator('.bloc-actualites textarea')).toHaveValue('Brouillon en cours');
     await expect(fiche(page).locator('.bloc-actualites textarea')).toBeFocused();
 });
+
+// L'en-tête de la feuille de route n'a qu'une rangée : les mois en occupent toute la hauteur,
+// sans la place vide de l'ancienne ligne des semaines.
+test('l en tete de la feuille de route tient sur une seule rangee', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    const m = await fiche(page).locator('.fiche-entetes').evaluate((tete) => {
+        const r = tete.getBoundingClientRect();
+        const mois = tete.querySelector('.fiche-mois').getBoundingClientRect();
+        const libelle = tete.querySelector('.fiche-ligne-tete');
+        const texte = document.createRange();
+        texte.selectNodeContents(libelle);
+        const l = texte.getBoundingClientRect();
+        const moisTexte = document.createRange();
+        moisTexte.selectNodeContents(tete.querySelector('.fiche-mois'));
+        const mt = moisTexte.getBoundingClientRect();
+        return {
+            haut: mois.top - r.top, bas: r.bottom - mois.bottom,
+            centres: Math.abs((l.top + l.height / 2) - (mt.top + mt.height / 2))
+        };
+    });
+
+    expect(m.haut).toBeLessThan(1);
+    expect(m.bas).toBeLessThan(2);
+    expect(m.centres).toBeLessThan(1.5);
+});
