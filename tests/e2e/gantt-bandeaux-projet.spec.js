@@ -64,8 +64,9 @@ test('la timeline garde une ligne en face de chaque ligne affichée', async ({ p
     await D.deplier(page, 'Socle technique', 'Cadrage des outils');
     const ecart = await page.evaluate(() => {
         const rang = Array.from(document.querySelectorAll('#taskList > div')).findIndex((l) => l.innerText.includes('Cadrage des outils'));
+        const piste = document.querySelectorAll('#timelineGrid .grid-row')[rang];
         const barre = document.querySelector('#timelineGrid .gantt-bar[data-id="1"]');
-        return barre ? Math.abs(parseFloat(barre.style.top) - (rang * 44 + 10)) : null;
+        return barre ? Math.abs(parseFloat(barre.style.top) - (piste.offsetTop + 10)) : null;
     });
     expect(ecart).toBeLessThan(1);
 });

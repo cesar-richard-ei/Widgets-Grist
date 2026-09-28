@@ -98,6 +98,21 @@ function domaineDeChantier(t) {
     const m = team.find(x => x.id === t.Responsable);
     return m && m.Domaine ? m.Domaine : null;
 }
+// Hauteurs en pixels, reprises de --row-height et --bandeau-domaine dans gantt.html. Le bandeau est
+// une bande à part au-dessus de la ligne du chantier : la ligne grandit d'autant, des deux côtés.
+const HAUTEUR_LIGNE = 44;
+const HAUTEUR_BANDEAU_DOMAINE = 24;
+
+// Géométrie verticale des lignes affichées, seule source des positions de la timeline.
+function geometrieDesLignes() {
+    const hauteurs = currentVisible.map(v => HAUTEUR_LIGNE
+        + (!v.groupe && v.task && domaineDeChantier(v.task) ? HAUTEUR_BANDEAU_DOMAINE : 0));
+    const g = TF.geometrieDesLignes(hauteurs);
+    // Haut de la partie de la ligne qui porte la barre, sous le bandeau éventuel.
+    g.hautContenu = (i) => g.hauts[i] + hauteurs[i] - HAUTEUR_LIGNE;
+    return g;
+}
+
 const bandeauDomaine = (domaine) => '<span class="bandeau-domaine" style="background-color:' +
     escapeAttr(couleurDeDomaine(domaine)) + '">' + escapeHtml(domaine) + '</span>';
 
@@ -1334,6 +1349,7 @@ function peindreFondGrille(grid, unite, start, totalDays, numCells, cw) {
 function renderTimeline() {
     // WBS-02: utiliser currentVisible (ordre DFS) au lieu d'une liste plate filtrée
     const ft = currentVisible.map(v => v.task);
+    const lignes = geometrieDesLignes();
     const dimmedSet = new Set(currentVisible.filter(v => v.dimmed).map(v => v.task.id));
     const start = effectiveStart;
     const totalDays = effectiveDays;
@@ -1375,7 +1391,7 @@ function renderTimeline() {
     const grid = document.getElementById('timelineGrid');
     grid.innerHTML = gridHtml;
     grid.style.width = totalWidth + 'px';
-    grid.style.height = (ft.length * 44) + 'px';
+    grid.style.height = lignes.total + 'px';
     peindreFondGrille(grid, cfg.unit, start, totalDays, numCells, effectiveCellWidth);
 
     rendreLAncrage(start, pxPerDay);
@@ -1434,7 +1450,7 @@ function renderTimeline() {
 
         const p = getTaskPriority(t);
         const jalon = isJalon(t);
-        const top = idx * 44 + 10;
+        const top = lignes.hautContenu(idx) + 10;
         const geo = TF.computeBarGeometry({ start: start, tStart: tStart, tEnd: tEnd, pxPerDay: pxPerDay });
         const left = geo.left, width = geo.width;
         const selected = t.id === selectedTaskId;
@@ -1480,7 +1496,7 @@ function renderTimeline() {
     });
 
     sortirLesTitresQuiDebordent(grid);
-    renderDependencies(ft, start, pxPerDay, barresTracees);
+    renderDependencies(ft, start, pxPerDay, barresTracees, lignes);
 }
 
 // Un titre plus long que sa barre est reporté à côté d'elle plutôt que tronqué. La largeur de la
@@ -1503,7 +1519,7 @@ function sortirLesTitresQuiDebordent(grid) {
     }
 }
 
-function renderDependencies(ft, start, pxPerDay, barresTracees) {
+function renderDependencies(ft, start, pxPerDay, barresTracees, lignes) {
     const existing = document.querySelector('.dependencies-layer');
     if (existing) existing.remove();
 
@@ -1534,7 +1550,8 @@ function renderDependencies(ft, start, pxPerDay, barresTracees) {
             const depIdx = taskIndexMap[depId];
             const tIdx = taskIndexMap[t.id];
 
-            const dep = TF.computeDependencyPath({ start: start, depEnd: depEnd, depStart: depStart, tStart: tStart, depIdx: depIdx, tIdx: tIdx, pxPerDay: pxPerDay, lien: lien });
+            const dep = TF.computeDependencyPath({ start: start, depEnd: depEnd, depStart: depStart, tStart: tStart, depIdx: depIdx, tIdx: tIdx, pxPerDay: pxPerDay, lien: lien,
+                y1: lignes.hautContenu(depIdx) + HAUTEUR_LIGNE / 2, y2: lignes.hautContenu(tIdx) + HAUTEUR_LIGNE / 2 });
             const highlight = selectedTaskId === t.id || selectedTaskId === depId;
 
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');

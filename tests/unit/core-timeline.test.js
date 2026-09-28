@@ -149,3 +149,23 @@ test('computeTimelineScale : une fenetre glissante remonte aussi jusqu a la tach
     });
     assert.ok(s.effectiveStart <= new Date(2025, 5, 1), 'extendLeft ne doit plus figer la borne gauche');
 });
+
+test('geometrieDesLignes : chaque ligne commence ou finit la precedente', () => {
+    const g = TF.geometrieDesLignes([44, 68, 44]);
+    assert.deepEqual(g.hauts, [0, 44, 112]);
+    assert.equal(g.total, 156);
+});
+
+test('geometrieDesLignes : une liste vide ne mesure rien', () => {
+    assert.deepEqual(TF.geometrieDesLignes([]), { hauts: [], total: 0 });
+});
+
+test('computeDependencyPath : les ordonnees fournies priment sur le rang', () => {
+    const d = TF.computeDependencyPath({
+        start: new Date(2026, 0, 1), depEnd: new Date(2026, 0, 5), tStart: new Date(2026, 0, 10),
+        depIdx: 0, tIdx: 1, pxPerDay: 10, y1: 46, y2: 90
+    });
+    assert.equal(d.y1, 46);
+    assert.equal(d.y2, 90);
+    assert.equal(d.pathD, 'M50,46 C70,46 70,90 90,90');
+});
