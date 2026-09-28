@@ -68,6 +68,8 @@ jobs:
           repo="${GITHUB_REPOSITORY#*/}"
           base="https://${owner}.github.io/${repo}"
 
+          # Le site se construit depuis projects/ selon site.json. Une release anterieure a ce
+          # fonctionnement n'a pas de site.json : son published/ est servi tel quel.
           build() {
             (
               cd "$1"
@@ -76,7 +78,13 @@ jobs:
                 npm install --ignore-scripts
               }
               npm run build --if-present
-              GITHUB_USER="$owner" REPO_NAME="$repo" BASE_URL="$2" node scripts/generate-manifest.js
+              if [ -f site.json ]; then
+                GITHUB_USER="$owner" REPO_NAME="$repo" BASE_URL="$2" node scripts/build-site.js "$3"
+              else
+                GITHUB_USER="$owner" REPO_NAME="$repo" BASE_URL="$2" node scripts/generate-manifest.js
+                mkdir -p "$3"
+                cp -r published/. "$3"
+              fi
             )
           }
 
@@ -95,14 +103,10 @@ jobs:
 
           version_dev=$(git -C dev-src describe --tags --always 2>/dev/null || echo dev)
 
-          build "$prod_src" "$base"
-          mkdir -p site
-          cp -r "$prod_src/published/." site/
+          build "$prod_src" "$base" "$PWD/site"
           estampiller site "${VERSION_RACINE}"
 
-          build dev-src "${base}/dev"
-          mkdir -p site/dev
-          cp -r dev-src/published/. site/dev/
+          build dev-src "${base}/dev" "$PWD/site/dev"
           estampiller site/dev "${version_dev}"
 
           echo "Arborescence du site :"

@@ -49,7 +49,7 @@ Les widgets apparaîtront automatiquement dans le sélecteur "Custom Widget".
 
 1. Forkez ce repo
 2. Modifiez les widgets dans `projects/`
-3. Publiez vers `published/`
+3. Déclarez ce qui doit être servi dans `site.json`
 4. Activez GitHub Pages sur votre fork
 
 ---
@@ -57,8 +57,8 @@ Les widgets apparaîtront automatiquement dans le sélecteur "Custom Widget".
 ## Structure du repo
 
 ```
-published/         ← Widgets en production (déployés sur GitHub Pages)
-projects/          ← Projets en développement
+projects/          ← Sources des widgets, servies telles quelles
+site.json          ← Ce que sert GitHub Pages, et depuis quelle source
 skills/            ← Documentation technique et patterns
 scripts/           ← Outils de build et publication
 ```

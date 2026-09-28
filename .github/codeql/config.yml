@@ -1,6 +1,1 @@
 name: Widgets-Grist
-
-# published/ est une copie de projects/ produite par la promotion : l'analyser
-# dupliquerait chaque alerte.
-paths-ignore:
-  - published

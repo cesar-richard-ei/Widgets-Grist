@@ -32,13 +32,12 @@ tmp/
 temp/
 *.tmp
 
-# Artefact de build : regenere a chaque deploiement et dependant de BASE_URL
-published/manifest.json
+# Site construit par scripts/build-site.js : regenere a chaque deploiement
+/site/
 
 # Test coverage
 coverage/
 .nyc_output/
-published/taskflow/HARMONIZATION.md
 
 # Playwright
 /test-results/

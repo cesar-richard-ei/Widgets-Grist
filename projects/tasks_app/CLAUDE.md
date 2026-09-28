@@ -554,7 +554,7 @@ voir d'un coup d'œil quelle version est réellement servie, le cache de GitHub 
 croire à un déploiement absent.
 
 **Ne pas remplacer le marqueur ailleurs qu'au déploiement** : le mettre dans le dépôt ferait
-diverger `projects/` et `published/` à chaque release.
+changer les sources à chaque release.
 
 ### Volet tâche (Gantt)
 
@@ -1043,14 +1043,10 @@ mécanisme : il reste entièrement vert dans ce cas.
 
 ### Déploiement
 
-```
-projects/tasks_app/kanban.html     →  published/taskflow/kanban/index.html
-projects/tasks_app/gantt.html      →  published/taskflow/gantt/index.html
-projects/tasks_app/calendar.html   →  published/taskflow/calendar/index.html
-projects/tasks_app/dashboard.html  →  published/taskflow/dashboard/index.html
-projects/tasks_app/plan.html       →  published/taskflow/plan/index.html
-```
+Rien à copier : `site.json` sert chaque widget depuis sa source, `projects/tasks_app/<widget>.html`
+en `taskflow/<widget>/index.html`, et `catalogue.json` décrit les widgets à Grist. Un merge sur
+`main` part sous `/dev/`, une release à la racine. Seul `npm run build:inline` reste à lancer avant
+de commiter, et `check:inline` le vérifie en CI.
 
-Avant copie : `npm run build:inline` puis `npm run check:inline`. Après copie : `npm run manifest` pour régénérer `published/manifest.json`.
-
-URLs publiées : `https://nic01asfr.github.io/Widgets-Grist/taskflow/{widget}/`
+URLs servies : `https://cesar-richard-ei.github.io/Widgets-Grist/taskflow/{widget}/`, et `/dev/`
+devant `taskflow/` pour la qualif.
