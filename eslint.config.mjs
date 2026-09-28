@@ -6,7 +6,7 @@ export default [
     {
         ignores: [
             'node_modules/**',
-            'published/**',
+            'site/**',
             'test-results/**',
             'playwright-report/**',
             'blob-report/**'

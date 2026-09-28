@@ -6,12 +6,11 @@
   "scripts": {
     "build": "echo 'No build required for static widgets'",
     "dev": "echo 'Ouvrir les fichiers HTML directement dans le navigateur'",
-    "manifest": "node scripts/generate-manifest.js",
-    "promote": "node scripts/promote.js",
+    "site": "node scripts/build-site.js",
     "build:inline": "node scripts/build-inline.js",
     "check:inline": "node scripts/build-inline.js --check",
     "serve:dev": "node scripts/serve-dev.js",
-    "serve": "npm run manifest && npx serve published -p 3000 --cors",
+    "serve": "npm run site && npx serve site -p 3000 --cors",
     "test": "node --test tests/unit/*.test.js",
     "lint": "eslint .",
     "test:e2e": "playwright test"

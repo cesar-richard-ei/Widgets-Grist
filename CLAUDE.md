@@ -6,11 +6,11 @@ Guide de développement pour le repository de widgets Grist.
 
 ## Instructions pour agents IA
 
-**Ce repo suit une séparation stricte développement / production.**
+**Le site servi se construit depuis `projects/` : il n'y a pas de copie de publication à tenir à jour.**
 
 ### Règles essentielles
 
-1. **Ne jamais modifier `published/`** sauf demande explicite de publication
+1. **Un merge sur `main` est servi sous `/dev/`** (la qualif) : ne merger que ce qui peut y partir
 2. **Développer dans `projects/`** — tous les projets sont dans ce dossier
 3. **Chaque projet a son propre CLAUDE.md** — le lire avant toute intervention
 4. **Le manifest.json est auto-généré** — ne jamais l'éditer manuellement
@@ -29,25 +29,22 @@ Guide de développement pour le repository de widgets Grist.
 ### Workflow de travail
 
 ```
-DÉVELOPPEMENT                         PUBLICATION
-─────────────────────────────────────────────────────────
-projects/mon-widget/     ──promote──►  published/mon-widget/
-    ├── fichiers.html                      ├── package.json (obligatoire)
-    └── CLAUDE.md                          └── index.html
+projects/tasks_app/fiche.html  ──site.json──►  site/taskflow/fiche/index.html
+                                                 ├── /dev/ : main, à chaque push
+                                                 └── racine : dernière release
 ```
 
 ### Avant de coder sur un projet
 
 1. Lire le `CLAUDE.md` du projet (ex: `projects/tasks_app/CLAUDE.md`)
 2. Comprendre l'architecture existante
-3. Ne pas publier sans demande explicite
+3. Garder en tête qu'un merge sur `main` part en qualif
 
-### Quand l'utilisateur demande de "publier"
+### Ajouter un fichier au site
 
-1. Créer `published/nom-widget/package.json` avec la section `grist`
-2. Copier les fichiers finaux vers `published/nom-widget/`
-3. Exécuter `npm run manifest` pour régénérer le catalogue
-4. Commit avec message descriptif
+1. Le déclarer dans `site.json`, sous le dossier servi qui le porte
+2. Pour un nouveau widget, décrire son entrée dans le catalogue du projet (`catalogue.json`, section `grist`)
+3. `npm run site` construit le site dans `site/` : vérifier le fichier et le `manifest.json`
 
 ### Conventions de code
 
@@ -89,25 +86,14 @@ Widgets-Grist/
 │   │   ├── calendar.html
 │   │   └── ...
 │
-├── published/                    # ZONE PUBLIÉE (déployée sur GitHub Pages)
-│   ├── manifest.json            # Catalogue (généré, non versionné)
-│   │
-│   ├── taskflow/                # Widgets TaskFlow publiés
-│   │   ├── package.json
-│   │   ├── kanban/
-│   │   │   └── index.html
-│   │   ├── gantt/
-│   │   │   └── index.html
-│   │   └── calendar/
-│   │       └── index.html
-│   │
-│   └── [autres-widgets]/
+├── site.json                     # Ce que sert GitHub Pages : dossier servi → source de projects/
+├── site/                         # Site construit par scripts/build-site.js (non versionné)
 │
 ├── packages/                     # WIDGETS AVEC BUILD (optionnel)
 │   └── [widget-react]/
 │       ├── package.json
 │       ├── src/
-│       └── dist/                # Output → copié dans published/
+│       └── dist/                # Output, déclaré dans site.json
 │
 ├── skills/                       # PATTERNS DE CODE RÉUTILISABLES
 │   ├── README.md                # Index des skills
@@ -121,8 +107,7 @@ Widgets-Grist/
 └── scripts/
     ├── build-inline.js          # Inline les sources .js dans les widgets HTML
     ├── check-commits.js         # Vérifie la convention des messages de commit
-    ├── generate-manifest.js     # Génère manifest.json depuis published/
-    └── promote.js               # Copie de projects/ vers published/
+    └── build-site.js            # Construit site/ depuis projects/ et génère manifest.json
 ```
 
 ## Zones du repository
@@ -135,21 +120,22 @@ Zone de travail pour les widgets en cours de développement. **Non déployée** 
 - Les fichiers peuvent être testés localement (mode démo) ou via URL raw GitHub
 - Pas de contrainte de structure stricte
 
-### `published/` — Production
+### `site.json` et `site/` — Ce qui est servi
 
-Zone des widgets stables publiés. **Déployée sur GitHub Pages** via CI/CD.
+`site.json` décrit le site servi par GitHub Pages : pour chaque dossier servi, quel fichier de
+`projects/` va à quel chemin, et le catalogue qui décrit ses widgets à Grist. `scripts/build-site.js`
+le lit, copie les fichiers dans `site/` et génère `manifest.json`.
 
-- Chaque widget a un `package.json` avec la section `grist` (métadonnées)
-- Structure requise : `widget-name/index.html` (ou `widget-name.html`)
-- Le `manifest.json` est généré par le script, pas versionné : ses URL dépendent de `BASE_URL`
-- `lastUpdatedAt` vient du dernier commit touchant le dossier du widget, la génération est donc reproductible
+- `site/` n'est pas versionné : `pages.yml` le reconstruit à chaque déploiement
+- Une source déclarée qui n'existe pas fait échouer la construction, et le test unitaire `build-site`
+- `lastUpdatedAt` vient du dernier commit touchant les sources du dossier, la génération est donc reproductible
 
 ### `packages/` — Widgets avec build
 
 Pour les widgets nécessitant compilation (React, Vue, TypeScript...).
 
 - Chaque package a son `package.json` avec scripts de build
-- Le build output va dans `published/` via le script de build
+- Le build output est déclaré dans `site.json`
 - Utilise npm workspaces pour la gestion des dépendances
 
 ## Workflow de développement
@@ -164,30 +150,10 @@ cd projects/mon-widget/
 # Ou tester avec Grist via URL raw GitHub
 ```
 
-### 2. Promouvoir vers published/
+### 2. Publier
 
-```bash
-# Quand le widget est prêt
-npm run promote -- mon-widget
-
-# Ou manuellement : copier les fichiers vers published/
-```
-
-### 3. Publier
-
-```bash
-# Générer le manifest
-npm run manifest
-
-# Commit et push sur main
-git add .
-git commit -m "Publish mon-widget v1.0"
-git push
-
-# GitHub Actions déploie automatiquement sous /dev/
-```
-
-Pour mettre à jour la racine (version stable), créer une release GitHub. Voir la section CI/CD.
+Merger sur `main` : `pages.yml` reconstruit le site et le sert sous `/dev/`, la qualif. Pour la racine,
+servie en prod, créer une release. Voir la section CI/CD.
 
 ## Configuration Grist
 
@@ -220,14 +186,22 @@ Les widgets apparaîtront dans le sélecteur "Custom Widget" de Grist.
 ### Widget statique (sans build)
 
 ```
-published/mon-widget/
-├── package.json      # Métadonnées obligatoires
-├── index.html        # Point d'entrée
-├── style.css         # Optionnel
-└── script.js         # Optionnel
+projects/mon-widget/
+├── catalogue.json    # Entrée du catalogue Grist
+├── mon-widget.html   # Point d'entrée, servi en mon-widget/index.html
+└── CLAUDE.md
 ```
 
-**package.json minimal :**
+Puis dans `site.json` :
+
+```json
+"mon-widget": {
+    "catalogue": "projects/mon-widget/catalogue.json",
+    "fichiers": { "index.html": "projects/mon-widget/mon-widget.html" }
+}
+```
+
+**catalogue.json minimal :**
 
 ```json
 {
@@ -252,7 +226,7 @@ packages/mon-widget-react/
 │   ├── App.tsx
 │   └── index.tsx
 ├── vite.config.ts
-└── dist/             # → copié vers published/mon-widget-react/
+└── dist/             # déclaré dans site.json
 ```
 
 **package.json :**
@@ -263,7 +237,7 @@ packages/mon-widget-react/
   "version": "1.0.0",
   "scripts": {
     "dev": "vite",
-    "build": "vite build --outDir ../../published/mon-widget-react"
+    "build": "vite build"
   },
   "grist": {
     "widgetId": "@org/widget-mon-widget-react",
@@ -274,7 +248,7 @@ packages/mon-widget-react/
 }
 ```
 
-## Champs `grist` dans package.json
+## Champs `grist` du catalogue
 
 | Champ | Obligatoire | Description |
 |-------|-------------|-------------|
@@ -295,17 +269,14 @@ npm install
 # Lint JavaScript
 npm run lint
 
-# Générer le manifest.json
-npm run manifest
+# Construire le site dans site/, manifest compris
+npm run site
 
-# Promouvoir un widget de projects/ vers published/
-npm run promote -- nom-du-projet
+# Servir le site construit en local
+npm run serve
 
 # Build tous les widgets (packages/)
 npm run build
-
-# Tout en un : build + manifest
-npm run deploy
 ```
 
 ## CI/CD avec GitHub Actions
@@ -336,6 +307,10 @@ pas deux recettes à garder synchronisées.
 Chaque exécution reconstruit le site entier, la racine depuis le tag de la dernière release, `/dev/`
 depuis `main`. Tant qu'aucune release n'existe, la racine est servie depuis `main` et le workflow émet
 un avertissement.
+
+Chaque arbre est construit par son propre `scripts/build-site.js` à partir de son `site.json`. Une
+release antérieure à `site.json` (v1.30.0 et avant) n'en a pas : son dossier `published/` est alors
+servi tel quel, avec le générateur de manifest de l'époque.
 
 Le manifest de `/dev/` est généré avec `BASE_URL` pointant sur le sous-chemin, pour que ses widgets
 référencent bien les URL nightly. Chaque page reçoit une estampille substituée à
@@ -388,8 +363,7 @@ que les bibliothèques arrivent par balise `script`.
 ### `codeql.yml` — analyse statique
 
 CodeQL passe sur le JavaScript et sur les workflows eux-mêmes, à chaque PR, à chaque push sur `main` et une
-fois par semaine. `published/` est exclu par `.github/codeql/config.yml` puisque c'est une copie de
-`projects/`. Les alertes remontent dans l'onglet Security, elles ne bloquent pas le merge.
+fois par semaine. Les alertes remontent dans l'onglet Security, elles ne bloquent pas le merge.
 
 ### Configuration GitHub Pages
 
@@ -451,97 +425,15 @@ Voir `projects/tasks_app/CLAUDE.md` pour les détails.
 
 ## Guide de publication
 
-### Étape par étape
+1. Le widget fonctionne en mode démo et dans Grist, sans erreur console
+2. Ses fichiers sont déclarés dans `site.json`, son entrée dans le catalogue du projet
+3. `npm run site` construit le site sans erreur et le `manifest.json` l'annonce
+4. Merger sur `main` : il est servi sous `/dev/`
+5. Vérifier la page servie et le widget dans le document Grist de qualif
+6. Release pour la racine, puis la même vérification en prod
 
-#### 1. Préparer le widget
-
-Le widget doit être fonctionnel et testé. Vérifier :
-- [ ] Mode démo fonctionnel (ouverture locale)
-- [ ] Intégration Grist fonctionnelle
-- [ ] Pas d'erreurs console
-- [ ] Responsive / utilisable
-
-#### 2. Créer la structure dans published/
-
-```bash
-# Créer le dossier
-mkdir -p published/mon-widget
-
-# Créer le package.json (obligatoire)
-```
-
-**published/mon-widget/package.json :**
-```json
-{
-  "name": "mon-widget",
-  "version": "1.0.0",
-  "description": "Description courte du widget",
-  "grist": {
-    "widgetId": "mon-widget",
-    "name": "Mon Widget",
-    "accessLevel": "full",
-    "description": "Description affichée dans Grist"
-  }
-}
-```
-
-#### 3. Copier les fichiers
-
-```bash
-# Copier le HTML principal
-cp projects/mon-widget/widget.html published/mon-widget/index.html
-
-# Ou utiliser le script
-npm run promote -- projects/mon-widget/widget.html mon-widget
-```
-
-#### 4. Générer le manifest
-
-```bash
-npm run manifest
-```
-
-Vérifie que le widget apparaît dans `published/manifest.json`.
-
-#### 5. Commit et push
-
-```bash
-git add published/
-git commit -m "feat: publish mon-widget v1.0.0"
-git push
-```
-
-Le workflow GitHub Actions déploie automatiquement sous `/dev/`. La racine attend une release.
-
-### Widgets multiples dans un package
-
-Un seul `package.json` peut déclarer plusieurs widgets :
-
-```json
-{
-  "name": "taskflow",
-  "grist": [
-    {
-      "widgetId": "taskflow-kanban",
-      "name": "TaskFlow Kanban",
-      "url": "kanban/index.html",
-      "accessLevel": "full"
-    },
-    {
-      "widgetId": "taskflow-gantt",
-      "name": "TaskFlow Gantt",
-      "url": "gantt/index.html",
-      "accessLevel": "full"
-    }
-  ]
-}
-```
-
-### Mise à jour d'un widget
-
-1. Modifier les fichiers dans `published/`
-2. Incrémenter la version dans `package.json`
-3. `npm run manifest` + commit + push
+Un catalogue peut déclarer plusieurs widgets : `grist` est alors un tableau, chaque `url` étant
+relative au dossier servi (`kanban/`, `gantt/`...).
 
 ---
 
@@ -680,7 +572,7 @@ Quand un agent fait un changement significatif :
 
 | Ne pas faire | Faire à la place |
 |--------------|------------------|
-| Modifier `published/` sans demande | Travailler dans `projects/` |
+| Dire qu'un widget est livré après le merge | Vérifier la page servie et le widget dans Grist |
 | Créer un nouveau pattern sans vérifier skills/ | Réutiliser les patterns existants |
 | Changer l'architecture sans documenter | Mettre à jour le CLAUDE.md |
 | Ignorer le CLAUDE.md du projet | Le lire en premier |
