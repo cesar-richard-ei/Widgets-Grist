@@ -548,12 +548,20 @@ test('une actualite vide ne s affiche pas', async ({ page }) => {
     await expect(fiche(page).locator('.bloc-actualites')).toHaveCount(0);
 });
 
-test('l actualite se lit entre l en-tete et le cadrage', async ({ page }) => {
+test('l actualite se presente comme la description, juste sous elle', async ({ page }) => {
     await D.ouvrirFiche(page, avecActualites(), DATALAB);
 
-    const ordre = await fiche(page).evaluate((f) => Array.from(f.children).map((e) => e.className));
-    expect(ordre.findIndex((c) => c.includes('bloc-actualites'))).toBe(ordre.findIndex((c) => c.includes('fiche-entete')) + 1);
-    expect(ordre.findIndex((c) => c.includes('fiche-cadrage'))).toBeGreaterThan(ordre.findIndex((c) => c.includes('bloc-actualites')));
+    const blocs = await fiche(page).locator('.fiche-colonne.large > .fiche-bloc').evaluateAll((els) => els.map((e) => e.className));
+    expect(blocs.slice(0, 2)).toEqual(['fiche-bloc bloc-description', 'fiche-bloc bloc-actualites']);
+
+    const style = (sel) => fiche(page).locator(sel).evaluate((e) => {
+        const c = getComputedStyle(e);
+        return [c.fontSize, c.fontWeight, c.color, c.backgroundColor, c.paddingTop, c.borderRadius].join('|');
+    });
+    expect(await style('.bloc-actualites .fiche-label')).toBe(await style('.bloc-description .fiche-label'));
+    expect(await style('.bloc-actualites textarea')).toBe(await style('.bloc-description textarea'));
+    await expect(fiche(page).locator('.bloc-actualites .fiche-label')).toHaveText('Actualités');
+    await expect(fiche(page).locator('.fiche-actualites')).toHaveCount(0);
 });
 
 test('sans colonne actualite, la fiche n en montre pas', async ({ page }) => {
