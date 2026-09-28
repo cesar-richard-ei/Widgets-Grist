@@ -105,3 +105,24 @@ test('les menus de filtre font 320 px de large', async ({ page }) => {
         expect(await menu.evaluate((m) => m.getBoundingClientRect().width)).toBe(320);
     }
 });
+
+// Un nom de projet sur deux lignes garde sa case en face de la première, pas au milieu du bloc.
+test('la case du filtre projet s aligne sur la premiere ligne du nom', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Projects.records[0].nom = 'Portail des habilitations et des accès aux entrepôts de données de santé';
+    await D.ouvrirGantt(page, doc);
+    await page.locator('#filtreProjet .filter-btn').click();
+
+    const option = page.locator('#menuProjet .filter-option', { hasText: 'Portail' });
+    const mesure = await option.evaluate((opt) => {
+        const texte = Array.from(opt.childNodes).find((n) => n.nodeType === Node.TEXT_NODE && n.textContent.trim());
+        const range = document.createRange();
+        range.selectNodeContents(texte);
+        const lignes = range.getClientRects();
+        const caseACocher = opt.querySelector('input').getBoundingClientRect();
+        return { lignes: lignes.length, ecart: Math.abs((caseACocher.top + caseACocher.height / 2) - (lignes[0].top + lignes[0].height / 2)) };
+    });
+
+    expect(mesure.lignes).toBeGreaterThan(1);
+    expect(mesure.ecart).toBeLessThanOrEqual(1.5);
+});
