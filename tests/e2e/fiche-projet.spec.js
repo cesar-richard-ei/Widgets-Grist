@@ -359,14 +359,14 @@ test('la fiche se lit dans la table, quelle que soit la forme servie', async ({ 
     await expect(fiche(page).locator('.fiche-titre')).toHaveText('Datalab');
 });
 
-test('les pastilles de personnes n ont ni icone de lien ni coins arrondis au-dela de 2 px', async ({ page }) => {
+test('les pastilles de personnes n ont pas d icone de lien et des coins de 4 px', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
 
     await expect(fiche(page).locator('.fiche-lien')).toHaveCount(0);
     const rayons = await fiche(page).locator('.fiche-personne').evaluateAll((els) =>
         els.map((e) => parseFloat(getComputedStyle(e).borderTopLeftRadius)));
     expect(rayons.length).toBeGreaterThan(0);
-    rayons.forEach((r) => expect(r).toBeLessThanOrEqual(2));
+    rayons.forEach((r) => expect(r).toBe(4));
 });
 
 test('les pastilles de personnes ont le meme retrait sur les quatre cotes', async ({ page }) => {
