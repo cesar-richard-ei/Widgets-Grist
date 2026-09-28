@@ -9,8 +9,7 @@
             "dashboard/index.html": "projects/tasks_app/dashboard.html",
             "plan/index.html": "projects/tasks_app/plan.html",
             "fiche/index.html": "projects/tasks_app/fiche.html",
-            "whiteboard/index.html": "projects/whiteboard/index.html",
-            "skills/design-system.md": "projects/tasks_app/design-system.md"
+            "whiteboard/index.html": "projects/whiteboard/index.html"
         }
     },
     "capacity": {
