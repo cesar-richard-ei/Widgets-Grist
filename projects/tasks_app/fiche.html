@@ -679,8 +679,6 @@
             /* Tracé d'une flèche de dépendance entre deux tâches (pur). Reprend la géométrie
              * exacte de gantt.html : centre de ligne (hauteur 44, +22), courbe de Bézier, flèche.
              * Entrée : { start:Date, depEnd:Date, depStart:Date, tStart:Date, depIdx, tIdx, pxPerDay, lien, y1, y2 }
-             * `y1` et `y2`, centres des deux lignes, remplacent le calcul par le rang quand les lignes
-             * n'ont pas toutes la même hauteur.
              * `lien` vaut 'fin' (défaut, fin du prédécesseur) ou 'debut' (son début) : les deux arrivent
              * sur le début du successeur, seule l'origine change.
              * Sortie : { x1, y1, x2, y2, midX, pathD, arrowPoints }
@@ -701,7 +699,6 @@
                 };
             }
 
-            // Haut de chaque ligne, cumul des hauteurs de celles qui la précèdent.
             function geometrieDesLignes(hauteurs) {
                 const hauts = [];
                 let total = 0;
