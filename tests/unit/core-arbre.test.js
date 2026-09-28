@@ -82,3 +82,28 @@ test('un arbre vide ne casse pas', () => {
     assert.deepEqual(a.descendants(1), []);
     assert.equal(a.parent({ id: 1, parentTask: 9 }), null);
 });
+
+test('parentAvecChantier : une tache sans parent se range sous son chantier', () => {
+    const t = { id: 5, chantier: 2, parentTask: null };
+    assert.equal(TF.parentAvecChantier(t, 'chantier', true), TF.ID_CHANTIER + 2);
+});
+
+test('parentAvecChantier : une sous-tache garde sa tache parente', () => {
+    const t = { id: 6, chantier: 2, parentTask: 5 };
+    assert.equal(TF.parentAvecChantier(t, 'chantier', true), 5);
+});
+
+test('parentAvecChantier : un parentTask qui ne designe pas une tache est ignore', () => {
+    const t = { id: 6, Chantiers: 2, parentTask: 2 };
+    assert.equal(TF.parentAvecChantier(t, 'Chantiers', false), TF.ID_CHANTIER + 2);
+});
+
+test('la progression d un chantier est celle de ses taches, ponderee par leur estimation', () => {
+    const taches = [
+        { id: 1, chantier: 7, progression: 100, estimationH: 30 },
+        { id: 2, chantier: 7, progression: 0, estimationH: 10 }
+    ];
+    const a = TF.construireArbre([{ id: TF.ID_CHANTIER + 7 }].concat(
+        taches.map((t) => Object.assign({}, t, { parentTask: TF.parentAvecChantier(t, 'chantier', true) }))));
+    assert.equal(a.progression(a.tache(TF.ID_CHANTIER + 7)), 75);
+});

@@ -672,8 +672,10 @@ const aggregateProgress = (t) => arbre.progression(t);
 ```
 
 **Ce module est inliné à part**, par son propre marqueur `// <inline:core/arbre.js>` posé après
-celui du cœur, dont il dépend. Le loger dans `taskflow-core.js` aurait alourdi de 5 à 7 ko le plan,
-la fiche et le tableau blanc, qui n'affichent aucune hiérarchie : le cœur, lui, est inliné partout.
+celui du cœur, dont il dépend. Le loger dans `taskflow-core.js` aurait alourdi de 5 à 7 ko le plan
+et le tableau blanc, qui n'affichent aucune hiérarchie : le cœur, lui, est inliné partout. La fiche
+l'embarque pour la progression de ses chantiers, calculée comme dans le Gantt : même rattachement
+des tâches à leur chantier (`TF.parentAvecChantier`, `TF.ID_CHANTIER`), même `progression`.
 
 ### API commune (dans chaque widget)
 

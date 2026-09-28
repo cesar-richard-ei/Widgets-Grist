@@ -608,3 +608,18 @@ test('l en tete de la feuille de route tient sur une seule rangee', async ({ pag
     expect(m.bas).toBeLessThan(2);
     expect(m.centres).toBeLessThan(1.5);
 });
+
+// La progression d'un chantier se calcule comme dans le Gantt : moyenne de ses tâches, pondérée
+// par leur estimation quand elles en portent toutes une.
+test('un chantier affiche la progression de ses taches, comme le Gantt', async ({ page }) => {
+    const doc = D.documentCible();
+    const guide = doc.Tasks.records.find((t) => t.titre === 'Guide de prise en main');
+    Object.assign(guide, { progression: 40, estimationH: 30 });
+    doc.Tasks.records.push(Object.assign({}, guide, { id: 30, titre: 'Guide avancé', progression: 100, estimationH: 10 }));
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const rang = fiche(page).locator('.fiche-rang.est-chantier', { hasText: 'Guides utilisateurs' });
+    await expect(rang.locator('.fiche-progression')).toHaveText('55%');
+    const remplissage = await rang.locator('.fiche-avancee').evaluate((e) => e.style.width);
+    expect(remplissage).toBe('55%');
+});

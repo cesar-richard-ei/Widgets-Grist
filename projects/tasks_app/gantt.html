@@ -1319,8 +1319,8 @@
          * arbre.js — Hierarchie des taches, module du cœur TaskFlow
          * ----------------------------------------------------------------------------
          * SOURCE UNIQUE, inlinee par scripts/build-inline.js dans les seuls widgets qui
-         * affichent un arbre : gantt, kanban, calendar, dashboard. Le plan, la fiche et
-         * le tableau blanc ne la portent pas.
+         * affichent un arbre ou sa progression : gantt, kanban, calendar, dashboard et
+         * fiche. Le plan et le tableau blanc ne la portent pas.
          *
          * Se greffe sur TF : le marqueur doit donc venir APRES celui du cœur.
          * ========================================================================== */
@@ -1336,6 +1336,15 @@
          * repointe rattachait 41 taches sur 79 a une autre tache. L'index les
          * ecarte a la construction plutot que de s'en proteger a chaque parcours.
          * --------------------------------------------------------------------- */
+        // Les identifiants de Chantiers et de Tasks se recouvrent : un chantier entre dans l'arbre décalé.
+        const ID_CHANTIER = 1000000;
+
+        function parentAvecChantier(t, colonneChantier, parentTaskEstHierarchie) {
+            const sousTacheDe = parentTaskEstHierarchie ? t.parentTask : null;
+            const chantier = colonneChantier ? t[colonneChantier] : null;
+            return sousTacheDe || (chantier ? ID_CHANTIER + chantier : null);
+        }
+
         function construireArbre(taches) {
             const liste = Array.isArray(taches) ? taches : [];
             const parId = new Map();
@@ -1455,9 +1464,9 @@
         }
 
             // Greffe sur le cœur, inliné juste au-dessus. Hors navigateur, TF n'existe pas.
-            if (typeof TF !== 'undefined') TF.construireArbre = construireArbre;
+            if (typeof TF !== 'undefined') Object.assign(TF, { construireArbre: construireArbre, ID_CHANTIER: ID_CHANTIER, parentAvecChantier: parentAvecChantier });
             // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
-            if (typeof module !== 'undefined' && module.exports) module.exports = { construireArbre: construireArbre };
+            if (typeof module !== 'undefined' && module.exports) module.exports = { construireArbre: construireArbre, ID_CHANTIER: ID_CHANTIER, parentAvecChantier: parentAvecChantier };
         })();
         // </inline>
         // <inline:gantt.js> -- GENERE par scripts/build-inline.js, NE PAS EDITER ICI
@@ -1733,9 +1742,7 @@
         // recouvrant.
         const parentTaskEstHierarchie = () => typeColonne('Tasks', 'parentTask') === 'Ref:Tasks';
 
-        // Les identifiants de Chantiers et de Tasks se recouvrent : décalage pour cohabiter dans un même
-        // tableau, tout le rendu de l'arbre ne manipulant que des identifiants numériques.
-        const ID_CHANTIER = 1000000;
+        const ID_CHANTIER = TF.ID_CHANTIER;
         const estChantier = (t) => !!t && t.estChantier === true;
 
         function chantierEnLigne(c) {
@@ -1761,8 +1768,7 @@
             for (const t of tasks) {
                 const idChantier = t[colonne];
                 t.chantier = idChantier || null;
-                const sousTacheDe = hierarchie ? t.parentTask : null;
-                t.parentTask = sousTacheDe || (idChantier ? ID_CHANTIER + idChantier : null);
+                t.parentTask = TF.parentAvecChantier(t, colonne, hierarchie);
                 if (!t.projet && idChantier && parProjet.has(idChantier)) t.projet = parProjet.get(idChantier);
             }
             tasks = chantiers.concat(tasks);

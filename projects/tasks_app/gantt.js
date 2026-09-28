@@ -270,9 +270,7 @@ function pruneChantierRecord(rec) {
 // recouvrant.
 const parentTaskEstHierarchie = () => typeColonne('Tasks', 'parentTask') === 'Ref:Tasks';
 
-// Les identifiants de Chantiers et de Tasks se recouvrent : décalage pour cohabiter dans un même
-// tableau, tout le rendu de l'arbre ne manipulant que des identifiants numériques.
-const ID_CHANTIER = 1000000;
+const ID_CHANTIER = TF.ID_CHANTIER;
 const estChantier = (t) => !!t && t.estChantier === true;
 
 function chantierEnLigne(c) {
@@ -298,8 +296,7 @@ function fusionnerChantiers(brut) {
     for (const t of tasks) {
         const idChantier = t[colonne];
         t.chantier = idChantier || null;
-        const sousTacheDe = hierarchie ? t.parentTask : null;
-        t.parentTask = sousTacheDe || (idChantier ? ID_CHANTIER + idChantier : null);
+        t.parentTask = TF.parentAvecChantier(t, colonne, hierarchie);
         if (!t.projet && idChantier && parProjet.has(idChantier)) t.projet = parProjet.get(idChantier);
     }
     tasks = chantiers.concat(tasks);

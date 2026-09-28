@@ -1167,8 +1167,8 @@
          * arbre.js — Hierarchie des taches, module du cœur TaskFlow
          * ----------------------------------------------------------------------------
          * SOURCE UNIQUE, inlinee par scripts/build-inline.js dans les seuls widgets qui
-         * affichent un arbre : gantt, kanban, calendar, dashboard. Le plan, la fiche et
-         * le tableau blanc ne la portent pas.
+         * affichent un arbre ou sa progression : gantt, kanban, calendar, dashboard et
+         * fiche. Le plan et le tableau blanc ne la portent pas.
          *
          * Se greffe sur TF : le marqueur doit donc venir APRES celui du cœur.
          * ========================================================================== */
@@ -1184,6 +1184,15 @@
          * repointe rattachait 41 taches sur 79 a une autre tache. L'index les
          * ecarte a la construction plutot que de s'en proteger a chaque parcours.
          * --------------------------------------------------------------------- */
+        // Les identifiants de Chantiers et de Tasks se recouvrent : un chantier entre dans l'arbre décalé.
+        const ID_CHANTIER = 1000000;
+
+        function parentAvecChantier(t, colonneChantier, parentTaskEstHierarchie) {
+            const sousTacheDe = parentTaskEstHierarchie ? t.parentTask : null;
+            const chantier = colonneChantier ? t[colonneChantier] : null;
+            return sousTacheDe || (chantier ? ID_CHANTIER + chantier : null);
+        }
+
         function construireArbre(taches) {
             const liste = Array.isArray(taches) ? taches : [];
             const parId = new Map();
@@ -1303,9 +1312,9 @@
         }
 
             // Greffe sur le cœur, inliné juste au-dessus. Hors navigateur, TF n'existe pas.
-            if (typeof TF !== 'undefined') TF.construireArbre = construireArbre;
+            if (typeof TF !== 'undefined') Object.assign(TF, { construireArbre: construireArbre, ID_CHANTIER: ID_CHANTIER, parentAvecChantier: parentAvecChantier });
             // Export Node pour les tests. Inerte dans le navigateur, ou `module` n'existe pas.
-            if (typeof module !== 'undefined' && module.exports) module.exports = { construireArbre: construireArbre };
+            if (typeof module !== 'undefined' && module.exports) module.exports = { construireArbre: construireArbre, ID_CHANTIER: ID_CHANTIER, parentAvecChantier: parentAvecChantier };
         })();
         // </inline>
 

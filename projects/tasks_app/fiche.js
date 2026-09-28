@@ -156,6 +156,10 @@ function lignes() {
     const colDebut = colonneDateChantier('debut');
     const colFin = colonneDateChantier('fin');
     const duProjet = chantiers.filter((c) => listeRefs(c.Projets).indexOf(projet.id) !== -1);
+    // Même arbre que le Gantt, pour que les progressions affichées soient les mêmes.
+    const hierarchie = typeColonne('Tasks', 'parentTask') === 'Ref:Tasks';
+    const arbre = TF.construireArbre(duProjet.map((c) => ({ id: TF.ID_CHANTIER + c.id }))
+        .concat(taches.map((t) => Object.assign({}, t, { parentTask: TF.parentAvecChantier(t, colChantier, hierarchie) }))));
     const out = [];
     duProjet.forEach((c) => {
         const filles = colChantier ? taches.filter((t) => t[colChantier] === c.id) : [];
@@ -165,13 +169,14 @@ function lignes() {
             id: 'c' + c.id, chantier: true, titre: c.Nom_du_chantier || 'Sans titre',
             debut: gristVersDate(c[colDebut] || (debuts.length ? Math.min.apply(null, debuts) : null)),
             fin: gristVersDate(c[colFin] || (fins.length ? Math.max.apply(null, fins) : null)),
-            responsable: refPersonne('Chantiers', 'Responsable', c.Responsable), filles: filles.length
+            responsable: refPersonne('Chantiers', 'Responsable', c.Responsable), filles: filles.length,
+            progression: arbre.progression(arbre.tache(TF.ID_CHANTIER + c.id))
         });
         if (chantiersReplies.has(c.id)) return;
         filles.forEach((t) => out.push({
             id: 't' + t.id, chantier: false, titre: t.titre || 'Sans titre',
             debut: gristVersDate(t.dateDebut), fin: gristVersDate(t.dateEcheance),
-            responsable: refPersonne('Tasks', 'Responsable', t.Responsable), progression: t.progression || 0,
+            responsable: refPersonne('Tasks', 'Responsable', t.Responsable), progression: arbre.progression(arbre.tache(t.id)),
             parent: c.id
         }));
     });
