@@ -30,25 +30,27 @@ test('la gauche de la barre porte le jour, puis la periode entre ses fleches', a
     expect(gauche).toEqual(['badgeVersion', "Aujourd'hui", '◀', 'currentPeriod', '▶']);
 });
 
-test('la droite de la barre porte les trois filtres, la couleur puis l ajout', async ({ page }) => {
+test('la droite de la barre porte la couleur, les trois filtres puis l ajout', async ({ page }) => {
     await D.ouvrirGantt(page);
 
     const droite = await page.locator('.header-right > *').evaluateAll((els) => els.map((e) => e.id));
 
-    expect(droite).toEqual(['libelleFiltres', 'filtreProjet', 'filtreDomaine', 'filtreResponsable', 'zoneCouleur', 'zoneAjout']);
+    expect(droite).toEqual(['libelleCouleurs', 'zoneCouleur', 'libelleFiltres', 'filtreProjet', 'filtreDomaine', 'filtreResponsable', 'zoneAjout']);
 });
 
-test('le libelle des filtres est ecrit comme la periode', async ({ page }) => {
+test('les libelles Couleurs et Filtres sont ecrits comme la periode, sans deux-points', async ({ page }) => {
     await D.ouvrirGantt(page);
 
-    await expect(page.locator('#libelleFiltres')).toHaveText('Filtres :');
+    await expect(page.locator('#libelleCouleurs')).toHaveText('Couleurs');
+    await expect(page.locator('#libelleFiltres')).toHaveText('Filtres');
 
-    const polices = await page.evaluate(() => ['#libelleFiltres', '#currentPeriod'].map((sel) => {
+    const polices = await page.evaluate(() => ['#libelleCouleurs', '#libelleFiltres', '#currentPeriod'].map((sel) => {
         const s = getComputedStyle(document.querySelector(sel));
         return [s.fontFamily, s.fontSize, s.fontWeight, s.letterSpacing].join('|');
     }));
 
-    expect(polices[0]).toBe(polices[1]);
+    expect(polices[0]).toBe(polices[2]);
+    expect(polices[1]).toBe(polices[2]);
 });
 
 test('le dropdown unique de filtres a laisse la place a trois menus independants', async ({ page }) => {
