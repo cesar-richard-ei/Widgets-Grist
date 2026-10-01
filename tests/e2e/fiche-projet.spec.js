@@ -184,42 +184,38 @@ test('la categorie Offre de service ouvre une fiche avec sa feuille de route', a
     await expect(fiche(page).locator('.fiche-route')).toHaveCount(1);
 });
 
-// Le bandeau porte la teinte de la categorie lue, pas une couleur unique ni celle de la ligne.
-test('le bandeau prend la teinte de la categorie', async ({ page }) => {
-    const teinte = async (projet, categorie) => {
-        const doc = D.documentCible();
-        doc.Projects.records.find((p) => p.id === projet).Categorie = categorie;
-        await D.ouvrirFiche(page, doc, projet);
-        return fiche(page).locator('.fiche-entete').evaluate((e) => getComputedStyle(e).backgroundColor);
-    };
+// Le bandeau porte la couleur du domaine du responsable, quelle que soit la catégorie : Chloé
+// porte « Expérience », en ocre, et Bruno « Socle technique », en vert.
+test('le bandeau prend la couleur du domaine du responsable', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+    await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(245, 158, 11)');
 
-    expect(await teinte(DATALAB, 2)).toBe('rgb(30, 120, 211)');
+    await D.ouvrirFiche(page, null, PORTAIL);
+    await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
 });
 
-test('la teinte du bandeau suit la categorie Produit', async ({ page }) => {
-    const doc = D.documentCible();
-    doc.Projects.records.find((p) => p.id === PORTAIL).Categorie = 1;
-    await D.ouvrirFiche(page, doc, PORTAIL);
+test('les pastilles de personnes reprennent la couleur de la fiche', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
 
-    await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(120, 20, 118)');
+    await expect(fiche(page).locator('.fiche-personne').first()).toHaveCSS('background-color', 'rgb(245, 158, 11)');
 });
 
-// La teinte habille toute la fiche, pas seulement son bandeau : les pastilles de personnes la
-// reprennent, comme sur la maquette.
-test('les pastilles de personnes prennent la teinte de la categorie', async ({ page }) => {
+// Sans domaine à suivre, la fiche passe au gris de la maquette, titre en blanc.
+test('sans responsable, le bandeau est gris', async ({ page }) => {
     const doc = D.documentCible();
-    doc.Projects.records.find((p) => p.id === PORTAIL).Categorie = 1;   // Produit
-    await D.ouvrirFiche(page, doc, PORTAIL);
-
-    await expect(fiche(page).locator('.fiche-personne').first()).toHaveCSS('background-color', 'rgb(120, 20, 118)');
-});
-
-test('la teinte du bandeau suit la categorie Offre de service', async ({ page }) => {
-    const doc = D.documentCible();
-    doc.Projects.records.find((p) => p.id === DATALAB).Categorie = 3;
+    delete doc.Projects.records.find((p) => p.id === DATALAB).responsable;
     await D.ouvrirFiche(page, doc, DATALAB);
 
-    await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(127, 86, 4)');
+    await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(91, 91, 91)');
+    await expect(fiche(page).locator('.fiche-titre')).toHaveCSS('color', 'rgb(255, 255, 255)');
+});
+
+test('un responsable sans domaine laisse aussi le bandeau gris', async ({ page }) => {
+    const doc = D.documentCible();
+    delete doc.Team.records.find((m) => m.id === 3).Domaine;
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(91, 91, 91)');
 });
 
 test('sans projet selectionne, l accueil invite a choisir une ligne du tableau', async ({ page }) => {

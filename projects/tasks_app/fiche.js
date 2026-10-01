@@ -4,14 +4,14 @@
 // Le widget est lié à la table Projects et ne travaille que sur l'enregistrement sélectionné.
 // Rien ne s'y crée ni ne s'y supprime : seules la description et l'actualité se modifient, quand le document le permet.
 
-// Une catégorie par gabarit. La teinte est celle du bandeau dans la maquette, et la feuille de
-// route ne concerne pas toutes les catégories : le Produit n'en a pas. Une catégorie absente d'ici
-// n'a pas encore de fiche et annonce celle qui vient.
+// Une catégorie par gabarit. La feuille de route ne concerne pas toutes les catégories : le Produit
+// n'en a pas. Une catégorie absente d'ici n'a pas encore de fiche et annonce celle qui vient.
 const GABARITS = {
-    'Projet': { teinte: '#1e78d3', feuilleDeRoute: true },
-    'Produit': { teinte: '#781476', feuilleDeRoute: false },
-    'Offre de service': { teinte: '#7f5604', feuilleDeRoute: true }
+    'Projet': { feuilleDeRoute: true },
+    'Produit': { feuilleDeRoute: false },
+    'Offre de service': { feuilleDeRoute: true }
 };
+const GRIS_SANS_DOMAINE = '#5B5B5B';
 const NOMS_DATE_CHANTIER = { debut: ['Debut', 'Date_debut'], fin: ['Fin', 'Date_fin'] };
 const MOIS_AVANT = 1;   // la fenêtre s'ouvre au premier jour du mois précédent
 const MOIS_TOTAL = 6;
@@ -272,12 +272,14 @@ async function enregistrerSaisie(s, champ) {
     }
 }
 
-// Domaine du responsable d'un chantier, à la couleur que le Gantt donne à ce domaine.
-function domaineDuChantier(r) {
-    const m = r.chantier && r.responsable ? membre(r.responsable) : null;
+// Domaine d'une personne, à la couleur que le Gantt donne à ce domaine.
+function domaineDe(ref) {
+    const m = ref ? membre(ref) : null;
     if (!m || !m.Domaine) return null;
-    return { nom: m.Domaine, couleur: TF.couleurDeDomaine(equipes.get(r.responsable.table) || [], m.Domaine) };
+    return { nom: m.Domaine, couleur: TF.couleurDeDomaine(equipes.get(ref.table) || [], m.Domaine) };
 }
+
+const domaineDuChantier = (r) => (r.chantier ? domaineDe(r.responsable) : null);
 
 function texteOuVide(v) {
     const s = v == null ? '' : String(v).trim();
@@ -416,7 +418,8 @@ function rendre() {
         racine.innerHTML = enTete() + ficheAVenir(categorie);
         return;
     }
-    racine.style.setProperty('--teinte-fiche', gabarit.teinte);
+    const domaine = domaineDe(refPersonne('Projects', 'responsable', projet.responsable));
+    racine.style.setProperty('--teinte-fiche', domaine ? domaine.couleur : GRIS_SANS_DOMAINE);
     // Une relecture des tables redessine la fiche : la saisie en cours y survit, curseur compris.
     const actif = document.activeElement;
     const enCours = actif && actif.classList && actif.classList.contains('fiche-saisie')
