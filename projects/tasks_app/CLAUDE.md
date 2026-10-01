@@ -268,9 +268,14 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   existe et n'est pas calculée ; sinon le bloc reste en lecture. Un rendu déclenché par `onRecords`
   pendant la saisie restitue le texte, le focus et la sélection. Le champ éditable a son propre fond
   (`--fond-saisie`), distinct des blocs en lecture seule.
-- **Actualités.** Encart teinté à la couleur de la fiche, entre le bandeau et le cadrage, sur
-  `Projects.Actualites`. Éditable comme la description, sans historisation. Masqué quand la ligne
-  n'a pas d'actualité ou que le document n'a pas la colonne.
+- **Actualités.** `Projects.Actualites`, présentée exactement comme la description, juste en
+  dessous dans la colonne de droite, éditable et sans historisation. Masquée quand la ligne n'a pas
+  d'actualité ou que le document n'a pas la colonne. Les deux cases prennent la hauteur de leur
+  texte (`ajusterHauteur`).
+- **Couleur de la fiche.** `--teinte-fiche` est la couleur du domaine du responsable
+  (`TF.couleurDeDomaine`, comme le Gantt) : bandeau, texte de la pilule du type, pastilles de
+  personnes. Sans responsable, ou responsable sans domaine, le gris `#5B5B5B` de la maquette. La
+  catégorie ne décide plus que du gabarit (feuille de route ou non).
 - **Statut.** `Projects.Statut`, premier bloc de la colonne de gauche comme sur la maquette Figma :
   pastille aux couleurs du choix Grist, texte noir quand seul le fond est défini, comme Grist.
   Masqué quand la ligne n'a pas de statut ou que le document n'a pas la colonne.
