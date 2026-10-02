@@ -81,7 +81,7 @@
         }
 
         .fiche-personne {
-            display: inline-flex; align-items: center; gap: 8px; background: var(--teinte-fiche, var(--accent));
+            display: inline-flex; align-items: center; gap: 8px;
             color: #fff; border-radius: 4px; padding: 12px; font-weight: 400; font-size: 0.95rem; line-height: 1.3;
         }
 
@@ -1085,7 +1085,9 @@
             return refs.map((ref) => {
                 const m = membre(ref);
                 if (!m) return '';
-                return '<span class="fiche-personne">' + echapper(m.nom) + '</span>';
+                const domaine = domaineDe(ref);
+                return '<span class="fiche-personne" style="background-color:' + echapper(domaine ? domaine.couleur : GRIS_SANS_DOMAINE) + '">'
+                    + echapper(m.nom) + '</span>';
             }).join('');
         }
 
