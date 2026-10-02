@@ -657,6 +657,7 @@ test('une fiche sans responsable le signale par une alerte', async ({ page }) =>
     const alerte = fiche(page).locator('.bloc-responsable .fiche-alerte');
     await expect(alerte).toHaveText('Aucun responsable');
     await expect(alerte).toHaveCSS('background-color', 'rgb(220, 38, 38)');
+    expect(await alerte.evaluate((e) => getComputedStyle(e, '::before').content)).toBe('"⚠"');
 });
 
 test('une fiche avec un responsable n a pas d alerte', async ({ page }) => {
