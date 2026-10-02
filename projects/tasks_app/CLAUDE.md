@@ -273,9 +273,11 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   d'actualité ou que le document n'a pas la colonne. Les deux cases prennent la hauteur de leur
   texte (`ajusterHauteur`).
 - **Couleur de la fiche.** `--teinte-fiche` est la couleur du domaine du responsable
-  (`TF.couleurDeDomaine`, comme le Gantt) : bandeau, texte de la pilule du type, pastilles de
-  personnes. Sans responsable, ou responsable sans domaine, le gris `#5B5B5B` de la maquette. La
-  catégorie ne décide plus que du gabarit (feuille de route ou non).
+  (`TF.couleurDeDomaine`, comme le Gantt) : bandeau et texte de la pilule du type. Sans
+  responsable, ou responsable sans domaine, le gris `#5B5B5B` de la maquette. La catégorie ne
+  décide plus que du gabarit (feuille de route ou non).
+- **Pastilles de personnes.** Chacune à la couleur du domaine de sa personne, gris `#5B5B5B` sans
+  domaine.
 - **Statut.** `Projects.Statut`, premier bloc de la colonne de gauche comme sur la maquette Figma :
   pastille aux couleurs du choix Grist, texte noir quand seul le fond est défini, comme Grist.
   Masqué quand la ligne n'a pas de statut ou que le document n'a pas la colonne.
