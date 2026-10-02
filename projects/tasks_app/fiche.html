@@ -149,6 +149,10 @@
             position: absolute; top: 50%; transform: translateY(-50%); height: 12px; border-radius: 6px;
             background: var(--teinte, #94a3b8); overflow: hidden;
         }
+        .fiche-jalon {
+            position: absolute; top: 50%; width: 10px; height: 10px; border-radius: 2px;
+            transform: translate(-50%, -50%) rotate(45deg); background: var(--teinte, #94a3b8);
+        }
         .fiche-avancee { position: absolute; left: 0; top: 0; bottom: 0; background: rgba(0, 0, 0, 0.28); }
 
         /* Le trait du jour et la colonne courante se mesurent sur la piste seule : portes par le
@@ -1069,7 +1073,7 @@
                     id: 't' + t.id, chantier: false, titre: t.titre || 'Sans titre',
                     debut: gristVersDate(t.dateDebut), fin: gristVersDate(t.dateEcheance),
                     responsable: refPersonne('Tasks', 'Responsable', t.Responsable), progression: arbre.progression(arbre.tache(t.id)),
-                    parent: c.id
+                    parent: c.id, jalon: t.type === 'jalon'
                 }));
             });
             return out;
@@ -1236,8 +1240,16 @@
             const aujourdhui = pourcent(f.today);
             const colonneCourante = { gauche: pourcent(lundiCourant), largeur: (7 / f.duree) * 100 };
 
+            const losange = (r, teinte) => {
+                const d = r.fin || r.debut;
+                const position = d ? ((jours(f.debut, d) + 0.5) / f.duree) * 100 : -1;
+                return position >= 0 && position <= 100
+                    ? '<span class="fiche-jalon" style="left:' + position.toFixed(2) + '%;--teinte:' + echapper(teinte) + '"></span>'
+                    : '';
+            };
+
             const corps = rangs.map((r) => {
-                const b = barre(f, r.debut, r.fin);
+                const b = r.jalon ? null : barre(f, r.debut, r.fin);
                 const replie = chantiersReplies.has(Number(r.id.slice(1)));
                 const chevron = r.chantier && r.filles
                     ? '<button class="fiche-chevron" data-chantier="' + r.id.slice(1) + '" aria-label="Replier ou déplier">' + (replie ? '▶' : '▼') + '</button>'
@@ -1251,10 +1263,10 @@
                     + (domaine ? ' style="--teinte-domaine:' + echapper(domaine.couleur) + '"' : '') + '>'
                     + '<div class="fiche-ligne">' + bandeau(true) + chevron
                     + '<span class="fiche-intitule"><span class="fiche-nom">' + echapper(r.titre) + '</span></span>'
-                    + '<span class="fiche-progression">' + Math.round(r.progression || 0) + '%</span>'
+                    + (r.jalon ? '' : '<span class="fiche-progression">' + Math.round(r.progression || 0) + '%</span>')
                     + (r.filles ? '<span class="fiche-filles">↳' + r.filles + '</span>' : '')
                     + '</div>'
-                    + '<div class="fiche-piste">' + bandeau(false)
+                    + '<div class="fiche-piste">' + bandeau(false) + (r.jalon ? losange(r, teinte) : '')
                     + (b ? '<span class="fiche-barre" style="left:' + b.gauche.toFixed(2) + '%;width:' + b.largeur.toFixed(2) + '%;--teinte:' + echapper(teinte) + '">'
                         + (r.progression ? '<span class="fiche-avancee" style="width:' + Math.min(Math.max(r.progression, 0), 100) + '%"></span>' : '')
                         + '</span>' : '')

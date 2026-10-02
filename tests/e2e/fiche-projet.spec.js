@@ -673,3 +673,17 @@ test('une fiche avec un responsable n a pas d alerte', async ({ page }) => {
 
     await expect(fiche(page).locator('.fiche-alerte')).toHaveCount(0);
 });
+
+test('un jalon s affiche en losange a sa date, sans barre ni progression', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Tasks.records.find((t) => t.id === 4).chantier = 2;
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const rang = fiche(page).locator('.fiche-rang', { hasText: 'Plateforme prête' });
+    await expect(rang.locator('.fiche-jalon')).toHaveCount(1);
+    await expect(rang.locator('.fiche-barre')).toHaveCount(0);
+    await expect(rang.locator('.fiche-progression')).toHaveCount(0);
+    const losange = await rang.locator('.fiche-jalon').boundingBox();
+    expect(Math.abs(losange.width - losange.height)).toBeLessThan(1);
+    expect(await rang.locator('.fiche-jalon').evaluate((e) => getComputedStyle(e).transform)).not.toBe('none');
+});
