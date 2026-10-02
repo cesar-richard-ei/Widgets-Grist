@@ -301,7 +301,8 @@ function cadrage() {
     return '<section class="fiche-cadrage">'
         + '<div class="fiche-colonne">'
         + blocStatut()
-        + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean)))
+        + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean))
+            || '<span class="fiche-alerte">Aucun responsable</span>')
         + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
         + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
         + '</div>'

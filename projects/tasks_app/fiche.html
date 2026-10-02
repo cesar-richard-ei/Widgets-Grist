@@ -87,6 +87,12 @@
             color: #fff; border-radius: 4px; padding: 12px; font-weight: 400; font-size: 0.95rem; line-height: 1.3;
         }
 
+        .fiche-alerte {
+            display: inline-flex; align-items: center; gap: 8px; background: #dc2626; color: #fff;
+            border-radius: 4px; padding: 12px; font-weight: 600; font-size: 0.95rem; line-height: 1.3;
+        }
+        .fiche-alerte::before { content: 'A0'; }
+
         .fiche-route { padding: 32px 34px 0; }
         .fiche-route h2 { font-size: 0.78rem; font-weight: 800; margin: 0 0 12px; }
         .fiche-grille {
@@ -1189,7 +1195,8 @@
             return '<section class="fiche-cadrage">'
                 + '<div class="fiche-colonne">'
                 + blocStatut()
-                + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean)))
+                + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean))
+                    || '<span class="fiche-alerte">Aucun responsable</span>')
                 + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
                 + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
                 + '</div>'
