@@ -648,3 +648,19 @@ test('les cases description et actualite s adaptent a leur contenu', async ({ pa
     expect(apres.hauteur).toBeGreaterThan(actualite.hauteur);
     expect(apres.contenu).toBeLessThanOrEqual(apres.hauteur);
 });
+
+test('une fiche sans responsable le signale par une alerte', async ({ page }) => {
+    const doc = D.documentCible();
+    delete doc.Projects.records.find((p) => p.id === DATALAB).responsable;
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const alerte = fiche(page).locator('.bloc-responsable .fiche-alerte');
+    await expect(alerte).toHaveText('Aucun responsable');
+    await expect(alerte).toHaveCSS('background-color', 'rgb(220, 38, 38)');
+});
+
+test('une fiche avec un responsable n a pas d alerte', async ({ page }) => {
+    await D.ouvrirFiche(page, null, DATALAB);
+
+    await expect(fiche(page).locator('.fiche-alerte')).toHaveCount(0);
+});

@@ -278,7 +278,8 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   la couleur de ce domaine, nom compris, sur sa ligne et sa piste. La couleur vient de
   `TF.couleurDeDomaine`, la même règle que le filtre Domaine et le bandeau du Gantt.
 - **Cadrage.** Responsable, sponsors et contributeurs clés en pastilles, description, budget alloué,
-  commanditaires et deadline. Une colonne vide se dit « Non renseigné » plutôt que de laisser un blanc.
+  commanditaires et deadline. Une colonne vide se dit « Non renseigné » plutôt que de laisser un blanc,
+  sauf le responsable : son absence s'affiche en alerte rouge « Aucun responsable ».
 - **Feuille de route.** Les chantiers du projet, chacun suivi de ses tâches, sur une fenêtre fixe de
   six mois qui va du premier du mois précédent au dernier du cinquième suivant. Les chantiers se
   replient.
