@@ -193,7 +193,9 @@ function pastilles(refs) {
     return refs.map((ref) => {
         const m = membre(ref);
         if (!m) return '';
-        return '<span class="fiche-personne">' + echapper(m.nom) + '</span>';
+        const domaine = domaineDe(ref);
+        return '<span class="fiche-personne" style="background-color:' + echapper(domaine ? domaine.couleur : GRIS_SANS_DOMAINE) + '">'
+            + echapper(m.nom) + '</span>';
     }).join('');
 }
 

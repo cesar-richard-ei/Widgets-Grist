@@ -194,10 +194,22 @@ test('le bandeau prend la couleur du domaine du responsable', async ({ page }) =
     await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
 });
 
-test('les pastilles de personnes reprennent la couleur de la fiche', async ({ page }) => {
+// Chaque pastille porte le domaine de sa personne, pas celui du responsable de la fiche.
+test('chaque pastille de personne prend la couleur de son propre domaine', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
 
-    await expect(fiche(page).locator('.fiche-personne').first()).toHaveCSS('background-color', 'rgb(245, 158, 11)');
+    await expect(fiche(page).locator('.bloc-responsable .fiche-personne')).toHaveCSS('background-color', 'rgb(245, 158, 11)');
+    await expect(fiche(page).locator('.bloc-contributeurs .fiche-personne', { hasText: 'Bruno Klein' }))
+        .toHaveCSS('background-color', 'rgb(16, 185, 129)');
+});
+
+test('une personne sans domaine a une pastille grise', async ({ page }) => {
+    const doc = D.documentCible();
+    delete doc.Team.records.find((m) => m.id === 2).Domaine;
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.bloc-contributeurs .fiche-personne', { hasText: 'Bruno Klein' }))
+        .toHaveCSS('background-color', 'rgb(91, 91, 91)');
 });
 
 // Sans domaine à suivre, la fiche passe au gris de la maquette, titre en blanc.
