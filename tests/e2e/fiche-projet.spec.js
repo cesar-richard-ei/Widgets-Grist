@@ -559,7 +559,7 @@ test('une actualite vide ne s affiche pas', async ({ page }) => {
 test('l actualite se presente comme la description, juste sous elle', async ({ page }) => {
     await D.ouvrirFiche(page, avecActualites(), DATALAB);
 
-    const blocs = await fiche(page).locator('.fiche-colonne.large > .fiche-bloc').evaluateAll((els) => els.map((e) => e.className));
+    const blocs = await fiche(page).locator('.fiche-colonne.large .fiche-bloc').evaluateAll((els) => els.map((e) => e.className));
     expect(blocs.slice(0, 2)).toEqual(['fiche-bloc bloc-description', 'fiche-bloc bloc-actualites']);
 
     const style = (sel) => fiche(page).locator(sel).evaluate((e) => {
@@ -686,4 +686,41 @@ test('un jalon s affiche en losange a sa date, sans barre ni progression', async
     const losange = await rang.locator('.fiche-jalon').boundingBox();
     expect(Math.abs(losange.width - losange.height)).toBeLessThan(1);
     expect(await rang.locator('.fiche-jalon').evaluate((e) => getComputedStyle(e).transform)).not.toBe('none');
+});
+
+const avecJalon = (decalage) => {
+    const doc = avecActualites();
+    const jalon = doc.Tasks.records.find((t) => t.id === 4);
+    jalon.chantier = 2;
+    if (decalage !== undefined) {
+        jalon.dateDebut += decalage * 86400;
+        jalon.dateEcheance += decalage * 86400;
+    }
+    return doc;
+};
+
+test('le prochain jalon du projet s affiche a cote de l actualite', async ({ page }) => {
+    await D.ouvrirFiche(page, avecJalon(), DATALAB);
+
+    const bloc = fiche(page).locator('.bloc-jalon');
+    await expect(bloc.locator('.fiche-label')).toContainText('Prochain jalon clé');
+    await expect(bloc.locator('.fiche-jalon-titre')).toHaveText('Plateforme prête');
+    const attendu = await page.evaluate(() => { const d = new Date(); d.setDate(d.getDate() + 35); return d.toLocaleDateString('fr-FR'); });
+    await expect(bloc.locator('.fiche-jalon-date')).toHaveText(attendu);
+    const teinte = await fiche(page).locator('.fiche-entete').evaluate((e) => getComputedStyle(e).backgroundColor);
+    await expect(bloc.locator('.fiche-jalon-date')).toHaveCSS('color', teinte);
+
+    const actu = await fiche(page).locator('.bloc-actualites').boundingBox();
+    const jalon = await bloc.boundingBox();
+    expect(Math.abs(actu.y - jalon.y)).toBeLessThan(1);
+    expect(jalon.x).toBeGreaterThan(actu.x + actu.width);
+});
+
+test('sans prochain jalon, l actualite prend toute la largeur', async ({ page }) => {
+    await D.ouvrirFiche(page, avecJalon(-60), DATALAB);
+
+    await expect(fiche(page).locator('.bloc-jalon')).toHaveCount(0);
+    const actu = await fiche(page).locator('.bloc-actualites').boundingBox();
+    const description = await fiche(page).locator('.bloc-description').boundingBox();
+    expect(Math.abs(actu.width - description.width)).toBeLessThan(1);
 });

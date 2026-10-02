@@ -278,6 +278,9 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   décide plus que du gabarit (feuille de route ou non).
 - **Pastilles de personnes.** Chacune à la couleur du domaine de sa personne, gris `#5B5B5B` sans
   domaine.
+- **Prochain jalon clé.** Le premier jalon à venir du projet (par ses chantiers, ou `Tasks.projet`),
+  à côté de l'actualité : date à la couleur de la fiche, puis son titre. Sans jalon à venir, le bloc
+  disparaît et l'actualité prend toute la largeur.
 - **Statut.** `Projects.Statut`, premier bloc de la colonne de gauche comme sur la maquette Figma :
   pastille aux couleurs du choix Grist, texte noir quand seul le fond est défini, comme Grist.
   Masqué quand la ligne n'a pas de statut ou que le document n'a pas la colonne.

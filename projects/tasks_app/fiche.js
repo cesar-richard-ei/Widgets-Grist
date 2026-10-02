@@ -231,6 +231,26 @@ function blocSaisie(s) {
 
 const blocActualites = () => (texteOuVide(projet[ACTUALITES.colonne]) ? blocSaisie(ACTUALITES) : '');
 
+function prochainJalon() {
+    const colChantier = colonneChantier();
+    const duProjet = new Set(chantiers.filter((c) => listeRefs(c.Projets).indexOf(projet.id) !== -1).map((c) => c.id));
+    const aujourdhui = new Date();
+    aujourdhui.setHours(0, 0, 0, 0);
+    return taches
+        .filter((t) => t.type === 'jalon' && (t.projet === projet.id || (colChantier && duProjet.has(t[colChantier]))))
+        .map((t) => ({ titre: t.titre, date: gristVersDate(t.dateEcheance || t.dateDebut) }))
+        .filter((j) => j.date && j.date >= aujourdhui)
+        .sort((a, b) => a.date - b.date)[0] || null;
+}
+
+function blocProchainJalon() {
+    const j = prochainJalon();
+    if (!j) return '';
+    return '<div class="fiche-bloc bloc-jalon"><div class="fiche-label">Prochain jalon clé'
+        + '<span class="fiche-jalon-date">' + echapper(j.date.toLocaleDateString('fr-FR')) + '</span></div>'
+        + '<div class="fiche-jalon-titre">' + echapper(j.titre || 'Sans titre') + '</div></div>';
+}
+
 // Grist écrit en noir un choix qui n'a qu'une couleur de fond.
 function couleursDuChoix(colonne, valeur) {
     let options = {};
@@ -312,7 +332,7 @@ function cadrage() {
         + '</div>'
         + '<div class="fiche-colonne large">'
         + blocSaisie(DESCRIPTION)
-        + blocActualites()
+        + '<div class="fiche-duo">' + blocActualites() + blocProchainJalon() + '</div>'
         + '<div class="fiche-trio">'
         + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
         + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
