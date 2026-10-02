@@ -289,7 +289,8 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   sauf le responsable : son absence s'affiche en alerte rouge « Aucun responsable ».
 - **Feuille de route.** Les chantiers du projet, chacun suivi de ses tâches, sur une fenêtre fixe de
   six mois qui va du premier du mois précédent au dernier du cinquième suivant. Les chantiers se
-  replient.
+  replient. Un jalon (`type` = `jalon`) s'y dessine en losange à sa date, sans progression, comme
+  dans le Gantt.
 - **Fenêtre et colonnes.** Les colonnes sont des semaines : la fenêtre s'ouvre donc au lundi de la
   première et se ferme au dimanche de la dernière. Mesurer les positions depuis le premier du mois
   les décalerait d'une colonne, la ligne du jour comprise.
