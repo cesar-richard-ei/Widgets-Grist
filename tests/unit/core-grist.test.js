@@ -121,3 +121,12 @@ test('ensureUntiedLabels ignore une table ou une colonne absente sans lever', as
     assert.equal(grist._doc.Tasks.columns.titre.untieColIdFromLabel, true);
     assert.equal('absente' in grist._doc.Tasks.columns, false);
 });
+
+// Grist marque isFormula toute colonne neuve encore vide, et la convertit en données à la première
+// écriture : seule une formule non vide en fait une colonne calculée.
+test('estCalculee ne retient que les colonnes qui portent une formule', () => {
+    assert.equal(TF.estCalculee({ isFormula: true, formula: '$a + 1' }), true);
+    assert.equal(TF.estCalculee({ isFormula: true, formula: '' }), false);
+    assert.equal(TF.estCalculee({ isFormula: false, formula: '' }), false);
+    assert.equal(TF.estCalculee(null), false);
+});

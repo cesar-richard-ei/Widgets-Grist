@@ -275,3 +275,15 @@ test('un chantier cree avec des tags les emporte dans sa table', async ({ page }
     await expect.poll(() => page.evaluate(() => window.grist.docApi.fetchTable('Chantiers')
         .then((t) => t.tags[t.Nom_du_chantier.indexOf('Chantier étiqueté')]))).toEqual(['L', 'pilote']);
 });
+
+// Une colonne créée sans y rien saisir reste marquée formule dans Grist jusqu'à la première valeur.
+test('une colonne tags toute neuve, encore vide, ouvre deja la saisie', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Chantiers.columns.tags = { type: 'ChoiceList', isFormula: true };
+    await ouvrirTache(page, doc);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await saisirTag(page, 'neuf');
+
+    await expect.poll(() => champ(page, 'Chantiers', 1, 'tags')).toEqual(['L', 'neuf']);
+});
