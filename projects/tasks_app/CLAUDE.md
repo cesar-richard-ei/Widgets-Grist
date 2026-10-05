@@ -152,7 +152,7 @@ Le widget lit et écrit **tout par colId**. Or Grist régénère le colId à cha
 | `assignees` | RefList:Team | Liste d'assignés (format `['L', id1, id2]`) |
 | `dependDe` | RefList:Tasks | Dépendances fin→début (prédécesseurs) |
 | `dependDebutDe` | RefList:Tasks | Dépendances début→début. **Colonne opt-in**, aucun widget ne la crée — voir « Deux types de lien » |
-| `tags` | ChoiceList | Étiquettes libres |
+| `tags` | ChoiceList | Étiquettes libres. Sans la colonne (document verrouillé), le volet ne montre pas la section Tags |
 | `estimationH` | Numeric | Estimation en heures |
 | `tempsPasse` | Numeric | Temps réellement passé |
 | `couleur` | Text | Couleur personnalisée hex |
@@ -922,7 +922,9 @@ typé, donc les laisser ouvrirait une écriture sans destination.
 `donneesChantier()` prépare les données du volet : les dates absentes sont préremplies depuis les
 tâches tout en restant modifiables, les assignés et les charges sont des **remontées** des tâches.
 `saveChantierToGrist()` écrit dans `Chantiers` (`Nom_du_chantier`, `Description` et les deux dates),
-en retranchant `ID_CHANTIER` de l'identifiant affiché.
+en retranchant `ID_CHANTIER` de l'identifiant affiché. Les tags d'un chantier vont dans
+`Chantiers.tags` (ChoiceList), que le widget ne crée pas : sans elle, le volet du chantier n'a pas
+de section Tags.
 
 Les **dates d'un chantier** ne portent pas le même nom partout : le document du métier les appelle
 `Debut` et `Fin`, le modèle de référence `Date_debut` et `Date_fin`. `colonneDateChantier()` retient

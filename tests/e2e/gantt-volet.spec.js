@@ -21,8 +21,8 @@ const blocs = (page) => page.evaluate(() => Array.from(
     .sort((a, b) => a.haut - b.haut)
     .map((x) => x.texte));
 
-async function ouvrirTache(page, doc) {
-    await D.ouvrirGantt(page, doc);
+async function ouvrirTache(page, doc, options) {
+    await D.ouvrirGantt(page, doc, options);
     await D.deplier(page, 'Socle technique', 'Cadrage des outils');
     await D.ouvrirVolet(page, 'Cadrage des outils');
 }
@@ -217,4 +217,61 @@ test('aucun titre de section ne porte d icone', async ({ page }) => {
     const titres = await titresDeSection(page);
 
     expect(titres.filter((t) => t.icone).map((t) => t.texte)).toEqual([]);
+});
+
+const champ = (page, table, id, colonne) => page.evaluate(({ table, id, colonne }) =>
+    window.grist.docApi.fetchTable(table).then((t) => t[colonne][t.id.indexOf(id)]), { table, id, colonne });
+
+async function saisirTag(page, tag) {
+    await page.locator('#tagInput').fill(tag);
+    await page.locator('#tagInput').press('Enter');
+}
+
+// Un document dont la structure est verrouillée ne laisse pas le widget recréer la colonne : le
+// volet ne propose alors pas de tags qui ne seraient enregistrés nulle part.
+test('sans colonne tags, le volet d une tache ne propose pas de tags', async ({ page }) => {
+    await ouvrirTache(page, D.sansColonne(D.documentCible(), 'tags'), { grist: { structureVerrouillee: true } });
+
+    await expect(section(page, 'Tags')).toHaveCount(0);
+});
+
+test('un tag saisi sur une tache part dans Tasks', async ({ page }) => {
+    await ouvrirTache(page);
+
+    await saisirTag(page, 'urgent');
+
+    await expect.poll(() => champ(page, 'Tasks', 1, 'tags')).toEqual(['L', 'poc', 'urgent']);
+});
+
+test('sans colonne tags dans Chantiers, le volet d un chantier ne propose pas de tags', async ({ page }) => {
+    await ouvrirTache(page);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await expect(section(page, 'Tags')).toHaveCount(0);
+});
+
+test('les tags d un chantier partent dans sa table', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Chantiers.columns.tags = { type: 'ChoiceList' };
+    doc.Chantiers.records.find((c) => c.id === 1).tags = ['L', 'socle'];
+    await ouvrirTache(page, doc);
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await expect(section(page, 'Tags')).toContainText('socle');
+    await saisirTag(page, 'prioritaire');
+
+    await expect.poll(() => champ(page, 'Chantiers', 1, 'tags')).toEqual(['L', 'socle', 'prioritaire']);
+});
+
+test('un chantier cree avec des tags les emporte dans sa table', async ({ page }) => {
+    const doc = D.documentCible();
+    doc.Chantiers.columns.tags = { type: 'ChoiceList' };
+    await D.ouvrirGantt(page, doc);
+    await page.evaluate(() => openCreateChantierPanel());
+    await page.locator('#taskTitle').fill('Chantier étiqueté');
+    await saisirTag(page, 'pilote');
+    await page.locator('#panel button', { hasText: 'Créer le chantier' }).click();
+
+    await expect.poll(() => page.evaluate(() => window.grist.docApi.fetchTable('Chantiers')
+        .then((t) => t.tags[t.Nom_du_chantier.indexOf('Chantier étiqueté')]))).toEqual(['L', 'pilote']);
 });

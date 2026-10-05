@@ -1649,6 +1649,10 @@
         const COL_DEP_DEBUT = 'dependDebutDe';
         const getStartDependsOnArray = (t) => getRefListArray(t?.[COL_DEP_DEBUT]);
         const depDebutDisponible = () => TASK_COLS.has(COL_DEP_DEBUT);
+        function tagsDisponibles() {
+            const colonnes = colonnesEcrivables(panelState.estChantier ? 'Chantiers' : 'Tasks');
+            return colonnes ? colonnes.has('tags') : !panelState.estChantier && TASK_COLS.has('tags');
+        }
         const getTagsArray = (t) => getChoiceListArray(t?.tags);
 
         // Project/Team helpers
@@ -1752,7 +1756,7 @@
                 titre: c.Nom_du_chantier || '', description: c.Description || '',
                 dateDebut: c[colonneDateChantier('debut')] || null, dateEcheance: c[colonneDateChantier('fin')] || null,
                 projet: projets.length ? projets[0] : 0, projets: projets,
-                assignees: c.Contributeurs || null, Responsable: c.Responsable || null,
+                assignees: c.Contributeurs || null, Responsable: c.Responsable || null, tags: c.tags || null,
                 type: 'tache', statut: '', priorite: null, parentTask: null
             };
         }
@@ -1794,7 +1798,7 @@
                 Responsable: c.Responsable || null,
                 assignees: assignes,
                 charges: Array.from(cumul, ([teamId, heures]) => ({ teamId: teamId, heures: heures })),
-                dependDe: [], dependDebutDe: [], tags: [], subtasks: [], progression: 0, priorite: null,
+                dependDe: [], dependDebutDe: [], tags: getTagsArray(c), subtasks: [], progression: 0, priorite: null,
                 estimationH: null, tempsPasse: null, couleur: null, parentTask: null
             };
         }
@@ -3287,7 +3291,7 @@
             const record = {
                 Nom_du_chantier: data.titre, Description: data.description || '',
                 Projets: toGristRefList(data.projet ? [data.projet] : []),
-                Responsable: data.Responsable || null
+                Responsable: data.Responsable || null, tags: toGristChoiceList(data.tags)
             };
             record[colonneDateChantier('debut')] = data.dateDebut || null;
             record[colonneDateChantier('fin')] = data.dateEcheance || null;
@@ -3663,7 +3667,7 @@
                         (depDebutDisponible() && !chantier ? listeDeLien('depsDebutSelect', COL_DEP_DEBUT, 'Commence en même temps que', 'Aucune...') : '') +
                         blockedHtml + '</div></div>' : '') : '') +
 
-                (data.type !== 'jalon' ?
+                (data.type !== 'jalon' && tagsDisponibles() ?
                     '<div class="panel-section"><div class="panel-section-header"><span class="panel-section-title">Tags</span>' + (data.tags.length ? '<span class="panel-section-badge">' + data.tags.length + '</span>' : '') + '</div>' +
                     '<div class="form-group"><div class="tags-input" onclick="document.getElementById(\'tagInput\').focus()">' + tagsChips + '<input type="text" id="tagInput" placeholder="' + (data.tags.length ? '' : 'Ajouter un tag...') + '" onkeydown="handleTagKeydown(event)"></div></div>'
                     : '') +
@@ -4074,6 +4078,7 @@
             brut[colDebut] = data.dateDebut || null;
             brut[colFin] = data.dateEcheance || null;
             brut.Projets = toGristRefList(rattachementsDuChantier(data));
+            brut.tags = toGristChoiceList(data.tags);
             const record = pruneChantierRecord(brut);
             // La ligne locale ne reprend que ce qui est réellement parti : une colonne élaguée n'a pas été
             // enregistrée, l'afficher comme telle ferait mentir le graphique jusqu'au rechargement.
@@ -4081,6 +4086,7 @@
             if ('Nom_du_chantier' in record) local.titre = record.Nom_du_chantier;
             if ('Description' in record) local.description = record.Description;
             if ('Responsable' in record) local.Responsable = record.Responsable;
+            if ('tags' in record) local.tags = record.tags;
             if ('Projets' in record) {
                 local.projets = getRefListArray(record.Projets);
                 local.projet = local.projets.length ? local.projets[0] : 0;

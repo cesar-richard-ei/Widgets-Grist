@@ -128,6 +128,9 @@ function createFakeGrist(documentInitial, options) {
     function appliquer(action) {
         const type = action[0];
 
+        if (config.structureVerrouillee && (type === 'AddTable' || type === 'AddColumn')) {
+            throw new Error('Acces refuse : structure du document verrouillee');
+        }
         if (type === 'AddTable') {
             const colonnes = {};
             for (const c of action[2] || []) colonnes[c.id] = { type: c.type || 'Any' };
