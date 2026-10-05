@@ -289,7 +289,8 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   `TF.couleurDeDomaine`, la même règle que le filtre Domaine et le bandeau du Gantt.
 - **Cadrage.** Responsable, sponsors et contributeurs clés en pastilles, description, budget alloué,
   commanditaires et deadline. Une colonne vide se dit « Non renseigné » plutôt que de laisser un blanc,
-  sauf le responsable : son absence s'affiche en alerte rouge « Aucun responsable ».
+  sauf le responsable : son absence s'affiche, comme sur la maquette, par une icône d'erreur et
+  « Aucun » en rouge `#B3261E`, sans pastille.
 - **Feuille de route.** Les chantiers du projet, chacun suivi de ses tâches, sur une fenêtre fixe de
   six mois qui va du premier du mois précédent au dernier du cinquième suivant. Les chantiers se
   replient. Un jalon (`type` = `jalon`) s'y dessine en losange à sa date, sans progression, comme
