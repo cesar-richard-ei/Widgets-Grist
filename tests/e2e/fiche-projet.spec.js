@@ -657,15 +657,21 @@ test('les cases description et actualite s adaptent a leur contenu', async ({ pa
     expect(apres.contenu).toBeLessThanOrEqual(apres.hauteur);
 });
 
+// Maquette « Fiche sans responsable » : icône d'erreur et « Aucun » en rouge, sans pastille.
 test('une fiche sans responsable le signale par une alerte', async ({ page }) => {
     const doc = D.documentCible();
     delete doc.Projects.records.find((p) => p.id === DATALAB).responsable;
     await D.ouvrirFiche(page, doc, DATALAB);
 
     const alerte = fiche(page).locator('.bloc-responsable .fiche-alerte');
-    await expect(alerte).toHaveText('Aucun responsable');
-    await expect(alerte).toHaveCSS('background-color', 'rgb(220, 38, 38)');
-    expect(await alerte.evaluate((e) => getComputedStyle(e, '::before').content)).toBe('"⚠"');
+    await expect(alerte).toHaveText('Aucun');
+    await expect(alerte).toHaveCSS('color', 'rgb(179, 38, 30)');
+    await expect(alerte).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    const icone = alerte.locator('svg');
+    await expect(icone).toHaveCount(1);
+    const i = await icone.boundingBox();
+    const t = await alerte.evaluate((e) => { const r = document.createRange(); r.selectNodeContents(e.lastChild); return r.getBoundingClientRect().left; });
+    expect(Math.round(t - (i.x + i.width))).toBe(4);
 });
 
 test('une fiche avec un responsable n a pas d alerte', async ({ page }) => {

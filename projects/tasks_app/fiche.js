@@ -21,6 +21,8 @@ const ETINCELLES = '<svg viewBox="0 0 24 24" width="26" height="26" fill="curren
     + '<path d="M18 13.4 18.8 15.6 21 16.4 18.8 17.2 18 19.4 17.2 17.2 15 16.4 17.2 15.6z"/>'
     + '</svg>';
 
+const ICONE_ERREUR = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="currentColor" focusable="false" aria-hidden="true">'
+    + '<path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
 const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" focusable="false">'
     + '<path d="M12 20V5"/><path d="m6 11 6-6 6 6"/></svg>';
 
@@ -326,7 +328,7 @@ function cadrage() {
         + '<div class="fiche-colonne">'
         + blocStatut()
         + bloc('bloc-responsable', 'Responsable', pastilles([refPersonne('Projects', 'responsable', projet.responsable)].filter(Boolean))
-            || '<span class="fiche-alerte">Aucun responsable</span>')
+            || '<span class="fiche-alerte">' + ICONE_ERREUR + 'Aucun</span>')
         + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
         + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
         + '</div>'
