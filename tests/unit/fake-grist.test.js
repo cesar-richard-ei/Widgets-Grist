@@ -101,6 +101,13 @@ test('AddColumn ajoute la colonne, valeur nulle sur les enregistrements existant
     assert.deepEqual(data.charges, [null]);
 });
 
+test('une structure verrouillee refuse AddColumn et ne touche pas la table', async () => {
+    const grist = createFakeGrist(documentMinimal(), { structureVerrouillee: true });
+    await assert.rejects(() => grist.docApi.applyUserActions([['AddColumn', 'Tasks', 'charges', { type: 'Text' }]]), /verrouillee/);
+    const data = await grist.docApi.fetchTable('Tasks');
+    assert.equal(data.charges, undefined);
+});
+
 test('ModifyColumn fusionne les proprietes de la colonne', async () => {
     const grist = createFakeGrist(documentMinimal());
     await grist.docApi.applyUserActions([
