@@ -208,7 +208,7 @@ function colonneMeta(tableId, colId) {
 // Une colonne calculée ou absente ne s'écrit pas : Grist refuserait l'écriture entière.
 function colonneEcrivable(tableId, colId) {
     const c = colonneMeta(tableId, colId);
-    return Boolean(c && !c.isFormula);
+    return Boolean(c && !TF.estCalculee(c));
 }
 
 // Champs de Projects modifiables depuis la fiche. L'actualité n'est pas historisée, la saisie

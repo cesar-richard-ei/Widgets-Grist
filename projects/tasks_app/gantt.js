@@ -255,7 +255,7 @@ function colonnesEcrivables(tableId) {
     if (!schemaMeta) return null;
     const t = (schemaMeta.tables || []).find(x => x.tableId === tableId);
     if (!t) return null;
-    return new Set((schemaMeta.cols || []).filter(c => c.parentId === t.id && !c.isFormula).map(c => c.colId));
+    return new Set((schemaMeta.cols || []).filter(c => c.parentId === t.id && !TF.estCalculee(c)).map(c => c.colId));
 }
 
 // Grist rejette le lot entier dès qu'une action vise une colonne absente ou calculée : une seule

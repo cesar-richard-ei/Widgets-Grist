@@ -269,6 +269,9 @@
             }
 
             // Lit les deux tables de metadonnees en une passe (parallele), a partager entre helpers.
+            // Grist marque isFormula une colonne neuve encore vide : seule une formule non vide la rend calculee.
+            const estCalculee = (c) => !!(c && c.isFormula && c.formula);
+
             async function fetchSchemaMeta(grist) {
                 const [t, c] = await Promise.all([
                     grist.docApi.fetchTable('_grist_Tables'),
@@ -719,6 +722,7 @@
                 isPlausibleDate: isPlausibleDate,
                 columnarToRows: columnarToRows,
                 fetchSchemaMeta: fetchSchemaMeta,
+                estCalculee: estCalculee,
                 loadStatusConfig: loadStatusConfig,
                 buildStatusConfig: buildStatusConfig,
                 getStatus: getStatus,
@@ -1109,7 +1113,7 @@
         // Une colonne calculée ou absente ne s'écrit pas : Grist refuserait l'écriture entière.
         function colonneEcrivable(tableId, colId) {
             const c = colonneMeta(tableId, colId);
-            return Boolean(c && !c.isFormula);
+            return Boolean(c && !TF.estCalculee(c));
         }
 
         // Champs de Projects modifiables depuis la fiche. L'actualité n'est pas historisée, la saisie

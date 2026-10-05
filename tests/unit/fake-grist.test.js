@@ -108,6 +108,24 @@ test('une structure verrouillee refuse AddColumn et ne touche pas la table', asy
     assert.equal(data.charges, undefined);
 });
 
+test('une colonne vide marquee formule devient une colonne de donnees a la premiere ecriture', async () => {
+    const doc = documentMinimal();
+    doc.Tasks.columns.libre = { type: 'Text', isFormula: true };
+    const grist = createFakeGrist(doc);
+    await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', doc.Tasks.records[0].id, { libre: 'ok' }]]);
+    const meta = await grist.docApi.fetchTable('_grist_Tables_column');
+    const i = meta.colId.indexOf('libre');
+    assert.equal(meta.isFormula[i], false);
+    assert.equal(meta.formula[i], '');
+});
+
+test('une colonne qui porte une formule refuse l ecriture', async () => {
+    const doc = documentMinimal();
+    doc.Tasks.columns.calc = { type: 'Text', isFormula: true, formula: '$titre' };
+    const grist = createFakeGrist(doc);
+    await assert.rejects(() => grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', doc.Tasks.records[0].id, { calc: 'x' }]]), /calculee/);
+});
+
 test('ModifyColumn fusionne les proprietes de la colonne', async () => {
     const grist = createFakeGrist(documentMinimal());
     await grist.docApi.applyUserActions([

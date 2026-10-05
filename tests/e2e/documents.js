@@ -168,7 +168,7 @@ function renommerColonne(doc, table, avant, apres) {
  */
 function colonneCalculee(doc, table, colonne) {
     const copie = clone(doc);
-    copie[table].columns[colonne].isFormula = true;
+    Object.assign(copie[table].columns[colonne], { isFormula: true, formula: '$' + colonne });
     return copie;
 }
 

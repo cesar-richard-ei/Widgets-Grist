@@ -762,6 +762,9 @@ const TF = (function () {
     }
 
     // Lit les deux tables de metadonnees en une passe (parallele), a partager entre helpers.
+    // Grist marque isFormula une colonne neuve encore vide : seule une formule non vide la rend calculee.
+    const estCalculee = (c) => !!(c && c.isFormula && c.formula);
+
     async function fetchSchemaMeta(grist) {
         const [t, c] = await Promise.all([
             grist.docApi.fetchTable('_grist_Tables'),
@@ -1212,6 +1215,7 @@ const TF = (function () {
         isPlausibleDate: isPlausibleDate,
         columnarToRows: columnarToRows,
         fetchSchemaMeta: fetchSchemaMeta,
+        estCalculee: estCalculee,
         loadStatusConfig: loadStatusConfig,
         buildStatusConfig: buildStatusConfig,
         getStatus: getStatus,

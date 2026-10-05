@@ -69,7 +69,8 @@ function createFakeGrist(documentInitial, options) {
                     widgetOptions: info.widgetOptions != null ? info.widgetOptions : '',
                     visibleCol: info.visibleCol != null ? info.visibleCol : 0,
                     untieColIdFromLabel: info.untieColIdFromLabel != null ? info.untieColIdFromLabel : false,
-                    isFormula: !!info.isFormula
+                    isFormula: !!info.isFormula,
+                    formula: info.formula || ''
                 });
             }
         }
@@ -82,7 +83,7 @@ function createFakeGrist(documentInitial, options) {
             return versColonnaire(lignesMetaTables(), ['tableId']);
         }
         if (nom === '_grist_Tables_column') {
-            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'type', 'widgetOptions', 'visibleCol', 'untieColIdFromLabel', 'isFormula']);
+            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'type', 'widgetOptions', 'visibleCol', 'untieColIdFromLabel', 'isFormula', 'formula']);
         }
         if (!doc[nom]) throw new Error('Table inconnue: ' + nom);
         return versColonnaire(doc[nom].records, Object.keys(doc[nom].columns));
@@ -121,8 +122,10 @@ function createFakeGrist(documentInitial, options) {
         for (const colId of Object.keys(valeurs || {})) {
             const colonne = t.columns[colId];
             if (!colonne) throw new Error('Colonne inconnue: ' + tableId + '.' + colId);
-            if (colonne.isFormula) throw new Error('Colonne calculee, non modifiable: ' + tableId + '.' + colId);
+            if (colonne.isFormula && colonne.formula) throw new Error('Colonne calculee, non modifiable: ' + tableId + '.' + colId);
         }
+        // Grist convertit en colonne de donnees une colonne vide qui recoit une valeur.
+        for (const colId of Object.keys(valeurs || {})) t.columns[colId].isFormula = false;
     }
 
     function appliquer(action) {
