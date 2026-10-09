@@ -153,3 +153,94 @@ test('un produit garde sa fiche sans feuille de route', async ({ page }) => {
     await expect(fiche(page).locator('.bloc-objectif')).toBeVisible();
     await expect(fiche(page).locator('.fiche-route')).toHaveCount(0);
 });
+
+// Les champs de base dépendent eux aussi du gabarit : le budget pour le projet et l'offre de
+// service, commanditaires et deadline pour le projet seul.
+const blocsBase = (page) => fiche(page).locator('.bloc-budget, .bloc-commanditaires, .bloc-deadline')
+    .evaluateAll((els) => els.map((e) => e.className.match(/bloc-(budget|commanditaires|deadline)/)[1]));
+
+test('la fiche projet garde budget, commanditaires et deadline', async ({ page }) => {
+    await D.ouvrirFiche(page, documentMaquette(2), DATALAB);
+    expect(await blocsBase(page)).toEqual(['budget', 'commanditaires', 'deadline']);
+});
+
+test('la fiche produit n a ni budget, ni commanditaires, ni deadline', async ({ page }) => {
+    await D.ouvrirFiche(page, documentMaquette(1), DATALAB);
+    await expect(fiche(page).locator('.bloc-objectif')).toBeVisible();
+    expect(await blocsBase(page)).toEqual([]);
+});
+
+test('la fiche offre de service range le budget a cote des modalites', async ({ page }) => {
+    await D.ouvrirFiche(page, documentMaquette(3, { Modalites_de_realisation: 'Guichet' }), DATALAB);
+    expect(await blocsBase(page)).toEqual(['budget']);
+    const budget = await fiche(page).locator('.bloc-budget').boundingBox();
+    const modalites = await fiche(page).locator('.bloc-modalites').boundingBox();
+    expect(Math.abs(budget.y - modalites.y)).toBeLessThan(1);
+    expect(modalites.x).toBeGreaterThan(budget.x + budget.width);
+});
+
+function avecAcces(categorie, outil, documentation) {
+    const doc = documentMaquette(categorie, { Acces_a_l_outil: outil, Acces_a_la_documentation: documentation });
+    doc.Projects.columns.Acces_a_l_outil = { type: 'Text', label: "Accès à l'outil" };
+    doc.Projects.columns.Acces_a_la_documentation = { type: 'Text', label: 'Accès à la documentation' };
+    return doc;
+}
+
+test('un produit donne ses liens vers l outil et la documentation, sous la maturite', async ({ page }) => {
+    await D.ouvrirFiche(page, avecAcces(1, 'https://outil.example/app', 'Guide https://doc.example/guide'), DATALAB);
+
+    const gauche = fiche(page).locator('.fiche-cadrage > .fiche-colonne').first();
+    const outil = gauche.locator('.bloc-acces-outil a');
+    await expect(outil).toHaveAttribute('href', 'https://outil.example/app');
+    await expect(outil).toHaveAttribute('target', '_blank');
+    await expect(gauche.locator('.bloc-acces-documentation a')).toHaveAttribute('href', 'https://doc.example/guide');
+    await expect(gauche.locator('.bloc-acces-documentation a')).toHaveText(/Guide/);
+    const classes = await gauche.locator('> .fiche-bloc').evaluateAll((els) => els.map((e) => e.className));
+    expect(classes.slice(-3).map((c) => c.split(' ')[1])).toEqual(['bloc-maturite', 'bloc-acces-outil', 'bloc-acces-documentation']);
+});
+
+test('un lien qui n est pas une adresse web reste du texte', async ({ page }) => {
+    await D.ouvrirFiche(page, avecAcces(3, 'javascript:alert(1)', ''), DATALAB);
+
+    await expect(fiche(page).locator('.bloc-acces-outil a')).toHaveCount(0);
+    await expect(fiche(page).locator('.bloc-acces-outil')).toContainText('javascript:alert(1)');
+    await expect(fiche(page).locator('.bloc-acces-documentation')).toContainText('Non renseigné');
+});
+
+test('la fiche projet ne propose pas de liens d acces', async ({ page }) => {
+    await D.ouvrirFiche(page, avecAcces(2, 'https://outil.example/app', ''), DATALAB);
+    await expect(fiche(page).locator('.bloc-acces-outil, .bloc-acces-documentation')).toHaveCount(0);
+});
+
+test('l actualite et le prochain jalon ouvrent la colonne centrale, au-dessus de la description', async ({ page }) => {
+    const doc = documentMaquette(2, { Actualites: 'Ouverture en novembre' });
+    doc.Projects.columns.Actualites = { type: 'Text' };
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    const blocs = await fiche(page).locator('.fiche-colonne.large .fiche-bloc').evaluateAll((els) => els.map((e) => e.className.split(' ')[1]));
+    expect(blocs.slice(0, 2)).toEqual(['bloc-actualites', 'bloc-description']);
+});
+
+test('un statut ou une actualite vides restent affiches', async ({ page }) => {
+    const doc = documentMaquette(2, { Statut: '', Actualites: '' });
+    doc.Projects.columns.Actualites = { type: 'Text' };
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.bloc-statut')).toContainText('Non renseigné');
+    await expect(fiche(page).locator('.bloc-actualites textarea')).toHaveValue('');
+});
+
+test('la pastille du statut n est pas en gras', async ({ page }) => {
+    await D.ouvrirFiche(page, documentMaquette(2), DATALAB);
+
+    const graisse = (sel) => fiche(page).locator(sel).first().evaluate((e) => getComputedStyle(e).fontWeight);
+    expect(await graisse('.bloc-statut .fiche-statut')).toBe(await graisse('.bloc-responsable .fiche-personne'));
+});
+
+test('chaque bloc de la colonne centrale porte son pictogramme', async ({ page }) => {
+    await D.ouvrirFiche(page, documentMaquette(3), DATALAB);
+
+    for (const sel of ['.bloc-description', '.bloc-objectif', '.bloc-cible', '.bloc-perimetre', '.bloc-modalites', '.bloc-budget', '.bloc-maturite']) {
+        await expect(fiche(page).locator(sel + ' .fiche-label svg')).toHaveCount(1);
+    }
+});
