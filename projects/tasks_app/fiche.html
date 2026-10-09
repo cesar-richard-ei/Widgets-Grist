@@ -1197,7 +1197,7 @@
         // Chaque gabarit n'affiche que les champs que le document « Colonnes des fiches PMO » lui donne.
         const TOUS_GABARITS = ['Projet', 'Produit', 'Offre de service'];
         const CHAMPS_CADRAGE = [
-            { cle: 'objectif', libelles: ['Objectif / principales fonctionnalités', 'Objectif'], libelle: 'Objectif', gabarits: TOUS_GABARITS },
+            { cle: 'objectif', libelles: ['Objectifs ou principales fonctionnalités', 'Objectif / principales fonctionnalités', 'Objectif'], libelle: 'Objectif', gabarits: TOUS_GABARITS },
             { cle: 'cible', libelles: ['Public cible', 'Cible'], libelle: 'Cible', gabarits: TOUS_GABARITS },
             { cle: 'perimetre', libelles: ['Périmètre données'], libelle: 'Périmètre données', gabarits: ['Produit', 'Offre de service'] },
             { cle: 'contraintes', libelles: ['Contraintes et cadre'], libelle: 'Contraintes et cadre', gabarits: TOUS_GABARITS },
@@ -1309,8 +1309,8 @@
             if (GABARITS_INDICATEURS.indexOf(categorie) === -1) return '';
             const chiffres = [];
             for (let i = 1; i <= NB_INDICATEURS; i++) {
-                const colValeur = colonneParLibelle(['Donnée indicateur ' + i, 'Valeur indicateur ' + i]);
-                const colLibelle = colonneParLibelle(['Indicateur ' + i, 'Intitulé indicateur ' + i]);
+                const colValeur = colonneParLibelle(['Data - Ind. clé ' + i, 'Donnée indicateur ' + i]);
+                const colLibelle = colonneParLibelle(['Libellé - Ind. clé ' + i, 'Indicateur ' + i]);
                 const valeur = colValeur ? texteOuVide(projet[colValeur]) : '';
                 if (!valeur) continue;
                 chiffres.push('<div class="fiche-indicateur"><span class="fiche-indicateur-valeur">' + valeur + '</span>'
@@ -1400,7 +1400,8 @@
         // Projet : budget, commanditaires et deadline. Offre de service : le budget, à côté des modalités de
         // réalisation. Produit : aucun des trois.
         function blocsDeBase(categorie, modalites) {
-            const budget = () => bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue), 'budget');
+            const colBudget = colonneParLibelle(['Budget alloué ou coût', 'Budget alloué']) || 'Budget_alloue';
+            const budget = () => bloc('bloc-budget', 'Budget alloué', texteOuVide(projet[colBudget]), 'budget');
             if (categorie === 'Projet') {
                 return '<div class="fiche-trio">' + budget()
                     + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires), 'commanditaires')
