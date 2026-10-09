@@ -27,6 +27,9 @@ Le code commun (conversions, dates, statuts dynamiques, calcul de charge, `charg
 - Le script du Gantt vit dans `gantt.js` et suit le même chemin : éditer le `.js`, jamais le bloc généré dans le HTML.
 - `npm run check:inline` vérifie que tout est en phase (utilisé en validation/CI).
 - **Ne jamais éditer la zone entre les marqueurs à la main** — éditer `core/taskflow-core.js` puis rebuild.
+- La police Rubik de l'AP-HP suit le même chemin dans le Gantt et la fiche : `core/police-rubik.js`
+  la déclare en data URI (sous-ensemble latin), pour ne dépendre d'aucun serveur de polices.
+  Licence OFL dans `core/police-rubik-OFL.txt`.
 
 ### Statuts dynamiques (`statusCfg`)
 
