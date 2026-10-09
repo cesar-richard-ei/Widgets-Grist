@@ -217,8 +217,46 @@ function colonneEcrivable(tableId, colId) {
 // remplace la précédente ; vide ou sans colonne, elle ne s'affiche pas.
 const DESCRIPTION = { colonne: 'Description', classe: 'bloc-description', libelle: 'Description' };
 const ACTUALITES = { colonne: 'Actualites', classe: 'bloc-actualites', libelle: 'Actualités' };
-const SAISIES = [DESCRIPTION, ACTUALITES];
-const idSaisie = (s) => 'saisie-' + s.classe;
+let saisies = [DESCRIPTION, ACTUALITES];
+const idSaisie = (s) => 'saisie-' + s.classe.split(' ')[0];
+
+// Les colonnes de la maquette n'ont pas d'identifiant arrêté d'un document à l'autre : on les
+// reconnaît à leur libellé, accents, casse et ponctuation ignorés.
+const normaliser = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
+function colonneParLibelle(libelles) {
+    if (!schemaMeta) return null;
+    const t = (schemaMeta.tables || []).find((x) => x.tableId === 'Projects');
+    if (!t) return null;
+    const voulus = libelles.map(normaliser);
+    const c = (schemaMeta.cols || []).find((x) => x.parentId === t.id
+        && (voulus.indexOf(normaliser(x.label)) !== -1 || voulus.indexOf(normaliser(x.colId)) !== -1));
+    return c ? c.colId : null;
+}
+
+// Chaque gabarit n'affiche que les champs que le document « Colonnes des fiches PMO » lui donne.
+const TOUS_GABARITS = ['Projet', 'Produit', 'Offre de service'];
+const CHAMPS_CADRAGE = [
+    { cle: 'objectif', libelles: ['Objectif / principales fonctionnalités', 'Objectif'], libelle: 'Objectif', gabarits: TOUS_GABARITS },
+    { cle: 'cible', libelles: ['Public cible', 'Cible'], libelle: 'Cible', gabarits: TOUS_GABARITS },
+    { cle: 'perimetre', libelles: ['Périmètre données'], libelle: 'Périmètre données', gabarits: ['Produit', 'Offre de service'] },
+    { cle: 'contraintes', libelles: ['Contraintes et cadre'], libelle: 'Contraintes et cadre', gabarits: TOUS_GABARITS },
+    { cle: 'modalites', libelles: ['Modalités de réalisation'], libelle: 'Modalités de réalisation', gabarits: ['Offre de service'] },
+    { cle: 'maturite', libelles: ['Maturité'], libelle: 'Maturité', gabarits: TOUS_GABARITS }
+];
+const GABARITS_INDICATEURS = ['Produit', 'Offre de service'];
+const NB_INDICATEURS = 3;
+
+function saisiesDuCadrage(categorie) {
+    const champs = {};
+    for (const c of CHAMPS_CADRAGE) {
+        const colonne = c.gabarits.indexOf(categorie) !== -1 ? colonneParLibelle(c.libelles) : null;
+        if (colonne) champs[c.cle] = { colonne: colonne, classe: 'bloc-' + c.cle + ' bloc-texte', libelle: c.libelle };
+    }
+    return champs;
+}
+
+const blocChamp = (champ) => (champ ? blocSaisie(champ) : '');
 
 function champSaisie(s) {
     return '<textarea id="' + idSaisie(s) + '" class="fiche-saisie" rows="1" placeholder="Non renseigné">'
@@ -269,8 +307,56 @@ function couleursDuChoix(colonne, valeur) {
 function blocStatut() {
     const valeur = texteOuVide(projet.Statut);
     if (!valeur) return '';
-    return bloc('bloc-statut', 'Statut', '<span class="fiche-statut"'
-        + couleursDuChoix(colonneMeta('Projects', 'Statut'), projet.Statut) + '>' + valeur + '</span>');
+    const colCommentaire = colonneParLibelle(['Commentaires sur le statut', 'Commentaire sur le statut']);
+    const commentaire = colCommentaire ? texteOuVide(projet[colCommentaire]) : '';
+    const aide = commentaire
+        ? '<span class="fiche-statut-aide" tabindex="0" aria-label="Commentaire sur le statut">?</span>'
+            + '<span class="fiche-statut-bulle" role="tooltip">' + commentaire + '</span>'
+        : '';
+    return bloc('bloc-statut', 'Statut', '<span class="fiche-statut-ligne"><span class="fiche-statut"'
+        + couleursDuChoix(colonneMeta('Projects', 'Statut'), projet.Statut) + '>' + valeur + '</span>' + aide + '</span>');
+}
+
+function blocIndicateurs(categorie) {
+    if (GABARITS_INDICATEURS.indexOf(categorie) === -1) return '';
+    const chiffres = [];
+    for (let i = 1; i <= NB_INDICATEURS; i++) {
+        const colValeur = colonneParLibelle(['Donnée indicateur ' + i, 'Valeur indicateur ' + i]);
+        const colLibelle = colonneParLibelle(['Indicateur ' + i, 'Intitulé indicateur ' + i]);
+        const valeur = colValeur ? texteOuVide(projet[colValeur]) : '';
+        if (!valeur) continue;
+        chiffres.push('<div class="fiche-indicateur"><span class="fiche-indicateur-valeur">' + valeur + '</span>'
+            + '<span class="fiche-indicateur-libelle">' + (colLibelle ? texteOuVide(projet[colLibelle]) : '') + '</span></div>');
+    }
+    return chiffres.length ? '<div class="fiche-indicateurs">' + chiffres.join('') + '</div>' : '';
+}
+
+function blocVisuel() {
+    const col = colonneParLibelle(['Visuel']);
+    const piece = col ? listeRefs(projet[col])[0] : null;
+    if (!piece) return '';
+    const colTitre = colonneParLibelle(['Titre du visuel']);
+    const titre = colTitre ? texteOuVide(projet[colTitre]) : '';
+    return '<div class="fiche-bloc bloc-visuel">' + (titre ? '<div class="fiche-label">' + titre + '</div>' : '')
+        + '<img class="fiche-visuel" data-piece="' + Number(piece) + '" alt="' + (titre || 'Visuel') + '"></div>';
+}
+
+// Une pièce jointe ne se lit qu'avec un jeton d'accès, valable quelques minutes.
+let jeton = null;
+async function urlPieceJointe(id) {
+    if (!jeton || jeton.expire < Date.now()) {
+        const t = await grist.docApi.getAccessToken({ readOnly: true });
+        jeton = { token: t.token, baseUrl: t.baseUrl, expire: Date.now() + (t.ttlMsecs || 60000) - 10000 };
+    }
+    return jeton.baseUrl + '/attachments/' + id + '/download?auth=' + encodeURIComponent(jeton.token);
+}
+
+function chargerVisuels(racine) {
+    racine.querySelectorAll('img[data-piece]').forEach((img) => {
+        urlPieceJointe(img.dataset.piece)
+            .then((url) => { img.src = url; })
+            .catch((e) => console.warn(LOG, 'visuel illisible :', (e && e.message) || e));
+    });
 }
 
 function ajusterHauteur(champ) {
@@ -323,7 +409,11 @@ function enTete() {
         + '</header>';
 }
 
-function cadrage() {
+function cadrage(categorie) {
+    const champs = saisiesDuCadrage(categorie);
+    saisies = [DESCRIPTION, ACTUALITES].concat(Object.keys(champs).map((k) => champs[k]));
+    const droite = blocIndicateurs(categorie) + blocVisuel();
+    const duoCible = blocChamp(champs.cible) + blocChamp(champs.perimetre);
     return '<section class="fiche-cadrage">'
         + '<div class="fiche-colonne">'
         + blocStatut()
@@ -331,15 +421,22 @@ function cadrage() {
             || '<span class="fiche-alerte">' + ICONE_ERREUR + 'Aucun</span>')
         + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
         + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
+        + blocChamp(champs.maturite)
         + '</div>'
         + '<div class="fiche-colonne large">'
         + blocSaisie(DESCRIPTION)
         + '<div class="fiche-duo">' + blocActualites() + blocProchainJalon() + '</div>'
+        + blocChamp(champs.objectif)
+        + (duoCible ? '<div class="fiche-duo">' + duoCible + '</div>' : '')
+        + blocChamp(champs.contraintes)
+        + blocChamp(champs.modalites)
         + '<div class="fiche-trio">'
         + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
         + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
         + bloc('bloc-deadline', 'Deadline commanditaires', texteOuVide(dateCourte(projet.Deadline_commanditaire)))
-        + '</div></div></section>';
+        + '</div></div>'
+        + (droite ? '<div class="fiche-colonne droite">' + droite + '</div>' : '')
+        + '</section>';
 }
 
 function feuilleDeRoute() {
@@ -458,10 +555,11 @@ function rendre() {
         ? { id: actif.id, valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
         : null;
     rendu = true;
-    racine.innerHTML = enTete() + messageDeRefus() + cadrage()
+    racine.innerHTML = enTete() + messageDeRefus() + cadrage(categorie && GABARITS[categorie] ? categorie : 'Projet')
         + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
     rendu = false;
-    SAISIES.forEach((s) => {
+    chargerVisuels(racine);
+    saisies.forEach((s) => {
         const saisie = el(idSaisie(s));
         if (!saisie) return;
         if (enCours && enCours.id === saisie.id) {
