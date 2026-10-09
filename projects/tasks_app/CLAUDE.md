@@ -938,10 +938,9 @@ Le **projet** d'un chantier s'enregistre depuis le volet, dans `Chantiers.Projet
 et se laissait modifier, mais `saveChantierToGrist()` ne l'écrivait pas : le choix revenait à sa
 valeur d'origine au rendu suivant, ce que les utilisateurs voyaient comme une réinitialisation.
 
-Un chantier peut être rattaché à plusieurs projets là où le volet n'en montre qu'un, le premier.
-Enregistrer remplace donc ce seul rattachement et laisse les suivants en place : écrire la seule
-valeur affichée effacerait ceux que le volet ne montre pas. Un chantier de la production est dans
-ce cas.
+Le volet d'un chantier liste tous ses projets, « Projets », qui s'ajoutent et se retirent un à un,
+création comprise ; celui d'une tâche garde son sélecteur unique. Le premier de la liste donne au
+chantier sa couleur et son groupe. Un chantier de la production est rattaché à deux projets.
 
 > `Chantiers.Contributeurs` n'est ni écrite ni lue. La colonne existe dans la structure du document,
 > mais un chantier ne tient pas sa propre liste : elle remonte de ses tâches, dans le volet **comme

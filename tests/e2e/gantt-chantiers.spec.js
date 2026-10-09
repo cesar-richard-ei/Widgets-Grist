@@ -423,34 +423,69 @@ test('la ligne d un chantier montre ce que son volet montre', async ({ page }) =
     expect(pastilles).toEqual(['Chloé Roux']);
 });
 
-// Le volet d'un chantier laisse choisir son projet, mais l'enregistrement l'ignorait : le champ
-// revenait à sa valeur d'origine au rendu suivant.
-test('changer le projet d un chantier part en base', async ({ page }) => {
-    await D.ouvrirGantt(page);
-    await D.ouvrirVolet(page, 'Socle technique');
+const projetsDuChantier = (page, id) => page.evaluate(async (id) => {
+    const c = await window.grist.docApi.fetchTable('Chantiers');
+    return c.Projets[c.id.indexOf(id)];
+}, id);
+const rangeeProjets = (page) => volet(page).locator('.prop-row:has(.prop-label:text-is("Projets"))');
 
-    await volet(page).locator('.prop-row:has(.prop-label:text-is("Projet")) select').selectOption({ label: 'Datalab' });
-
-    await expect.poll(() => page.evaluate(async () => {
-        const c = await window.grist.docApi.fetchTable('Chantiers');
-        return c.Projets[c.id.indexOf(1)];
-    })).toEqual(['L', 2]);
-});
-
-// Le volet ne montre que le premier rattachement : enregistrer ne doit pas effacer les autres.
-test('changer le projet ne retire pas les autres rattachements du chantier', async ({ page }) => {
+function documentDeuxProjets() {
     const doc = D.documentCible();
     doc.Projects.records.push({ id: 3, nom: 'Espace de travail', couleur: '#10b981', actif: true, Categorie: 2 });
     doc.Chantiers.records.find((c) => c.id === 1).Projets = ['L', 1, 2];
-    await D.ouvrirGantt(page, doc);
+    return doc;
+}
+
+test('le volet d un chantier montre tous ses projets', async ({ page }) => {
+    await D.ouvrirGantt(page, documentDeuxProjets());
     await D.ouvrirVolet(page, 'Socle technique');
 
-    await volet(page).locator('.prop-row:has(.prop-label:text-is("Projet")) select').selectOption({ label: 'Espace de travail' });
+    await expect(rangeeProjets(page).locator('.projet-choisi .an')).toHaveText([/Portail/, /Datalab/]);
+});
+
+test('ajouter un projet a un chantier garde ses autres rattachements', async ({ page }) => {
+    await D.ouvrirGantt(page, documentDeuxProjets());
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await rangeeProjets(page).locator('.addbtn').click();
+    await rangeeProjets(page).locator('.multi-select-option', { hasText: 'Espace de travail' }).click();
+
+    await expect.poll(() => projetsDuChantier(page, 1)).toEqual(['L', 1, 2, 3]);
+});
+
+test('retirer un projet d un chantier ne retire que celui-la', async ({ page }) => {
+    await D.ouvrirGantt(page, documentDeuxProjets());
+    await D.ouvrirVolet(page, 'Socle technique');
+
+    await rangeeProjets(page).locator('.projet-choisi', { hasText: 'Portail' }).locator('.asg-x').click();
+
+    await expect.poll(() => projetsDuChantier(page, 1)).toEqual(['L', 2]);
+    await expect(rangeeProjets(page).locator('.projet-choisi .an')).toHaveText([/Datalab/]);
+});
+
+test('creer un chantier rattache a deux projets les enregistre tous les deux', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    await page.locator('#btnAjouter').click();
+    await page.locator('#menuAjout button', { hasText: 'Chantier' }).click();
+    await page.locator('#taskTitle').fill('Recette métier');
+    await rangeeProjets(page).locator('.addbtn').click();
+    await rangeeProjets(page).locator('.multi-select-option', { hasText: 'Datalab' }).click();
+    await page.locator('#panel .panel-btn.success').click();
 
     await expect.poll(() => page.evaluate(async () => {
         const c = await window.grist.docApi.fetchTable('Chantiers');
-        return c.Projets[c.id.indexOf(1)];
-    })).toEqual(['L', 3, 2]);
+        return c.Projets[c.Nom_du_chantier.indexOf('Recette métier')];
+    })).toEqual(['L', 1, 2]);
+});
+
+test('le volet d une tache garde un seul projet', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    await expect(volet(page).locator('.prop-row:has(.prop-label:text-is("Projet")) select')).toBeVisible();
+    await expect(rangeeProjets(page)).toHaveCount(0);
 });
 
 // Bruno, responsable du « Socle technique », porte le domaine « Socle technique », en vert : le
