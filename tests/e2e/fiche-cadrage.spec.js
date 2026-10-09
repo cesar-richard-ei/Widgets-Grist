@@ -11,7 +11,7 @@ const fiche = (page) => page.locator('.fiche');
 const DATALAB = 2;
 
 const COLONNES_MAQUETTE = {
-    Objectif_principales_fonctionnalites: { type: 'Text', label: 'Objectif / principales fonctionnalités' },
+    Objectifs_ou_principales_fonctionnalites: { type: 'Text', label: 'Objectifs ou principales fonctionnalités' },
     Public_cible: { type: 'Text', label: 'Public cible' },
     Contraintes_et_cadre: { type: 'Text', label: 'Contraintes et cadre' },
     Perimetre_donnees: { type: 'Text', label: 'Périmètre données' },
@@ -20,9 +20,9 @@ const COLONNES_MAQUETTE = {
     Commentaires_sur_le_statut: { type: 'Text', label: 'Commentaires sur le statut' },
     Visuel: { type: 'Attachments', label: 'Visuel' },
     Titre_du_visuel: { type: 'Text', label: 'Titre du visuel' },
-    Indicateur_1: { type: 'Text', label: 'Indicateur 1' }, Donnee_indicateur_1: { type: 'Text', label: 'Donnée indicateur 1' },
-    Indicateur_2: { type: 'Text', label: 'Indicateur 2' }, Donnee_indicateur_2: { type: 'Text', label: 'Donnée indicateur 2' },
-    Indicateur_3: { type: 'Text', label: 'Indicateur 3' }, Donnee_indicateur_3: { type: 'Text', label: 'Donnée indicateur 3' }
+    Libelle_Ind_cle_1: { type: 'Text', label: 'Libellé - Ind. clé 1' }, Data_Ind_cle_1: { type: 'Text', label: 'Data - Ind. clé 1' },
+    Libelle_Ind_cle_2: { type: 'Text', label: 'Libellé - Ind. clé 2' }, Data_ind_cle_2: { type: 'Text', label: 'Data - ind. clé 2' },
+    Libelle_Ind_cle_3: { type: 'Text', label: 'Libellé - Ind. clé 3' }, Data_ind_cle_3: { type: 'Text', label: 'Data - ind. clé 3' }
 };
 
 function documentMaquette(categorie, valeurs) {
@@ -39,7 +39,7 @@ const libelles = (page) => fiche(page).locator('.fiche-cadrage .fiche-label').al
 
 test('la fiche projet porte objectif, cible, contraintes et maturite', async ({ page }) => {
     await D.ouvrirFiche(page, documentMaquette(2, {
-        Objectif_principales_fonctionnalites: 'Explorer les données', Public_cible: 'Chercheurs', Maturite: 'En construction'
+        Objectifs_ou_principales_fonctionnalites: 'Explorer les données', Public_cible: 'Chercheurs', Maturite: 'En construction'
     }), DATALAB);
 
     await expect(fiche(page).locator('.bloc-objectif textarea')).toHaveValue('Explorer les données');
@@ -73,7 +73,7 @@ test('un champ de cadrage s enregistre au depart du curseur', async ({ page }) =
 
     await expect.poll(() => page.evaluate(async () => {
         const p = await window.grist.docApi.fetchTable('Projects');
-        return p.Objectif_principales_fonctionnalites[p.id.indexOf(2)];
+        return p.Objectifs_ou_principales_fonctionnalites[p.id.indexOf(2)];
     })).toBe('Mettre un bac à sable à disposition');
 });
 
@@ -85,9 +85,9 @@ test('sans les colonnes, la fiche ne montre aucun de ces blocs', async ({ page }
 
 test('les chiffres cles s affichent en haut de la colonne de droite d un produit', async ({ page }) => {
     const doc = documentMaquette(1, {
-        Indicateur_1: 'utilisateurs', Donnee_indicateur_1: '800',
-        Indicateur_2: 'requêtes', Donnee_indicateur_2: '10 000',
-        Indicateur_3: '', Donnee_indicateur_3: ''
+        Libelle_Ind_cle_1: 'utilisateurs', Data_Ind_cle_1: '800',
+        Libelle_Ind_cle_2: 'requêtes', Data_ind_cle_2: '10 000',
+        Libelle_Ind_cle_3: '', Data_ind_cle_3: ''
     });
     await D.ouvrirFiche(page, doc, DATALAB);
 
@@ -101,7 +101,7 @@ test('les chiffres cles s affichent en haut de la colonne de droite d un produit
 });
 
 test('une fiche projet n affiche pas de chiffres cles', async ({ page }) => {
-    await D.ouvrirFiche(page, documentMaquette(2, { Indicateur_1: 'utilisateurs', Donnee_indicateur_1: '800' }), DATALAB);
+    await D.ouvrirFiche(page, documentMaquette(2, { Libelle_Ind_cle_1: 'utilisateurs', Data_Ind_cle_1: '800' }), DATALAB);
 
     await expect(fiche(page).locator('.fiche-indicateurs')).toHaveCount(0);
 });
@@ -243,4 +243,17 @@ test('chaque bloc de la colonne centrale porte son pictogramme', async ({ page }
     for (const sel of ['.bloc-description', '.bloc-objectif', '.bloc-cible', '.bloc-perimetre', '.bloc-modalites', '.bloc-budget', '.bloc-maturite']) {
         await expect(fiche(page).locator(sel + ' .fiche-label svg')).toHaveCount(1);
     }
+});
+
+// Le document de production nomme le budget « Budget alloué ou coût ».
+test('le budget se lit sous le nom que lui donne le document', async ({ page }) => {
+    const doc = documentMaquette(2);
+    delete doc.Projects.columns.Budget_alloue;
+    doc.Projects.columns.Budget_alloue_ou_cout = { type: 'Text', label: 'Budget alloué ou coût' };
+    const p = doc.Projects.records.find((r) => r.id === DATALAB);
+    delete p.Budget_alloue;
+    p.Budget_alloue_ou_cout = '50 k€';
+    await D.ouvrirFiche(page, doc, DATALAB);
+
+    await expect(fiche(page).locator('.bloc-budget')).toContainText('50 k€');
 });
