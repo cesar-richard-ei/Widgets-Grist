@@ -65,6 +65,7 @@ function createFakeGrist(documentInitial, options) {
                     id: refColonne[tableId][colId],
                     parentId: refTable[tableId],
                     colId: colId,
+                    label: info.label != null ? info.label : colId,
                     type: info.type,
                     widgetOptions: info.widgetOptions != null ? info.widgetOptions : '',
                     visibleCol: info.visibleCol != null ? info.visibleCol : 0,
@@ -83,7 +84,7 @@ function createFakeGrist(documentInitial, options) {
             return versColonnaire(lignesMetaTables(), ['tableId']);
         }
         if (nom === '_grist_Tables_column') {
-            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'type', 'widgetOptions', 'visibleCol', 'untieColIdFromLabel', 'isFormula', 'formula']);
+            return versColonnaire(lignesMetaColonnes(), ['parentId', 'colId', 'label', 'type', 'widgetOptions', 'visibleCol', 'untieColIdFromLabel', 'isFormula', 'formula']);
         }
         if (!doc[nom]) throw new Error('Table inconnue: ' + nom);
         return versColonnaire(doc[nom].records, Object.keys(doc[nom].columns));
@@ -350,7 +351,10 @@ function createFakeGrist(documentInitial, options) {
         setSelectedRows: setSelectedRows,
         setCursorPos: setCursorPos,
         widgetApi: { getOptions: getOptions, setOptions: setOptions },
-        docApi: { fetchTable: fetchTable, listTables: listTables, applyUserActions: applyUserActions, getDocName: getDocName },
+        docApi: {
+            fetchTable: fetchTable, listTables: listTables, applyUserActions: applyUserActions, getDocName: getDocName,
+            getAccessToken: async () => ({ token: 'jeton-test', baseUrl: 'http://localhost:3001/__grist', ttlMsecs: 300000 })
+        },
         // Accesseurs plutot que proprietes figees : un rollack de lot reaffecte
         // doc/refTable/refColonne (voir applyUserActions), l'expose doit suivre l'etat courant.
         get _doc() { return doc; },
