@@ -26,6 +26,26 @@ const ICONE_ERREUR = '<svg viewBox="0 0 24 24" width="1em" height="1em" fill="cu
 const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" focusable="false">'
     + '<path d="M12 20V5"/><path d="m6 11 6-6 6 6"/></svg>';
 
+// Pictogrammes des libellés, repris de Lucide (licence ISC) au plus près de la maquette.
+const PICTOS = {
+    actualite: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+    jalon: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
+    description: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
+    objectif: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
+    cible: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><path d="M16 3.128a4 4 0 0 1 0 7.744"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><circle cx="9" cy="7" r="4"/>',
+    perimetre: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+    contraintes: '<path d="M22 6H2"/><path d="M22 18H2"/><path d="M6 2v20"/><path d="M18 2v20"/>',
+    budget: '<path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="M7 12h5"/><path d="M15 9.4a4 4 0 1 0 0 5.2"/>',
+    commanditaires: '<path d="M22 17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/><path d="M7 11h10"/><path d="M7 15h6"/><path d="M7 7h8"/>',
+    deadline: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+    maturite: '<path d="M15 3h6v6"/><path d="m21 3-7 7"/><path d="m3 21 7-7"/><path d="M9 21H3v-6"/>',
+    modalites: '<rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/>',
+    lien: '<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>'
+};
+const picto = (nom) => (PICTOS[nom]
+    ? '<svg class="fiche-picto" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + PICTOS[nom] + '</svg>'
+    : '');
+
 let schemaMeta = null;
 let projet = null;
 let personnes = new Map();
@@ -185,8 +205,8 @@ function lignes() {
     return out;
 }
 
-function bloc(classe, libelle, contenu) {
-    return '<div class="fiche-bloc ' + classe + '"><div class="fiche-label">' + echapper(libelle) + '</div>'
+function bloc(classe, libelle, contenu, icone) {
+    return '<div class="fiche-bloc ' + classe + '"><div class="fiche-label">' + picto(icone) + echapper(libelle) + '</div>'
         + '<div class="fiche-valeur">' + (contenu || '<span class="vide">Non renseigné</span>') + '</div></div>';
 }
 
@@ -215,8 +235,8 @@ function colonneEcrivable(tableId, colId) {
 
 // Champs de Projects modifiables depuis la fiche. L'actualité n'est pas historisée, la saisie
 // remplace la précédente ; vide ou sans colonne, elle ne s'affiche pas.
-const DESCRIPTION = { colonne: 'Description', classe: 'bloc-description', libelle: 'Description' };
-const ACTUALITES = { colonne: 'Actualites', classe: 'bloc-actualites', libelle: 'Actualités' };
+const DESCRIPTION = { colonne: 'Description', classe: 'bloc-description', libelle: 'Description', icone: 'description' };
+const ACTUALITES = { colonne: 'Actualites', classe: 'bloc-actualites', libelle: 'Actualités', icone: 'actualite' };
 let saisies = [DESCRIPTION, ACTUALITES];
 const idSaisie = (s) => 'saisie-' + s.classe.split(' ')[0];
 
@@ -251,7 +271,7 @@ function saisiesDuCadrage(categorie) {
     const champs = {};
     for (const c of CHAMPS_CADRAGE) {
         const colonne = c.gabarits.indexOf(categorie) !== -1 ? colonneParLibelle(c.libelles) : null;
-        if (colonne) champs[c.cle] = { colonne: colonne, classe: 'bloc-' + c.cle + ' bloc-texte', libelle: c.libelle };
+        if (colonne) champs[c.cle] = { colonne: colonne, classe: 'bloc-' + c.cle + ' bloc-texte', libelle: c.libelle, icone: c.cle };
     }
     return champs;
 }
@@ -264,12 +284,12 @@ function champSaisie(s) {
 }
 
 function blocSaisie(s) {
-    if (!colonneEcrivable('Projects', s.colonne)) return bloc(s.classe, s.libelle, texteOuVide(projet[s.colonne]));
-    return '<div class="fiche-bloc ' + s.classe + '"><label class="fiche-label" for="' + idSaisie(s) + '">' + echapper(s.libelle) + '</label>'
+    if (!colonneEcrivable('Projects', s.colonne)) return bloc(s.classe, s.libelle, texteOuVide(projet[s.colonne]), s.icone);
+    return '<div class="fiche-bloc ' + s.classe + '"><label class="fiche-label" for="' + idSaisie(s) + '">' + picto(s.icone) + echapper(s.libelle) + '</label>'
         + '<div class="fiche-valeur">' + champSaisie(s) + '</div></div>';
 }
 
-const blocActualites = () => (texteOuVide(projet[ACTUALITES.colonne]) ? blocSaisie(ACTUALITES) : '');
+const blocActualites = () => (colonneMeta('Projects', ACTUALITES.colonne) ? blocSaisie(ACTUALITES) : '');
 
 function prochainJalon() {
     const colChantier = colonneChantier();
@@ -286,7 +306,7 @@ function prochainJalon() {
 function blocProchainJalon() {
     const j = prochainJalon();
     if (!j) return '';
-    return '<div class="fiche-bloc bloc-jalon"><div class="fiche-label">Prochain jalon clé'
+    return '<div class="fiche-bloc bloc-jalon"><div class="fiche-label">' + picto('jalon') + 'Prochain jalon clé'
         + '<span class="fiche-jalon-date">' + echapper(j.date.toLocaleDateString('fr-FR')) + '</span></div>'
         + '<div class="fiche-jalon-titre">' + echapper(j.titre || 'Sans titre') + '</div></div>';
 }
@@ -305,8 +325,9 @@ function couleursDuChoix(colonne, valeur) {
 }
 
 function blocStatut() {
+    if (!colonneMeta('Projects', 'Statut')) return '';
     const valeur = texteOuVide(projet.Statut);
-    if (!valeur) return '';
+    if (!valeur) return bloc('bloc-statut', 'Statut', '');
     const colCommentaire = colonneParLibelle(['Commentaires sur le statut', 'Commentaire sur le statut']);
     const commentaire = colCommentaire ? texteOuVide(projet[colCommentaire]) : '';
     const aide = commentaire
@@ -315,6 +336,33 @@ function blocStatut() {
         : '';
     return bloc('bloc-statut', 'Statut', '<span class="fiche-statut-ligne"><span class="fiche-statut"'
         + couleursDuChoix(colonneMeta('Projects', 'Statut'), projet.Statut) + '>' + valeur + '</span>' + aide + '</span>');
+}
+
+// Une cellule « lien » de Grist s'écrit « libellé adresse » ou « adresse » seule. Seule une adresse
+// web devient un lien, le reste s'affiche tel quel.
+function lienDe(valeur) {
+    const brut = valeur == null ? '' : String(valeur).trim();
+    if (!brut) return '';
+    const morceaux = brut.split(/\s+/);
+    const adresse = morceaux[morceaux.length - 1];
+    if (!/^https?:\/\//i.test(adresse)) return echapper(brut);
+    const libelle = morceaux.length > 1 ? morceaux.slice(0, -1).join(' ') : adresse;
+    return '<a class="fiche-lien" href="' + echapper(adresse) + '" target="_blank" rel="noopener noreferrer">'
+        + echapper(libelle) + picto('lien') + '</a>';
+}
+
+const GABARITS_ACCES = ['Produit', 'Offre de service'];
+const ACCES = [
+    { classe: 'bloc-acces-outil', libelles: ["Accès à l'outil", 'Acces outil'], libelle: "Accès à l'outil" },
+    { classe: 'bloc-acces-documentation', libelles: ['Accès à la documentation', 'Acces documentation'], libelle: 'Accès à la documentation' }
+];
+
+function blocsAcces(categorie) {
+    if (GABARITS_ACCES.indexOf(categorie) === -1) return '';
+    return ACCES.map((a) => {
+        const col = colonneParLibelle(a.libelles);
+        return col ? bloc(a.classe, a.libelle, lienDe(projet[col])) : '';
+    }).join('');
 }
 
 function blocIndicateurs(categorie) {
@@ -409,6 +457,20 @@ function enTete() {
         + '</header>';
 }
 
+// Projet : budget, commanditaires et deadline. Offre de service : le budget, à côté des modalités de
+// réalisation. Produit : aucun des trois.
+function blocsDeBase(categorie, modalites) {
+    const budget = () => bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue), 'budget');
+    if (categorie === 'Projet') {
+        return '<div class="fiche-trio">' + budget()
+            + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires), 'commanditaires')
+            + bloc('bloc-deadline', 'Deadline commanditaires', texteOuVide(dateCourte(projet.Deadline_commanditaire)), 'deadline')
+            + '</div>';
+    }
+    if (categorie === 'Offre de service') return '<div class="fiche-duo fiche-trio">' + budget() + blocChamp(modalites) + '</div>';
+    return blocChamp(modalites);
+}
+
 function cadrage(categorie) {
     const champs = saisiesDuCadrage(categorie);
     saisies = [DESCRIPTION, ACTUALITES].concat(Object.keys(champs).map((k) => champs[k]));
@@ -422,19 +484,16 @@ function cadrage(categorie) {
         + bloc('bloc-sponsors', 'Sponsors', pastilles(refsPersonnes('Projects', 'Sponsor', projet.Sponsor)))
         + bloc('bloc-contributeurs', 'Contributeurs clés', pastilles(refsPersonnes('Projects', 'Contributeurs_cles', projet.Contributeurs_cles)))
         + blocChamp(champs.maturite)
+        + blocsAcces(categorie)
         + '</div>'
         + '<div class="fiche-colonne large">'
-        + blocSaisie(DESCRIPTION)
         + '<div class="fiche-duo">' + blocActualites() + blocProchainJalon() + '</div>'
+        + blocSaisie(DESCRIPTION)
         + blocChamp(champs.objectif)
         + (duoCible ? '<div class="fiche-duo">' + duoCible + '</div>' : '')
         + blocChamp(champs.contraintes)
-        + blocChamp(champs.modalites)
-        + '<div class="fiche-trio">'
-        + bloc('bloc-budget', 'Budget alloué', texteOuVide(projet.Budget_alloue))
-        + bloc('bloc-commanditaires', 'Commanditaires', texteOuVide(projet.Commanditaires))
-        + bloc('bloc-deadline', 'Deadline commanditaires', texteOuVide(dateCourte(projet.Deadline_commanditaire)))
-        + '</div></div>'
+        + blocsDeBase(categorie, champs.modalites)
+        + '</div>'
         + (droite ? '<div class="fiche-colonne droite">' + droite + '</div>' : '')
         + '</section>';
 }

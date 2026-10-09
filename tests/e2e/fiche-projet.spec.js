@@ -449,11 +449,11 @@ test('un statut qui n a qu une couleur de fond s ecrit en noir', async ({ page }
     await expect(pastille).toHaveCSS('color', 'rgb(0, 0, 0)');
 });
 
-test('sans statut renseigne, la fiche n en montre pas', async ({ page }) => {
+test('sans statut renseigne, le bloc reste affiche, vide', async ({ page }) => {
     await D.ouvrirFiche(page, avecStatut(''), DATALAB);
 
-    await expect(fiche(page).locator('.bloc-responsable')).toBeVisible();
-    await expect(fiche(page).locator('.bloc-statut')).toHaveCount(0);
+    await expect(fiche(page).locator('.bloc-statut')).toContainText('Non renseigné');
+    await expect(fiche(page).locator('.bloc-statut .fiche-statut')).toHaveCount(0);
 });
 
 test('sans colonne statut, la fiche n en montre pas', async ({ page }) => {
@@ -547,20 +547,19 @@ test('l actualite du projet s affiche et s edite quand la colonne existe', async
         .then((t) => t.Actualites[t.id.indexOf(2)]))).toBe('Ouverture repoussée à novembre.');
 });
 
-test('une actualite vide ne s affiche pas', async ({ page }) => {
+test('une actualite vide reste affichee, prete a la saisie', async ({ page }) => {
     const doc = avecActualites();
     doc.Projects.records.find((p) => p.id === DATALAB).Actualites = '';
     await D.ouvrirFiche(page, doc, DATALAB);
 
-    await expect(fiche(page).locator('.bloc-description')).toBeVisible();
-    await expect(fiche(page).locator('.bloc-actualites')).toHaveCount(0);
+    await expect(fiche(page).locator('.bloc-actualites textarea')).toHaveValue('');
 });
 
-test('l actualite se presente comme la description, juste sous elle', async ({ page }) => {
+test('l actualite se presente comme la description, juste au-dessus', async ({ page }) => {
     await D.ouvrirFiche(page, avecActualites(), DATALAB);
 
     const blocs = await fiche(page).locator('.fiche-colonne.large .fiche-bloc').evaluateAll((els) => els.map((e) => e.className));
-    expect(blocs.slice(0, 2)).toEqual(['fiche-bloc bloc-description', 'fiche-bloc bloc-actualites']);
+    expect(blocs.slice(0, 2)).toEqual(['fiche-bloc bloc-actualites', 'fiche-bloc bloc-description']);
 
     const style = (sel) => fiche(page).locator(sel).evaluate((e) => {
         const c = getComputedStyle(e);
