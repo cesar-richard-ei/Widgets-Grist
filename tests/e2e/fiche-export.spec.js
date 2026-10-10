@@ -145,3 +145,39 @@ test('un double clic n imprime qu une fois', async ({ page }) => {
     await page.waitForTimeout(300);
     expect((await impressions(page)).length).toBe(1);
 });
+
+// Chrome écrit chaque page en objet /Type /Page, en clair.
+const pagesDuPdf = (pdf) => (pdf.toString('latin1').match(/\/Type\s*\/Page(?![s\w])/g) || []).length;
+
+function offreChargee(nbTaches) {
+    const doc = avecCategorie(DATALAB, 3);
+    for (let i = 0; i < nbTaches; i++) {
+        doc.Tasks.records.push({ id: 100 + i, titre: 'Tâche ' + (i + 1), chantier: 2, dateDebut: D.j(i), dateEcheance: D.j(i + 20), statut: 'todo', type: 'tache', priorite: '2' });
+    }
+    return doc;
+}
+
+async function pdfApresExport(page, doc, id) {
+    await bouchonnerImpression(page);
+    await D.ouvrirFiche(page, doc, id);
+    await bouton(page).click();
+    await expect.poll(() => impressions(page).then((l) => l.length)).toBe(1);
+    return { vue: (await impressions(page))[0], pdf: await page.pdf({ preferCSSPageSize: true, printBackground: true }) };
+}
+
+test('une fiche produit s imprime a taille reelle sur une page', async ({ page }) => {
+    const { vue, pdf } = await pdfApresExport(page, avecCategorie(PORTAIL, 1), PORTAIL);
+    expect(vue.zoom).toBe(1);
+    expect(pagesDuPdf(pdf)).toBe(1);
+});
+
+test('une offre aux chantiers tous deplies tient sur une page', async ({ page }) => {
+    const { vue, pdf } = await pdfApresExport(page, offreChargee(40), DATALAB);
+    expect(vue.zoom).toBeLessThan(1);
+    expect(pagesDuPdf(pdf)).toBe(1);
+});
+
+test('une fiche projet a peine trop haute tient sur une page', async ({ page }) => {
+    const { pdf } = await pdfApresExport(page, null, DATALAB);
+    expect(pagesDuPdf(pdf)).toBe(1);
+});

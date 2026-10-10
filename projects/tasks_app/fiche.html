@@ -1410,8 +1410,9 @@
             });
         }
 
-        // Zone utile d'un A4 paysage à 10 mm de marge, en px CSS.
-        const PAGE_IMPRIMEE = { largeur: Math.floor(277 * 96 / 25.4), hauteur: Math.floor(190 * 96 / 25.4) };
+        // Zone utile d'un A4 paysage à 10 mm de marge, en px CSS. La hauteur garde 4 mm contre les arrondis
+        // du zoom, qui suffisaient à pousser la dernière ligne sur une seconde page.
+        const PAGE_IMPRIMEE = { largeur: Math.floor(277 * 96 / 25.4), hauteur: Math.floor(186 * 96 / 25.4) };
         const DELAI_VISUELS = 5000;
         let impression = null;
 
