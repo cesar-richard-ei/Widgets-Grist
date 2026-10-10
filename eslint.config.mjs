@@ -86,9 +86,9 @@ export default [
     },
 
     {
-        // Le module d'arbre se greffe sur le coeur, inline juste au-dessus de lui : TF n'existe
+        // Les modules d'arbre et d'impression se greffent sur le coeur, inline juste au-dessus d'eux : TF n'existe
         // donc pas dans son propre fichier, mais bien dans le widget qui le porte.
-        files: ['projects/tasks_app/core/arbre.js'],
+        files: ['projects/tasks_app/core/arbre.js', 'projects/tasks_app/core/impression.js'],
         languageOptions: { globals: { TF: 'readonly' } }
     },
 
