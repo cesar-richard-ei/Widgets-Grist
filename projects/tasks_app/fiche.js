@@ -408,6 +408,65 @@ function chargerVisuels(racine) {
     });
 }
 
+// Zone utile d'un A4 paysage à 10 mm de marge, en px CSS.
+const PAGE_IMPRIMEE = { largeur: Math.floor(277 * 96 / 25.4), hauteur: Math.floor(190 * 96 / 25.4) };
+const DELAI_VISUELS = 5000;
+let impression = null;
+
+function attendreVisuels(racine) {
+    return Promise.all(Array.from(racine.querySelectorAll('img[data-piece]')).map((img) => new Promise((fini) => {
+        if (img.getAttribute('src') && img.complete) return fini();
+        img.addEventListener('load', fini, { once: true });
+        img.addEventListener('error', fini, { once: true });
+        setTimeout(fini, DELAI_VISUELS);
+    })));
+}
+
+function mettreEnPage(racine, largeur) {
+    racine.style.width = largeur + 'px';
+    document.querySelectorAll('.fiche-saisie').forEach(ajusterHauteur);
+    return racine.getBoundingClientRect().height;
+}
+
+const deuxChiffres = (n) => String(n).padStart(2, '0');
+const mentionEdition = () => 'Fiche éditée le ' + new Date().toLocaleDateString('fr-FR');
+
+async function exporter(bouton) {
+    if (impression) return;
+    impression = { titre: document.title };
+    bouton.disabled = true;
+    const racine = el('fiche');
+    try {
+        await Promise.all([attendreVisuels(racine), document.fonts ? document.fonts.ready : null]);
+        const jour = new Date();
+        const pied = racine.querySelector('.fiche-pied');
+        if (pied) pied.textContent = mentionEdition();
+        document.documentElement.classList.add('impression');
+        const echelle = TF.echelleDImpression(Object.assign({ mesurer: (l) => mettreEnPage(racine, l) }, PAGE_IMPRIMEE));
+        mettreEnPage(racine, echelle.largeur);
+        racine.style.zoom = echelle.zoom;
+        document.title = 'Fiche - ' + (projet.nom || 'Sans titre') + ' - '
+            + jour.getFullYear() + '-' + deuxChiffres(jour.getMonth() + 1) + '-' + deuxChiffres(jour.getDate());
+        window.addEventListener('afterprint', finirImpression, { once: true });
+        window.print();
+    } catch (e) {
+        console.warn(LOG, 'export impossible :', (e && e.message) || e);
+        finirImpression();
+    }
+}
+
+function finirImpression() {
+    const racine = el('fiche');
+    document.documentElement.classList.remove('impression');
+    racine.style.removeProperty('width');
+    racine.style.removeProperty('zoom');
+    if (impression) document.title = impression.titre;
+    impression = null;
+    document.querySelectorAll('.fiche-saisie').forEach(ajusterHauteur);
+    const bouton = racine.querySelector('.fiche-export');
+    if (bouton) bouton.disabled = false;
+}
+
 function ajusterHauteur(champ) {
     // Rendue dans une iframe masquée, la case n'a pas encore de hauteur à mesurer.
     if (!champ.scrollHeight) return;
@@ -639,6 +698,14 @@ function rendre() {
         if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
         rendre();
     }));
+    const exporte = racine.querySelector('.fiche-export');
+    if (exporte) {
+        exporte.disabled = !!impression;
+        exporte.addEventListener('click', () => exporter(exporte));
+    }
+    // Une relecture pendant l'impression redessine la fiche : le pied doit rester rempli.
+    const pied = racine.querySelector('.fiche-pied');
+    if (pied && impression) pied.textContent = mentionEdition();
 }
 
 const LOG = '[fiche]';

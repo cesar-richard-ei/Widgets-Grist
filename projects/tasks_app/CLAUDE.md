@@ -326,6 +326,12 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   identifiants. La fiche relit donc le projet dans `Projects` comme elle lit les autres tables, et
   ne garde de l'enregistrement que la ligne sélectionnée. La résolution d'une personne accepte
   encore l'identifiant ou le libellé, et journalise sous `[fiche]` ce qui reste introuvable.
+- **Export PDF.** Le bouton de l'en-tête lance l'impression du navigateur sur un A4 paysage unique.
+  Il attend le visuel (5 s au plus), pose la classe `impression` sur `<html>`, mesure la fiche et
+  la réduit au besoin (`TF.echelleDImpression`, `core/impression.js`) en l'élargissant d'autant pour
+  remplir la largeur de la page, puis rétablit l'écran à `afterprint`. La mesure se fait à l'écran :
+  une règle qui dépend de la taille de l'écran (`vw`, `vh`, `@media max-width`) doit donc être
+  neutralisée sous `html.impression`, sinon la fiche imprimée déborde de la page.
 - **La table des personnes n'est pas nommée en dur.** Chaque colonne dit dans son type où pointent
   ses références (`Ref:Team`, `RefList:Autre`) ; la fiche lit ces tables et indexe les personnes par
   table et identifiant. Une catégorie sans fiche annonce celle qui vient plutôt que de décrire ce
