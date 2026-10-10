@@ -239,6 +239,7 @@ test('sans projet selectionne, l accueil invite a choisir une ligne du tableau',
     // La flèche désigne le sélecteur, posé au-dessus du widget : elle ouvre la ligne.
     expect(await page.evaluate(() => document.querySelector('.fiche-accueil-guide').firstElementChild.className))
         .toBe('fiche-accueil-fleche');
+    await expect(fiche(page).locator('.fiche-export')).toHaveCount(0);
 });
 
 // La colonne de gauche ne garde que ce qui identifie la ligne : Paul lit la feuille de route pour
