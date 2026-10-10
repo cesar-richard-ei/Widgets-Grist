@@ -29,6 +29,7 @@ const FLECHE = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stro
 // Pictogrammes des libellés, repris de Lucide (licence ISC) au plus près de la maquette.
 const PICTOS = {
     actualite: '<path d="m21 21-4.34-4.34"/><circle cx="11" cy="11" r="8"/>',
+    export: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/>',
     jalon: '<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/>',
     description: '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
     objectif: '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>',
@@ -449,11 +450,12 @@ function dateCourte(ts) {
     return d ? d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
 }
 
-function enTete() {
+function enTete(exportable) {
     const type = texteOuVide(projet.Type);
     return '<header class="fiche-entete">'
         + '<h1 class="fiche-titre">' + echapper(projet.nom || 'Sans titre') + '</h1>'
         + (type ? '<span class="fiche-type">' + type + '</span>' : '')
+        + (exportable ? '<button type="button" class="fiche-export">' + picto('export') + 'Exporter en PDF</button>' : '')
         + '</header>';
 }
 
@@ -615,8 +617,9 @@ function rendre() {
         ? { id: actif.id, valeur: actif.value, debut: actif.selectionStart, fin: actif.selectionEnd }
         : null;
     rendu = true;
-    racine.innerHTML = enTete() + messageDeRefus() + cadrage(categorie && GABARITS[categorie] ? categorie : 'Projet')
-        + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '');
+    racine.innerHTML = enTete(true) + messageDeRefus() + cadrage(categorie && GABARITS[categorie] ? categorie : 'Projet')
+        + (gabarit.feuilleDeRoute ? feuilleDeRoute() : '')
+        + '<p class="fiche-pied"></p>';
     rendu = false;
     chargerVisuels(racine);
     saisies.forEach((s) => {
