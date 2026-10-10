@@ -181,3 +181,47 @@ test('une fiche projet a peine trop haute tient sur une page', async ({ page }) 
     const { pdf } = await pdfApresExport(page, null, DATALAB);
     expect(pagesDuPdf(pdf)).toBe(1);
 });
+
+test('sans afterprint, la premiere interaction rend l ecran normal', async ({ page }) => {
+    await bouchonnerImpression(page);
+    await D.ouvrirFiche(page, null, DATALAB);
+    await bouton(page).click();
+    await expect.poll(() => impressions(page).then((l) => l.length)).toBe(1);
+
+    await fiche(page).locator('.fiche-cadrage').click({ position: { x: 5, y: 5 } });
+    await expect(page.locator('html')).not.toHaveClass(/impression/);
+    await expect(bouton(page)).toBeEnabled();
+});
+
+test('une relecture pendant l attente du visuel n imprime pas un visuel vide', async ({ page }) => {
+    // Chaque rendu redemande le visuel sous un nouveau jeton : le second arrive après le premier.
+    const delais = [0, 1000, 2500];
+    let demandes = 0;
+    await page.route('**/__grist/attachments/**', async (route) => {
+        await new Promise((r) => setTimeout(r, delais[Math.min(demandes++, 2)]));
+        await route.fulfill({ status: 200, contentType: 'image/png', body: PNG });
+    });
+    await bouchonnerImpression(page);
+    // Jeton à usage unique : chaque rendu repart sous une nouvelle URL, sans le cache du navigateur.
+    await page.addInitScript(() => {
+        let g = null;
+        let n = 0;
+        Object.defineProperty(window, 'grist', {
+            configurable: true, get: () => g,
+            set: (v) => {
+                const lire = v.docApi.getAccessToken;
+                v.docApi.getAccessToken = async () => Object.assign(await lire(), { token: 'jeton-' + (++n), ttlMsecs: 1 });
+                g = v;
+            }
+        });
+    });
+    await D.ouvrirFiche(page, avecVisuel(), DATALAB);
+    const relire = () => page.evaluate(() => window.grist.docApi.applyUserActions([['UpdateRecord', 'Projects', 2, { nom: 'Datalab' }]]));
+    await relire();
+    await expect.poll(() => demandes).toBe(2);
+    await bouton(page).click();
+    await relire();
+
+    await expect.poll(() => impressions(page).then((l) => l.length), { timeout: 8000 }).toBe(1);
+    expect((await impressions(page))[0].visuel).toBe(1);
+});

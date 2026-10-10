@@ -413,14 +413,21 @@ function chargerVisuels(racine) {
 const PAGE_IMPRIMEE = { largeur: Math.floor(277 * 96 / 25.4), hauteur: Math.floor(186 * 96 / 25.4) };
 const DELAI_VISUELS = 5000;
 let impression = null;
+const FINS_D_IMPRESSION = ['pointerdown', 'keydown'];
 
-function attendreVisuels(racine) {
-    return Promise.all(Array.from(racine.querySelectorAll('img[data-piece]')).map((img) => new Promise((fini) => {
-        if (img.getAttribute('src') && img.complete) return fini();
-        img.addEventListener('load', fini, { once: true });
-        img.addEventListener('error', fini, { once: true });
-        setTimeout(fini, DELAI_VISUELS);
-    })));
+// Une relecture pendant l'attente remplace les images : on attend alors les nouvelles, dans le même délai.
+async function attendreVisuels(racine) {
+    const limite = Date.now() + DELAI_VISUELS;
+    let images;
+    do {
+        images = Array.from(racine.querySelectorAll('img[data-piece]'));
+        await Promise.all(images.map((img) => new Promise((fini) => {
+            if (img.getAttribute('src') && img.complete) return fini();
+            img.addEventListener('load', fini, { once: true });
+            img.addEventListener('error', fini, { once: true });
+            setTimeout(fini, Math.max(limite - Date.now(), 0));
+        })));
+    } while (Date.now() < limite && images.some((img) => !img.isConnected));
 }
 
 function mettreEnPage(racine, largeur) {
@@ -448,8 +455,10 @@ async function exporter(bouton) {
         racine.style.zoom = echelle.zoom;
         document.title = 'Fiche - ' + (projet.nom || 'Sans titre') + ' - '
             + jour.getFullYear() + '-' + deuxChiffres(jour.getMonth() + 1) + '-' + deuxChiffres(jour.getDate());
-        window.addEventListener('afterprint', finirImpression, { once: true });
+        window.addEventListener('afterprint', finirImpression);
         window.print();
+        // Sans afterprint (impression bloquée par le poste), la première interaction rend l'écran.
+        FINS_D_IMPRESSION.forEach((t) => window.addEventListener(t, finirImpression, true));
     } catch (e) {
         console.warn(LOG, 'export impossible :', (e && e.message) || e);
         finirImpression();
@@ -457,6 +466,9 @@ async function exporter(bouton) {
 }
 
 function finirImpression() {
+    if (!impression) return;
+    window.removeEventListener('afterprint', finirImpression);
+    FINS_D_IMPRESSION.forEach((t) => window.removeEventListener(t, finirImpression, true));
     const racine = el('fiche');
     document.documentElement.classList.remove('impression');
     racine.style.removeProperty('width');
