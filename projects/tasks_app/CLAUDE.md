@@ -332,6 +332,10 @@ Widget **lié à la table `Projects`** : il ne travaille que sur l'enregistremen
   remplir la largeur de la page, puis rétablit l'écran à `afterprint`. La mesure se fait à l'écran :
   une règle qui dépend de la taille de l'écran (`vw`, `vh`, `@media max-width`) doit donc être
   neutralisée sous `html.impression`, sinon la fiche imprimée déborde de la page.
+- **Visuel agrandi.** Un clic sur le visuel l'ouvre dans un `<dialog>` qui couvre le widget, pas
+  l'écran Grist : l'iframe ne peut pas en sortir. Molette, double clic, boutons et `+`, `-`, `0`
+  zooment, le glisser déplace ; le calcul vit dans `core/visionneuse.js` (`TF.zoomerVisuel`). La
+  boîte est posée hors de `#fiche`, pour qu'une relecture des tables ne la ferme pas.
 - **La table des personnes n'est pas nommée en dur.** Chaque colonne dit dans son type où pointent
   ses références (`Ref:Team`, `RefList:Autre`) ; la fiche lit ces tables et indexe les personnes par
   table et identifiant. Une catégorie sans fiche annonce celle qui vient plutôt que de décrire ce
