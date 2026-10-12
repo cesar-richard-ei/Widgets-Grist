@@ -387,7 +387,109 @@ function blocVisuel() {
     const colTitre = colonneParLibelle(['Titre du visuel']);
     const titre = colTitre ? texteOuVide(projet[colTitre]) : '';
     return '<div class="fiche-bloc bloc-visuel">' + (titre ? '<div class="fiche-label">' + titre + '</div>' : '')
-        + '<img class="fiche-visuel" data-piece="' + Number(piece) + '" alt="' + (titre || 'Visuel') + '"></div>';
+        + '<button type="button" class="fiche-visuel-bouton" aria-label="Agrandir le visuel" data-titre="' + titre + '">'
+        + '<img class="fiche-visuel" data-piece="' + Number(piece) + '" alt="' + (titre || 'Visuel') + '"></button></div>';
+}
+
+// Hors de la fiche : une relecture la redessine sans fermer le visuel agrandi.
+let visionneuse = null;
+
+function creerVisionneuse() {
+    const boite = document.createElement('dialog');
+    boite.className = 'visionneuse';
+    boite.innerHTML = '<div class="visionneuse-barre"><span class="visionneuse-titre"></span>'
+        + '<button type="button" data-zoom="0.8" aria-label="Dézoomer">−</button>'
+        + '<button type="button" data-zoom="ajuster">Ajuster</button>'
+        + '<button type="button" data-zoom="1.25" aria-label="Zoomer">+</button>'
+        + '<button type="button" class="visionneuse-fermer" aria-label="Fermer" autofocus>×</button></div>'
+        + '<div class="visionneuse-scene"><img class="visionneuse-image" alt="" draggable="false"></div>';
+    document.body.appendChild(boite);
+    const scene = boite.querySelector('.visionneuse-scene');
+    const img = boite.querySelector('.visionneuse-image');
+    const cadre = () => ({ largeur: scene.clientWidth, hauteur: scene.clientHeight });
+    const taille = () => ({ largeur: img.naturalWidth, hauteur: img.naturalHeight });
+    const ajustee = () => TF.ajusterVisuel(cadre(), taille());
+    let etat = null;
+    let geste = null;
+
+    function poser(e) {
+        etat = e;
+        img.style.transform = 'translate(' + e.x + 'px, ' + e.y + 'px) scale(' + e.echelle + ')';
+        img.style.visibility = 'visible';
+        scene.classList.toggle('zoomee', e.echelle > ajustee().echelle + 1e-9);
+    }
+    function ajuster() {
+        if (boite.open && img.naturalWidth && scene.clientWidth) poser(ajustee());
+    }
+    function zoomer(facteur, point) {
+        if (!etat) return;
+        const c = cadre();
+        poser(TF.zoomerVisuel(etat, facteur, point || { x: c.largeur / 2, y: c.hauteur / 2 }, c, taille()));
+    }
+    const pointDe = (ev) => {
+        const r = scene.getBoundingClientRect();
+        return { x: ev.clientX - r.left, y: ev.clientY - r.top };
+    };
+
+    img.addEventListener('load', ajuster);
+    window.addEventListener('resize', ajuster);
+    boite.addEventListener('close', () => { etat = null; });
+    boite.querySelector('.visionneuse-barre').addEventListener('click', (ev) => {
+        const b = ev.target.closest('button');
+        if (!b) return;
+        if (b.classList.contains('visionneuse-fermer')) boite.close();
+        else if (b.dataset.zoom === 'ajuster') ajuster();
+        else zoomer(Number(b.dataset.zoom));
+    });
+    boite.addEventListener('keydown', (ev) => {
+        if (ev.key === '+' || ev.key === '=') zoomer(1.25);
+        else if (ev.key === '-') zoomer(0.8);
+        else if (ev.key === '0') ajuster();
+    });
+    scene.addEventListener('wheel', (ev) => {
+        ev.preventDefault();
+        zoomer(Math.exp(-ev.deltaY * 0.002), pointDe(ev));
+    }, { passive: false });
+    scene.addEventListener('dblclick', (ev) => {
+        if (scene.classList.contains('zoomee')) ajuster(); else zoomer(2, pointDe(ev));
+    });
+    scene.addEventListener('pointerdown', (ev) => {
+        if (ev.button !== 0) return;
+        geste = { x: ev.clientX, y: ev.clientY, parcours: 0, surImage: ev.target === img };
+        scene.setPointerCapture(ev.pointerId);
+    });
+    scene.addEventListener('pointermove', (ev) => {
+        if (!geste || !etat) return;
+        const dx = ev.clientX - geste.x;
+        const dy = ev.clientY - geste.y;
+        geste.parcours += Math.abs(dx) + Math.abs(dy);
+        Object.assign(geste, { x: ev.clientX, y: ev.clientY });
+        poser(TF.deplacerVisuel(etat, dx, dy, cadre(), taille()));
+    });
+    scene.addEventListener('pointerup', () => {
+        const g = geste;
+        geste = null;
+        if (g && !g.surImage && g.parcours < 4) boite.close();
+    });
+    scene.addEventListener('pointercancel', () => { geste = null; });
+
+    return {
+        ouvrir(source, titre) {
+            boite.querySelector('.visionneuse-titre').textContent = titre;
+            boite.showModal();
+            if (img.getAttribute('src') === source) return ajuster();
+            // Jusqu'à son chargement, l'image s'afficherait à sa taille réelle.
+            img.style.visibility = 'hidden';
+            img.src = source;
+        }
+    };
+}
+
+function agrandirVisuel(bouton) {
+    const img = bouton.querySelector('img');
+    if (!img.complete || !img.naturalWidth) return;
+    if (!visionneuse) visionneuse = creerVisionneuse();
+    visionneuse.ouvrir(img.currentSrc || img.src, bouton.dataset.titre || '');
 }
 
 // Une pièce jointe ne se lit qu'avec un jeton d'accès, valable quelques minutes.
@@ -711,6 +813,8 @@ function rendre() {
         if (chantiersReplies.has(id)) chantiersReplies.delete(id); else chantiersReplies.add(id);
         rendre();
     }));
+    const agrandir = racine.querySelector('.fiche-visuel-bouton');
+    if (agrandir) agrandir.addEventListener('click', () => agrandirVisuel(agrandir));
     const exporte = racine.querySelector('.fiche-export');
     if (exporte) {
         exporte.disabled = !!impression;
