@@ -94,3 +94,49 @@ test('une fleche de dependance arrive au centre de la barre qui suit', async ({ 
 
     expect(ecart).toBeLessThan(2);
 });
+
+// Filtré par domaine, le Gantt ne montre que ce domaine : son liseret coiffe chaque projet une fois,
+// au-dessus de son nom, au lieu de se répéter sur chaque chantier.
+
+const filtrer = (page, ...domaines) => page.evaluate((ds) => ds.forEach((d) => toggleFilter('domaine', d)), domaines);
+const liserets = (page, projet) => page.locator('#taskList .groupe-projet', { hasText: projet }).locator('.bandeau-domaine');
+
+test('filtre par domaine : le liseret coiffe le projet une seule fois', async ({ page }) => {
+    await ouvrirToutDeplie(page);
+    await filtrer(page, 'Socle technique');
+
+    await expect(page.locator('#taskList .task-row .bandeau-domaine')).toHaveCount(0);
+    await expect(liserets(page, 'Portail habilitations')).toHaveText(['Socle technique']);
+
+    const ecart = await page.locator('#taskList .groupe-projet', { hasText: 'Portail habilitations' }).evaluate((g) =>
+        g.querySelector('.groupe-nom').getBoundingClientRect().top - g.querySelector('.bandeau-domaine').getBoundingClientRect().bottom);
+    expect(ecart).toBeGreaterThanOrEqual(0);
+});
+
+test('filtre sur deux domaines : un liseret par domaine qui touche le projet', async ({ page }) => {
+    await ouvrirToutDeplie(page);
+    await filtrer(page, 'Socle technique', 'Expérience');
+
+    await expect(liserets(page, 'Portail habilitations')).toHaveText(['Expérience', 'Socle technique']);
+    await expect(liserets(page, 'Datalab')).toHaveText(['Expérience']);
+});
+
+test('filtre par domaine : chaque ligne de gauche garde la hauteur et la position de sa piste', async ({ page }) => {
+    await ouvrirToutDeplie(page);
+    await filtrer(page, 'Socle technique', 'Expérience');
+    await D.toutDeplier(page);
+
+    const ecarts = await page.evaluate(() => {
+        const gauche = Array.from(document.querySelectorAll('#taskList > div'));
+        const droite = Array.from(document.querySelectorAll('#timelineGrid .grid-row'));
+        const origineG = gauche[0].getBoundingClientRect().top;
+        const origineD = droite[0].getBoundingClientRect().top;
+        return gauche.map((l, i) => {
+            const a = l.getBoundingClientRect(), b = droite[i].getBoundingClientRect();
+            return Math.abs(a.height - b.height) + Math.abs((a.top - origineG) - (b.top - origineD));
+        });
+    });
+
+    expect(ecarts.length).toBeGreaterThan(3);
+    ecarts.forEach((e) => expect(e).toBeLessThan(1));
+});

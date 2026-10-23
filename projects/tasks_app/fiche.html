@@ -1449,7 +1449,8 @@
             if (GABARITS_ACCES.indexOf(categorie) === -1) return '';
             return ACCES.map((a) => {
                 const col = colonneParLibelle(a.libelles);
-                return col ? bloc(a.classe, a.libelle, lienDe(projet[col])) : '';
+                const lien = col ? lienDe(projet[col]) : '';
+                return lien ? bloc(a.classe, a.libelle, lien) : '';
             }).join('');
         }
 

@@ -1588,20 +1588,24 @@
             const m = team.find(x => x.id === t.Responsable);
             return m && m.Domaine ? m.Domaine : null;
         }
+        // Filtré par domaine, le liseret passe du chantier au bandeau de son projet.
+        function domaineAffiche(t) {
+            return effectiveFilters().domaine.length ? null : domaineDeChantier(t);
+        }
         // Reprennent --row-height et --bandeau-domaine de gantt.html.
         const HAUTEUR_LIGNE = 44;
         const HAUTEUR_BANDEAU_DOMAINE = 24;
 
         function geometrieDesLignes() {
-            const hauteurs = currentVisible.map(v => HAUTEUR_LIGNE
-                + (!v.groupe && v.task && domaineDeChantier(v.task) ? HAUTEUR_BANDEAU_DOMAINE : 0));
+            const hauteurs = currentVisible.map(v => HAUTEUR_LIGNE + HAUTEUR_BANDEAU_DOMAINE *
+                (v.groupe ? v.groupe.domaines.length : (v.task && domaineAffiche(v.task) ? 1 : 0)));
             const g = TF.geometrieDesLignes(hauteurs);
             g.hautContenu = (i) => g.hauts[i] + hauteurs[i] - HAUTEUR_LIGNE;
             return g;
         }
 
-        const bandeauDomaine = (domaine) => '<span class="bandeau-domaine" style="background-color:' +
-            escapeAttr(couleurDeDomaine(domaine)) + '">' + escapeHtml(domaine) + '</span>';
+        const bandeauDomaine = (domaine, rang = 0) => '<span class="bandeau-domaine" style="background-color:' +
+            escapeAttr(couleurDeDomaine(domaine)) + (rang ? ';top:' + rang * HAUTEUR_BANDEAU_DOMAINE + 'px' : '') + '">' + escapeHtml(domaine) + '</span>';
 
         function basculerDomaine(rang) {
             const d = domainesConnus()[rang];
@@ -1904,7 +1908,26 @@
                 }
             };
             for (const r of roots) walk(r, 0);
-            return avecBandeauxDeProjet(visible);
+            return avecBandeauxDeProjet(visible, domainesFiltresParProjet(filtered));
+        }
+
+        // Domaines du filtre que touchent les lignes retenues, rangés sous le projet de leur racine.
+        function domainesFiltresParProjet(retenues) {
+            const voulus = effectiveFilters().domaine;
+            const parProjet = new Map();
+            if (!voulus.length) return parProjet;
+            for (const t of retenues) {
+                let racine = t, guard = 0;
+                while (racine.parentTask && guard++ < 64) {
+                    const parent = tasks.find(x => x.id === racine.parentTask);
+                    if (!parent) break;
+                    racine = parent;
+                }
+                const cle = racine.projet || 0;
+                if (!parProjet.has(cle)) parProjet.set(cle, new Set());
+                for (const d of domainesDeLigne(t)) if (voulus.includes(d)) parProjet.get(cle).add(d);
+            }
+            return parProjet;
         }
 
         // Tasks et Chantiers portent chacune leur colonne Responsable, indépendamment : sur un chantier,
@@ -2071,7 +2094,7 @@
             return 'linear-gradient(' + teinte + ', ' + teinte + ')';
         }
 
-        function avecBandeauxDeProjet(visible) {
+        function avecBandeauxDeProjet(visible, domainesParProjet) {
             const out = [];
             let projetPrecedent = null;
             for (const entree of visible) {
@@ -2085,6 +2108,7 @@
                                 nom: projet ? projet.nom : 'Sans projet',
                                 categorie: categorieDuProjet(projet),
                                 couleur: couleurDeGroupe(projet),
+                                domaines: domainesConnus().filter(d => (domainesParProjet.get(idProjet) || new Set()).has(d)),
                                 replie: groupesReplies.has(idProjet)
                             },
                             depth: 0
@@ -2729,8 +2753,11 @@
             let html = '';
             currentVisible.forEach(({ task: t, depth, dimmed, groupe }) => {
                 if (groupe) {
+                    const liserets = groupe.domaines.length * HAUTEUR_BANDEAU_DOMAINE;
                     html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '"' +
-                        ' style="background-image:' + aplatDeTeinte(groupe.couleur, 0.2) + '">' +
+                        ' style="background-image:' + aplatDeTeinte(groupe.couleur, 0.2) +
+                        (liserets ? ';height:' + (HAUTEUR_LIGNE + liserets) + 'px;padding-top:' + liserets + 'px' : '') + '">' +
+                        groupe.domaines.map(bandeauDomaine).join('') +
                         '<span class="groupe-chevron" onclick="event.stopPropagation();toggleGroupeProjet(' + groupe.id + ')" title="' + (groupe.replie ? 'Déplier' : 'Replier') + '">▼</span>' +
                         (groupe.categorie ? '<span class="groupe-badge">' + escapeHtml(groupe.categorie) + '</span>' : '') +
                         '<span class="groupe-nom">' + escapeHtml(groupe.nom) + '</span>' +
@@ -2757,8 +2784,8 @@
                     ? '<span class="tree-chevron' + (expandedTasks.has(t.id) ? ' expanded' : '') + '" onclick="event.stopPropagation();toggleExpand(' + t.id + ')" title="' + (expandedTasks.has(t.id) ? 'Replier' : 'Déplier') + '">▶</span>'
                     : '<span class="tree-chevron-placeholder"></span>';
                 const indent = depth * 18;
-                const domaine = domaineDeChantier(t);
-                const classes = ['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', domaine ? 'avec-domaine' : ''].filter(Boolean).join(' ');
+                const domaine = domaineAffiche(t);
+                const classes =['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', domaine ? 'avec-domaine' : ''].filter(Boolean).join(' ');
 
                 html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px' +
                     (domaine ? ';background-image:' + aplatDeTeinte(couleurDeDomaine(domaine), 0.12) : '') + '">' +
@@ -2893,12 +2920,18 @@
             ft.forEach((_, iLigne) => {
                 const groupe = currentVisible[iLigne] && currentVisible[iLigne].groupe;
                 if (groupe) {
+                    const bandes = groupe.domaines.map(d => { const c = escapeAttr(couleurDeDomaine(d)); return 'linear-gradient(' + c + ', ' + c + ')'; });
                     gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background-image:' +
-                        aplatDeTeinte(groupe.couleur, 0.2) + '"></div>';
+                        bandes.concat(aplatDeTeinte(groupe.couleur, 0.2)).join(', ') +
+                        (bandes.length
+                            ? ';height:' + (HAUTEUR_LIGNE + bandes.length * HAUTEUR_BANDEAU_DOMAINE) + 'px;background-repeat:no-repeat' +
+                              ';background-size:' + bandes.map(() => '100% ' + HAUTEUR_BANDEAU_DOMAINE + 'px').concat('100% 100%').join(', ') +
+                              ';background-position:' + bandes.map((_, i) => '0 ' + i * HAUTEUR_BANDEAU_DOMAINE + 'px').concat('0 0').join(', ')
+                            : '') + '"></div>';
                     return;
                 }
                 // Bande et teinte en fond : la grille ne porte aucun élément dans ses rangs.
-                const domaine = domaineDeChantier(ft[iLigne]);
+                const domaine = domaineAffiche(ft[iLigne]);
                 const couleur = domaine ? escapeAttr(couleurDeDomaine(domaine)) : '';
                 gridHtml += domaine
                     ? '<div class="grid-row avec-domaine" data-id="' + ft[iLigne].id + '" style="background-image:linear-gradient(' +

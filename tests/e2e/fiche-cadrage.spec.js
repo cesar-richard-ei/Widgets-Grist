@@ -204,7 +204,13 @@ test('un lien qui n est pas une adresse web reste du texte', async ({ page }) =>
 
     await expect(fiche(page).locator('.bloc-acces-outil a')).toHaveCount(0);
     await expect(fiche(page).locator('.bloc-acces-outil')).toContainText('javascript:alert(1)');
-    await expect(fiche(page).locator('.bloc-acces-documentation')).toContainText('Non renseigné');
+    await expect(fiche(page).locator('.bloc-acces-documentation')).toHaveCount(0);
+});
+
+test('un acces sans adresse ne s affiche pas', async ({ page }) => {
+    await D.ouvrirFiche(page, avecAcces(3, '', '  '), DATALAB);
+    await expect(fiche(page).locator('.bloc-maturite')).toBeVisible();
+    await expect(fiche(page).locator('.bloc-acces-outil, .bloc-acces-documentation')).toHaveCount(0);
 });
 
 test('la fiche projet ne propose pas de liens d acces', async ({ page }) => {
