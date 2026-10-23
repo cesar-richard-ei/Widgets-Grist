@@ -2852,14 +2852,6 @@
             });
             document.getElementById('taskList').innerHTML = html;
 
-            // Même bulle de survol que sur les barres : la colonne de gauche tronque les libellés, et
-            // c'est souvent là que l'on cherche le détail. Les bandeaux de projet n'en portent pas.
-            for (const entree of currentVisible) {
-                if (!entree.task) continue;
-                const ligne = document.querySelector('#taskList .task-row[data-id="' + entree.task.id + '"]');
-                if (ligne) setupTooltip(ligne, entree.task);
-            }
-
             // Sortable en mode manuel : autorisé uniquement au sein d'une fratrie (limite via check dans onEnd)
             if (sortMode === 'manual') {
                 if (sortableInstance) sortableInstance.destroy();
@@ -3066,7 +3058,6 @@
                     m.innerHTML = '<div class="milestone-diamond" style="background:' + jColor + '"></div><span class="milestone-label">' + escapeHtml(t.titre) + '</span>';
                     m.onclick = () => openTaskPanel(t.id);
                     m.onmousedown = (e) => startDrag(e, m, 'move');
-                    setupTooltip(m, t);
                     grid.appendChild(m);
                 } else {
                     const bar = document.createElement('div');
@@ -3088,7 +3079,6 @@
                     // des qu'il porte sur une poignee rendrait ces barres impossibles a ouvrir.
                     bar.onclick = (e) => { if (!e.target.classList.contains('resize-handle') || !dragState.deplace) openTaskPanel(t.id); };
                     bar.onmousedown = (e) => { if (!e.target.classList.contains('resize-handle')) startDrag(e, bar, 'move'); };
-                    setupTooltip(bar, t);
                     grid.appendChild(bar);
                 }
             });
@@ -3174,9 +3164,17 @@
             document.getElementById('timelineGrid').appendChild(svg);
         }
 
-        function setupTooltip(el, task) {
+        // Une bulle par conteneur, posée une fois : quatre écouteurs par ligne et par barre, reposés à
+        // chaque rendu, pesaient sur le Gantt déplié. La colonne de gauche tronque les libellés, c'est
+        // souvent là qu'on cherche le détail ; les bandeaux de projet n'en portent pas.
+        function brancherBulles(conteneur, selecteur) {
             const tooltip = document.getElementById('tooltip');
-            el.addEventListener('mouseenter', () => {
+            const cibleDe = (e) => (e.target.closest ? e.target.closest(selecteur) : null);
+            conteneur.addEventListener('mouseover', (e) => {
+                const cible = cibleDe(e);
+                if (!cible || cible.contains(e.relatedTarget)) return;
+                const task = tasks.find(t => t.id === Number(cible.dataset.id));
+                if (!task) return;
                 let html = '<div class="tooltip-title">' + escapeHtml(task.titre) + '</div>';
                 TOOLTIP_FIELDS.forEach(field => {
                     const value = field.format(task);
@@ -3185,9 +3183,15 @@
                 tooltip.innerHTML = html;
                 tooltip.classList.add('visible');
             });
-            el.addEventListener('mousemove', (e) => { tooltip.style.left = (e.clientX + 15) + 'px'; tooltip.style.top = (e.clientY + 15) + 'px'; });
-            el.addEventListener('mouseleave', () => tooltip.classList.remove('visible'));
-            el.addEventListener('click', () => tooltip.classList.remove('visible')); // clic = ouverture panel : masquer le tooltip
+            conteneur.addEventListener('mousemove', (e) => {
+                if (!cibleDe(e)) return;
+                tooltip.style.left = (e.clientX + 15) + 'px'; tooltip.style.top = (e.clientY + 15) + 'px';
+            });
+            conteneur.addEventListener('mouseout', (e) => {
+                const cible = cibleDe(e);
+                if (cible && !cible.contains(e.relatedTarget)) tooltip.classList.remove('visible');
+            });
+            conteneur.addEventListener('click', (e) => { if (cibleDe(e)) tooltip.classList.remove('visible'); });
         }
 
         function syncScroll() {
@@ -4530,15 +4534,19 @@
             const tablesCreated = [];
             const prefetched = {};  // données lues ici pour la vérif, réutilisables par loadAllData si le schéma n'a pas bougé
 
-            for (const [tableName, columns] of Object.entries(TASKFLOW_SCHEMA)) {
-                let raw, tableExists;
-                try { raw = await grist.docApi.fetchTable(tableName); tableExists = true; }
-                catch (e) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } }
+            const tables = Object.entries(TASKFLOW_SCHEMA);
+            const metaInitiale = TF.fetchSchemaMeta(grist).catch(() => null);
+            const lues = await Promise.all(tables.map(([tableName]) =>
+                grist.docApi.fetchTable(tableName).then(raw => ({ raw: raw }), () => null)));
+            for (const [rang, [tableName, columns]] of tables.entries()) {
+                const raw = lues[rang] && lues[rang].raw;
+                const tableExists = !!lues[rang];
+                if (!tableExists) { try { await grist.docApi.applyUserActions([['AddTable', tableName, columns.map(c => ({ id: c.id, type: c.type }))]]); tablesCreated.push(tableName); created++; continue; } catch (e2) { continue; } }
                 if (tableExists) { prefetched[tableName] = raw; const existingCols = Object.keys(raw).filter(c => c !== 'id' && c !== 'manualSort'); const missing = columns.filter(c => !existingCols.includes(c.id)); for (const col of missing) { try { await grist.docApi.applyUserActions([['AddColumn', tableName, col.id, { type: col.type }]]); added++; } catch (e) {} } }
             }
             if (tablesCreated.includes('Tasks')) await seedData();
-            // Métadonnées lues une seule fois (après création éventuelle), partagées par les helpers ci-dessous.
-            schemaMeta = await TF.fetchSchemaMeta(grist);
+            // Métadonnées lues avec les tables, relues seulement si le schéma vient de changer.
+            schemaMeta = (created || added) ? await TF.fetchSchemaMeta(grist) : (await metaInitiale) || await TF.fetchSchemaMeta(grist);
             await TF.seedStatusChoices(grist, 'Tasks', 'statut', TF.DEFAULT_STATUSES, schemaMeta);
             await TF.ensureUntiedLabels(grist, Object.fromEntries(Object.entries(TASKFLOW_SCHEMA).map(([t, cols]) => [t, cols.map(c => c.id)])), schemaMeta);
             await TF.setRefDisplayColumns(grist, [
@@ -4618,21 +4626,30 @@
             try { return await grist.docApi.fetchTable(nom); } catch (e) { noterRefus(nom); return null; }
         }
 
-        async function loadAllData(prefetched) {
+        // Dernières lectures brutes : une notification ne relit que Tasks, et une relecture identique à la
+        // précédente n'a rien à redessiner.
+        let lecturesBrutes = null;
+        let signatureLue = null;
+
+        async function loadAllData(prefetched, seulementTasks) {
             tablesRefusees = new Set();
             // Les cinq lectures partent ensemble : enchaînées, elles coûtaient autant d'allers-retours au
             // chargement comme à chaque retour sur le widget, pour des tables qui ne dépendent pas les unes
             // des autres. `prefetched` porte ce qu'ensureSchema a déjà lu à l'ouverture.
-            const deja = prefetched || {};
+            const deja = Object.assign({}, seulementTasks ? lecturesBrutes : null, prefetched);
             const [brutTasks, brutTeam, brutProjects, brutCategories, brutChantiers] = await Promise.all([
                 deja.Tasks || lireTable('Tasks'),
                 deja.Team || lireTable('Team'),
                 deja.Projects || lireTable('Projects'),
-                lireTable('Categorie_de_projet'),
+                'Categorie_de_projet' in deja ? deja.Categorie_de_projet : lireTable('Categorie_de_projet'),
                 // Le rattachement se lit sur le type d'une colonne de Tasks : sans lui, la table des
                 // chantiers n'a pas à être demandée.
-                colonneChantier() ? lireTable('Chantiers') : null
+                'Chantiers' in deja ? deja.Chantiers : (colonneChantier() ? lireTable('Chantiers') : null)
             ]);
+            const signature = JSON.stringify([brutTasks, brutTeam, brutProjects, brutCategories, brutChantiers]);
+            if (gristReady && signature === signatureLue) return;
+            signatureLue = signature;
+            lecturesBrutes = { Team: brutTeam, Projects: brutProjects, Categorie_de_projet: brutCategories, Chantiers: brutChantiers };
             TASK_COLS = new Set(Object.keys(brutTasks || {}));
             tasks = convert(brutTasks);
             team = convert(brutTeam);
@@ -4663,6 +4680,7 @@
                 return;
             }
             // Phase 2 : ici on est dans Grist. Toute erreur est logguée mais ne bascule PAS en démo.
+            const nomDuDocument = grist.docApi.getDocName().catch(() => null);
             let prefetched = null;
             try {
                 prefetched = await ensureSchema();
@@ -4670,7 +4688,7 @@
                 console.error('ensureSchema error (continuing):', e);
                 showToast('Schéma: ' + (e?.message || e), 'error');
             }
-            try { filterDocId = await grist.docApi.getDocName(); } catch (e) {}
+            filterDocId = (await nomDuDocument) || filterDocId;
             hydrateFilters();
             try {
                 await loadAllData(prefetched);
@@ -4679,7 +4697,7 @@
                 showToast('Chargement: ' + (e?.message || e), 'error');
             }
             try {
-                grist.onRecords(async () => await loadAllData());
+                grist.onRecords(async () => await loadAllData(null, true));
                 grist.onRecord((rec) => {
                     if (rec?.id && rec.id !== selectedTaskId) {
                         selectedTaskId = rec.id;
@@ -4855,6 +4873,8 @@
         afficherVersion();
         brancherPoignee('poigneeTaskList', 'taskList', 1);
         brancherPoignee('poigneePanel', 'panel', -1);
+        brancherBulles(document.getElementById('taskList'), '.task-row');
+        brancherBulles(document.getElementById('timelineGrid'), '.gantt-bar, .gantt-milestone');
         // Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre). Un
         // redimensionnement émet un événement par image : sans ce regroupement, chaque pixel de la poignée
         // déclenchait un rendu complet, et la souris avançait plus vite que le widget.
