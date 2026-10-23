@@ -1900,6 +1900,7 @@ function openTaskPanel(taskId) {
     panelState.taskId = taskId;
     panelState.taskIndex = idx >= 0 ? idx : 0;
     panelState.editData = panelState.estChantier ? donneesChantier(task) : cloneTaskData(task);
+    panelState.reference = referenceDuVolet();
 
     renderPanel();
     openPanel();
@@ -2746,7 +2747,42 @@ async function saveTaskToGrist() {
     }
     if (panelState.estChantier) { await saveChantierToGrist(data); return; }
 
-    const record = {
+    const record = seulementModifies(recordDeTache(data));
+    if (!Object.keys(record).length) return;
+    try {
+        await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', panelState.taskId, pruneTaskRecord(Object.assign({}, record))]]);
+        retenirEcrit(record);
+        showSaveIndicator();
+        const idx = tasks.findIndex(t => t.id === panelState.taskId);
+        if (idx !== -1) tasks[idx] = { ...tasks[idx], ...record };
+    } catch (e) {
+        console.error(e);
+        showToast('Erreur sauvegarde', 'error');
+    }
+}
+
+// Ce que le volet a lu à l'ouverture : seuls les champs qui s'en écartent partent en base, pour ne
+// pas écraser ce qu'une autre personne a saisi entre-temps sur la même ligne.
+function referenceDuVolet() {
+    const data = panelState.editData;
+    if (!data) return null;
+    return panelState.estChantier ? brutDeChantier(data) : recordDeTache(data);
+}
+function seulementModifies(record) {
+    const reference = panelState.reference;
+    if (!reference) return record;
+    const modifies = {};
+    for (const cle of Object.keys(record)) {
+        if (JSON.stringify(record[cle]) !== JSON.stringify(reference[cle])) modifies[cle] = record[cle];
+    }
+    return modifies;
+}
+function retenirEcrit(record) {
+    if (panelState.reference) Object.assign(panelState.reference, record);
+}
+
+function recordDeTache(data) {
+    return {
         titre: data.titre, description: data.description, type: data.type, priorite: data.priorite,
         statut: data.statut, progression: data.progression, dateDebut: data.dateDebut, dateEcheance: data.dateEcheance,
         projet: data.projet, assignees: toGristRefList(data.assignees), dependDe: toGristRefList(data.dependDe),
@@ -2756,16 +2792,6 @@ async function saveTaskToGrist() {
         parentTask: data.parentTask || null, chantier: data.chantier || null, Responsable: data.Responsable || null,
         charges: TF.chargesToJson((data.charges || []).filter(c => data.assignees.includes(c.teamId))), dateCloture: data.dateCloture || null
     };
-
-    try {
-        await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', panelState.taskId, pruneTaskRecord(record)]]);
-        showSaveIndicator();
-        const idx = tasks.findIndex(t => t.id === panelState.taskId);
-        if (idx !== -1) tasks[idx] = { ...tasks[idx], ...record };
-    } catch (e) {
-        console.error(e);
-        showToast('Erreur sauvegarde', 'error');
-    }
 }
 
 // Enregistre un chantier dans sa propre table. L'identifiant affiché est décalé de ID_CHANTIER :
@@ -2776,12 +2802,9 @@ async function saveChantierToGrist(data) {
     if (idChantier <= 0) return;
     const colDebut = colonneDateChantier('debut');
     const colFin = colonneDateChantier('fin');
-    const brut = { Nom_du_chantier: data.titre, Description: data.description, Responsable: data.Responsable || null };
-    brut[colDebut] = data.dateDebut || null;
-    brut[colFin] = data.dateEcheance || null;
-    brut.Projets = toGristRefList(data.projets);
-    brut.tags = toGristChoiceList(data.tags);
-    const record = pruneChantierRecord(brut);
+    const modifies = seulementModifies(brutDeChantier(data));
+    const record = pruneChantierRecord(Object.assign({}, modifies));
+    if (!Object.keys(record).length) return;
     // La ligne locale ne reprend que ce qui est réellement parti : une colonne élaguée n'a pas été
     // enregistrée, l'afficher comme telle ferait mentir le graphique jusqu'au rechargement.
     const local = {};
@@ -2797,6 +2820,7 @@ async function saveChantierToGrist(data) {
     if (colFin in record) local.dateEcheance = record[colFin];
     try {
         await grist.docApi.applyUserActions([['UpdateRecord', 'Chantiers', idChantier, record]]);
+        retenirEcrit(modifies);
         showSaveIndicator();
         const idx = tasks.findIndex(t => t.id === panelState.taskId);
         if (idx !== -1) tasks[idx] = Object.assign({}, tasks[idx], local);
@@ -2804,6 +2828,15 @@ async function saveChantierToGrist(data) {
         console.error('Enregistrement du chantier refusé', e, record);
         showToast('Erreur sauvegarde : ' + messageErreur(e), 'error');
     }
+}
+
+function brutDeChantier(data) {
+    const brut = { Nom_du_chantier: data.titre, Description: data.description, Responsable: data.Responsable || null };
+    brut[colonneDateChantier('debut')] = data.dateDebut || null;
+    brut[colonneDateChantier('fin')] = data.dateEcheance || null;
+    brut.Projets = toGristRefList(data.projets);
+    brut.tags = toGristChoiceList(data.tags);
+    return brut;
 }
 
 // Plusieurs tâches se ressemblent souvent : la copie reprend tout le contenu de l'originale, y
