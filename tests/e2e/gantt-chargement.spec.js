@@ -64,3 +64,55 @@ test('une table absente du schema n est pas demandee', async ({ page }) => {
 
     expect(await page.evaluate(() => window.__lectures)).not.toContain('Categorie_de_projet');
 });
+
+test('a l ouverture, les tables du schema se lisent ensemble', async ({ page }) => {
+    await page.addInitScript(suivreLectures().poser);
+    await D.ouvrirGantt(page);
+
+    expect(await page.evaluate(() => window.__maxEnVol)).toBeGreaterThanOrEqual(3);
+});
+
+// Grist ne notifie que la table du widget : seule Tasks peut avoir changé. Les autres tables se
+// relisent au retour sur le widget.
+test('une notification de Grist ne relit que les taches', async ({ page }) => {
+    await page.addInitScript(suivreLectures().poser);
+    await D.ouvrirGantt(page);
+    await D.toutDeplier(page);
+
+    await page.evaluate(() => { window.__lectures = []; });
+    await page.evaluate(() => grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', 3, { titre: 'Recette finale' }]]));
+
+    await expect(D.ligne(page, 'Recette finale')).toBeVisible();
+    expect(await page.evaluate(() => window.__lectures)).toEqual(['Tasks']);
+});
+
+test('une relecture qui ne trouve rien de neuf ne redessine pas', async ({ page }) => {
+    await D.ouvrirGantt(page);
+
+    const rendus = await page.evaluate(async () => {
+        let n = 0;
+        const original = window.render;
+        window.render = function () { n++; return original.apply(this, arguments); };
+        await loadAllData();
+        window.render = original;
+        return n;
+    });
+    expect(rendus).toBe(0);
+});
+
+test('la bulle d une ligne et d une barre suit le survol', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.toutDeplier(page);
+    const bulle = page.locator('#tooltip');
+
+    await D.ligne(page, 'Cadrage des outils').hover();
+    await expect(bulle).toHaveClass(/visible/);
+    await expect(bulle.locator('.tooltip-title')).toHaveText('Cadrage des outils');
+
+    await page.mouse.move(2, 2);
+    await expect(bulle).not.toHaveClass(/visible/);
+
+    const id = await D.ligne(page, 'Recette').getAttribute('data-id');
+    await page.locator('#timelineGrid .gantt-bar[data-id="' + id + '"]').hover();
+    await expect(bulle.locator('.tooltip-title')).toHaveText('Recette');
+});
