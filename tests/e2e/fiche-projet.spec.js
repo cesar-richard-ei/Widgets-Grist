@@ -189,7 +189,9 @@ test('la categorie Offre de service ouvre une fiche avec sa feuille de route', a
 test('le bandeau prend la couleur du domaine du responsable', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
     await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(245, 158, 11)');
+});
 
+test('le bandeau d un autre responsable prend la couleur de son domaine', async ({ page }) => {
     await D.ouvrirFiche(page, null, PORTAIL);
     await expect(fiche(page).locator('.fiche-entete')).toHaveCSS('background-color', 'rgb(16, 185, 129)');
 });

@@ -49,6 +49,9 @@ const picto = (nom) => (PICTOS[nom]
 
 let schemaMeta = null;
 let projet = null;
+let projets = [];
+let idDocument = '';
+let curseurAttendu = true;
 let personnes = new Map();
 // Lignes de chaque table de personnes, dans l'ordre du document : la couleur d'un domaine est celle
 // de son premier membre.
@@ -921,16 +924,73 @@ async function charger(selectionne, relire) {
         if (!(await chargerTables())) return;
     }
     const sequence = chargementCourant;
-    const projets = await lire('Projects');
+    const lus = await lire('Projects');
     if (sequence !== chargementCourant) return;
-    projet = projets.find((p) => p.id === (selectionne || {}).id) || selectionne || null;
+    projets = lus;
+    projet = projets.find((p) => p.id === (selectionne || {}).id)
+        || (selectionne && !selectionne.retenu ? selectionne : null);
+    if (!projet && selectionne && selectionne.retenu) oublierProjet();
+    rendreChoix();
     rendre();
 }
 
-function demarrer() {
+const cleProjetRetenu = () => 'taskflow_fiche_projet:' + idDocument;
+function projetRetenu() {
+    try { return Number(localStorage.getItem(cleProjetRetenu())) || null; } catch (e) { return null; }
+}
+function retenirProjet(id) {
+    try { localStorage.setItem(cleProjetRetenu(), String(id)); } catch (e) { /* stockage indisponible */ }
+}
+function oublierProjet() {
+    try { localStorage.removeItem(cleProjetRetenu()); } catch (e) { /* stockage indisponible */ }
+}
+
+function rendreChoix() {
+    const liste = el('choixProjet');
+    const options = '<option value="">Choisir un projet, produit ou offre de service</option>'
+        + projets.map((p) => '<option value="' + p.id + '">' + echapper(p.nom || 'Sans titre') + '</option>').join('');
+    if (liste.dataset.options !== options) {
+        liste.innerHTML = options;
+        liste.dataset.options = options;
+    }
+    liste.value = projet ? String(projet.id) : '';
+    el('ficheChoix').hidden = false;
+}
+
+function choisirProjet(id) {
+    curseurAttendu = false;
+    retenirProjet(id);
+    Promise.resolve(grist.setCursorPos({ rowId: id })).catch(() => {});
+    return charger({ id: id, retenu: true });
+}
+
+// Au retour sur la page, Grist remet son curseur sur la première ligne : le premier enregistrement
+// reçu cède la place au dernier projet choisi. Les suivants viennent d'un choix de l'utilisateur.
+async function recevoirSelection(record) {
+    if (!record) {
+        if (!projet) await charger(null);
+        return;
+    }
+    const retenu = projetRetenu();
+    if (curseurAttendu) {
+        curseurAttendu = false;
+        if (retenu && retenu !== record.id) return choisirProjet(retenu);
+    }
+    if (projet && projet.id === record.id) return;
+    retenirProjet(record.id);
+    await charger(record);
+}
+
+async function demarrer() {
     try {
         grist.ready({ requiredAccess: 'full' });
-        grist.onRecord(async (record) => await charger(record),
+        try { idDocument = await grist.docApi.getDocName(); } catch (e) { /* clé générique */ }
+        el('choixProjet').addEventListener('change', (e) => {
+            if (e.target.value) choisirProjet(Number(e.target.value));
+        });
+        const retenu = projetRetenu();
+        charger(retenu ? { id: retenu, retenu: true } : null);
+        grist.onRecord(async (record) => await recevoirSelection(record),
             { expandRefs: false, keepEncoded: true, includeColumns: 'normal' });
         // Grist ne notifie que la table du widget : une modification dans les chantiers, les tâches
         // ou les effectifs passerait inaperçue sans cette relecture.
