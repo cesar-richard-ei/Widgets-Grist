@@ -435,6 +435,20 @@ function toggleExpand(id) {
     localStorage.setItem('taskflow_gantt_expanded', JSON.stringify([...expandedTasks]));
     render();
 }
+// Un filtre retient souvent des tâches rangées sous un chantier replié : on déplie le chemin qui y
+// mène, sans quoi seul le chantier grisé paraîtrait. L'utilisateur peut ensuite replier à la main.
+function deplierVersLesResultats() {
+    const f = effectiveFilters();
+    if (!FACETTES.some(facette => f[facette.cle].length)) return;
+    for (const t of getFilteredTasks()) {
+        let parent = t.parentTask ? tasks.find(x => x.id === t.parentTask) : null, guard = 0;
+        while (parent && guard++ < 64) {
+            expandedTasks.add(parent.id);
+            parent = parent.parentTask ? tasks.find(x => x.id === parent.parentTask) : null;
+        }
+    }
+    localStorage.setItem('taskflow_gantt_expanded', JSON.stringify([...expandedTasks]));
+}
 // WBS-02: replie toutes les branches d'un coup (fermeture seule, pas d'ouverture)
 function collapseAll() {
     if (!expandedTasks.size) return;
@@ -969,6 +983,7 @@ function toggleFilter(key, val) {
     updateFilterUI();
     broadcastFilters();
     persistFilters();
+    deplierVersLesResultats();
     render();
 }
 function broadcastFilters() {
@@ -1178,7 +1193,7 @@ function renderGanttSkeleton() {
 }
 function clearAllGanttFilters() { filters = { project: [], domaine: [], responsable: [], tag: [] }; appliquerFiltres(); }
 function effacerFiltre(cle) { filters[cle] = []; appliquerFiltres(); }
-function appliquerFiltres() { synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
+function appliquerFiltres() { synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); deplierVersLesResultats(); render(); }
 function updateGanttOverlay() {
     const ov = document.getElementById("ganttOverlay"); if (!ov) return;
     if (currentVisible && currentVisible.length > 0) { ov.style.display = "none"; ov.innerHTML = ""; return; }
@@ -3326,6 +3341,7 @@ async function initGrist() {
                 filters.responsable = Array.isArray(f.responsable) ? f.responsable : [];
                 filters.tag = Array.isArray(f.tag) ? f.tag : [];
                 persistFilters();
+                deplierVersLesResultats();
                 updateFilterMenus();
                 render();
             }

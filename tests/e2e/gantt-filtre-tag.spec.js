@@ -61,3 +61,24 @@ test('sans aucun tag, le filtre Tag disparait de la barre', async ({ page }) => 
 
     await expect(page.locator('#filtreTag')).toBeHidden();
 });
+
+// Les lignes retenues sont souvent des tâches, rangées sous un chantier replié : le filtre déplie
+// le chemin qui y mène, sans quoi on ne verrait que le chantier.
+test('poser un filtre deplie les branches qui menent aux lignes retenues', async ({ page }) => {
+    await D.ouvrirGantt(page, documentTague());
+    await expect(D.ligne(page, 'Cadrage des outils')).toHaveCount(0);
+
+    await filtrer(page, 'poc');
+
+    await expect(D.ligne(page, 'Cadrage des outils')).toBeVisible();
+});
+
+test('une branche depliee par le filtre se replie encore a la main', async ({ page }) => {
+    await D.ouvrirGantt(page, documentTague());
+    await filtrer(page, 'poc');
+    await expect(D.ligne(page, 'Cadrage des outils')).toBeVisible();
+
+    await D.ligne(page, 'Socle technique').locator('.tree-chevron').click();
+
+    await expect(D.ligne(page, 'Cadrage des outils')).toHaveCount(0);
+});
