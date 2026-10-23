@@ -52,6 +52,8 @@ let projet = null;
 let projets = [];
 let idDocument = '';
 let curseurAttendu = true;
+let idVoulu = null;
+let recordRecu = null;
 let personnes = new Map();
 // Lignes de chaque table de personnes, dans l'ordre du document : la couleur d'un domaine est celle
 // de son premier membre.
@@ -775,7 +777,7 @@ let rendu = false;
 function rendre() {
     const racine = el('fiche');
     if (!projet) {
-        racine.innerHTML = accueil();
+        racine.innerHTML = messageDeRefus() + accueil();
         return;
     }
     const categorie = categorieDuProjet(projet);
@@ -920,7 +922,7 @@ async function chargerTables() {
  * L'enregistrement servi par onRecord dépend d'options que le serveur applique à sa façon : seul
  * son identifiant est fiable, les valeurs se lisent dans la table comme celles des autres.
  */
-async function charger(selectionne, relire) {
+async function charger(relire) {
     if (relire || !tablesChargees) {
         if (!(await chargerTables())) return;
     }
@@ -928,9 +930,12 @@ async function charger(selectionne, relire) {
     const lus = await lire('Projects');
     if (sequence !== chargementCourant) return;
     projets = lus;
-    projet = projets.find((p) => p.id === (selectionne || {}).id)
-        || (selectionne && !selectionne.retenu ? selectionne : null);
-    if (!projet && selectionne && selectionne.retenu) oublierProjet();
+    projet = projets.find((p) => p.id === idVoulu)
+        || (recordRecu && recordRecu.id === idVoulu ? recordRecu : null);
+    if (!projet && idVoulu && projets.length && !tablesRefusees.has('Projects')) {
+        idVoulu = null;
+        oublierProjet();
+    }
     rendreChoix();
     rendre();
 }
@@ -960,16 +965,19 @@ function rendreChoix() {
 
 function choisirProjet(id) {
     curseurAttendu = false;
+    idVoulu = id;
     retenirProjet(id);
     Promise.resolve(grist.setCursorPos({ rowId: id })).catch(() => {});
-    return charger({ id: id, retenu: true });
+    return charger();
 }
 
-// Au retour sur la page, Grist remet son curseur sur la première ligne : le premier enregistrement
-// reçu cède la place au dernier projet choisi. Les suivants viennent d'un choix de l'utilisateur.
+// Au retour sur la page, Grist remet son curseur sur la première ligne, ou n'envoie rien : le
+// premier enregistrement reçu cède la place au dernier projet choisi. Les suivants viennent d'un
+// choix de l'utilisateur. Chaque chargement affiche le projet voulu à cet instant, quel que soit
+// l'ordre dans lequel arrivent les notifications de Grist.
 async function recevoirSelection(record) {
     if (!record) {
-        if (!projet) await charger(null);
+        if (!idVoulu) await charger();
         return;
     }
     const retenu = projetRetenu();
@@ -977,9 +985,11 @@ async function recevoirSelection(record) {
         curseurAttendu = false;
         if (retenu && retenu !== record.id) return choisirProjet(retenu);
     }
-    if (projet && projet.id === record.id) return;
+    if (idVoulu === record.id && projet) return;
+    idVoulu = record.id;
+    recordRecu = record;
     retenirProjet(record.id);
-    await charger(record);
+    await charger();
 }
 
 async function demarrer() {
@@ -989,13 +999,13 @@ async function demarrer() {
         el('choixProjet').addEventListener('change', (e) => {
             if (e.target.value) choisirProjet(Number(e.target.value));
         });
-        const retenu = projetRetenu();
-        charger(retenu ? { id: retenu, retenu: true } : null);
+        idVoulu = projetRetenu();
+        charger();
         grist.onRecord(async (record) => await recevoirSelection(record),
             { expandRefs: false, keepEncoded: true, includeColumns: 'normal' });
         // Grist ne notifie que la table du widget : une modification dans les chantiers, les tâches
         // ou les effectifs passerait inaperçue sans cette relecture.
-        grist.onRecords(async () => await charger(projet, true));
+        grist.onRecords(async () => await charger(true));
         window.addEventListener('resize', () => document.querySelectorAll('.fiche-saisie').forEach(ajusterHauteur));
     } catch (e) {
         el('fiche').innerHTML = '<p class="fiche-message">Cette fiche s’ouvre depuis un document Grist.</p>';
