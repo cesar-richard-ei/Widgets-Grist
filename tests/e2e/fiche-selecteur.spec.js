@@ -75,3 +75,29 @@ test('le selecteur ne part pas a l impression', async ({ page }) => {
     await page.evaluate(() => document.documentElement.classList.add('impression'));
     await expect(page.locator('#ficheChoix')).toBeHidden();
 });
+
+// Une section non liée reçoit de Grist un enregistrement vide à l'ouverture.
+test('un enregistrement vide envoye par Grist ne chasse pas le projet retenu', async ({ page }) => {
+    await D.ouvrirFiche(page, D.documentCible(), null, { reglages: { 'taskflow_fiche_projet:fake-doc': '2' } });
+
+    await expect(titre(page)).toHaveText('Datalab');
+    await expect(choix(page)).toHaveValue('2');
+});
+
+test('une lecture refusee le dit et garde le projet retenu', async ({ page }) => {
+    await D.ouvrirFiche(page, D.documentCible(), undefined, { reglages: { 'taskflow_fiche_projet:fake-doc': '2' }, refuser: 'Projects' });
+
+    await expect(page.locator('.fiche-refus')).toContainText('Projects');
+    expect(await page.evaluate(() => localStorage.getItem('taskflow_fiche_projet:fake-doc'))).toBe('2');
+});
+
+test('une notification de Grist pendant le chargement ne chasse pas le projet choisi', async ({ page }) => {
+    await D.ouvrirFiche(page, D.documentCible(), null, { retarder: 50 });
+    await expect(page.locator('.fiche-accueil')).toBeVisible();
+
+    await choix(page).selectOption({ label: 'Datalab' });
+    await page.evaluate(() => grist.docApi.applyUserActions([['UpdateRecord', 'Projects', 1, { couleur: '#123456' }]]));
+
+    await expect(titre(page)).toHaveText('Datalab');
+    await expect(choix(page)).toHaveValue('2');
+});
