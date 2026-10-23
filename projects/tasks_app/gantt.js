@@ -114,8 +114,59 @@ function geometrieDesLignes() {
     const hauteurs = currentVisible.map(v => HAUTEUR_LIGNE + HAUTEUR_BANDEAU_DOMAINE *
         (v.groupe ? v.groupe.domaines.length : (v.task && domaineAffiche(v.task) ? 1 : 0)));
     const g = TF.geometrieDesLignes(hauteurs);
+    g.hauteurs = hauteurs;
     g.hautContenu = (i) => g.hauts[i] + hauteurs[i] - HAUTEUR_LIGNE;
     return g;
+}
+
+// Seules les lignes proches de l'écran sont construites : tout déplié, le document du métier
+// comptait 24 600 éléments, reconstruits à chaque rendu. Des cales tiennent la hauteur du reste.
+// Le tri manuel garde toutes ses lignes, Sortable travaillant sur leur rang dans la liste.
+const MARGE_FENETRE = 800;
+let geometrieRendue = null;
+let fenetreRendue = null;
+
+function fenetreVisee(lignes) {
+    const n = currentVisible.length;
+    if (sortMode === 'manual' || !n) return { debut: 0, fin: n - 1 };
+    const sc = document.getElementById('timelineScroll');
+    const haut = sc.scrollTop - MARGE_FENETRE;
+    const bas = sc.scrollTop + (sc.clientHeight || window.innerHeight) + MARGE_FENETRE;
+    let debut = 0;
+    while (debut < n - 1 && lignes.hauts[debut + 1] <= haut) debut++;
+    let fin = debut;
+    while (fin < n - 1 && lignes.hauts[fin + 1] < bas) fin++;
+    return { debut: debut, fin: fin };
+}
+
+// La fenêtre, précédée du bandeau de projet qui la coiffe, pour qu'il reste collé en haut.
+function rangsConstruits(fenetre) {
+    const rangs = [];
+    let g = fenetre.debut;
+    while (g > 0 && !currentVisible[g].groupe) g--;
+    if (g < fenetre.debut && currentVisible[g] && currentVisible[g].groupe) rangs.push(g);
+    for (let i = fenetre.debut; i <= fenetre.fin; i++) rangs.push(i);
+    return rangs;
+}
+
+function avecCales(rangs, lignes, ligne, cale) {
+    let html = '', bas = 0;
+    for (const i of rangs) {
+        if (lignes.hauts[i] > bas) html += cale(lignes.hauts[i] - bas);
+        html += ligne(i);
+        bas = lignes.hauts[i] + lignes.hauteurs[i];
+    }
+    if (lignes.total > bas) html += cale(lignes.total - bas);
+    return html;
+}
+
+function fenetreDepassee() {
+    if (!geometrieRendue || !fenetreRendue || !currentVisible.length) return false;
+    const sc = document.getElementById('timelineScroll');
+    const l = geometrieRendue, f = fenetreRendue;
+    const hautRendu = l.hauts[f.debut], basRendu = l.hauts[f.fin] + l.hauteurs[f.fin];
+    return (sc.scrollTop < hautRendu && f.debut > 0)
+        || (sc.scrollTop + sc.clientHeight > basRendu && f.fin < currentVisible.length - 1);
 }
 
 const bandeauDomaine = (domaine, rang = 0) => '<span class="bandeau-domaine" style="background-color:' +
@@ -1297,66 +1348,75 @@ function renderTimelineHeader() {
 
 // WBS-02: liste aplatie visible, partagée entre renderTaskList et renderTimeline
 let currentVisible = [];
+function ligneDeListe({ task: t, depth, dimmed, groupe }) {
+    let html = '';
+    if (groupe) {
+        const liserets = groupe.domaines.length * HAUTEUR_BANDEAU_DOMAINE;
+        html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '"' +
+            ' style="background-image:' + aplatDeTeinte(groupe.couleur, 0.2) +
+            (liserets ? ';height:' + (HAUTEUR_LIGNE + liserets) + 'px;padding-top:' + liserets + 'px' : '') + '">' +
+            groupe.domaines.map(bandeauDomaine).join('') +
+            '<span class="groupe-chevron" onclick="event.stopPropagation();toggleGroupeProjet(' + groupe.id + ')" title="' + (groupe.replie ? 'Déplier' : 'Replier') + '">▼</span>' +
+            (groupe.categorie ? '<span class="groupe-badge">' + escapeHtml(groupe.categorie) + '</span>' : '') +
+            '<span class="groupe-nom">' + escapeHtml(groupe.nom) + '</span>' +
+        '</div>';
+        return html;
+    }
+    const p = getTaskPriority(t);
+    const isParent = hasChildren(t);
+    // Dates affichées : agrégées si parent sans dates propres, sinon dates du parent
+    let start = gristToDate(t.dateDebut), end = gristToDate(t.dateEcheance);
+    if (isParent && !start && !end) { const agg = aggregateDates(t); start = gristToDate(agg.start); end = gristToDate(agg.end); }
+    const jalon = isJalon(t);
+    const progress = isParent ? aggregateProgress(t) : (t.progression || 0);
+    const selected = t.id === selectedTaskId;
+    const assignees = estChantier(t) ? personnesDeChantier(t).filter(id => id !== t.Responsable) : getAssigneesArray(t);
+    const avatarsHtml = pastillesDeLigne(t, assignees);
+    const subs = getSubtasks(t);
+    const subsDone = subs.filter(s => s.done).length;
+    const subBadge = subs.length ? '<span class="task-subtask-badge' + (subsDone === subs.length ? ' complete' : '') + '" title="Sous-tâches">◎ ' + subsDone + '/' + subs.length + '</span>' : '';
+    const nChildren = getChildren(t.id).length;
+    const childBadge = nChildren ? '<span class="task-subtask-badge" title="Sous-tâches structurelles">↳ ' + nChildren + '</span>' : '';
+
+    const chevron = isParent
+        ? '<span class="tree-chevron' + (expandedTasks.has(t.id) ? ' expanded' : '') + '" onclick="event.stopPropagation();toggleExpand(' + t.id + ')" title="' + (expandedTasks.has(t.id) ? 'Replier' : 'Déplier') + '">▶</span>'
+        : '<span class="tree-chevron-placeholder"></span>';
+    const indent = depth * 18;
+    const domaine = domaineAffiche(t);
+    const classes =['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', domaine ? 'avec-domaine' : ''].filter(Boolean).join(' ');
+
+    html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px' +
+        (domaine ? ';background-image:' + aplatDeTeinte(couleurDeDomaine(domaine), 0.12) : '') + '">' +
+        (domaine ? bandeauDomaine(domaine) : '') +
+        (sortMode === 'manual' ? '<span class="drag-handle">☰</span>' : '') +
+        chevron +
+        '<div class="task-info">' +
+            '<div class="task-name">' + (jalon ? '◆ ' : '') + (escapeHtml(t.titre) || 'Sans titre') + '</div>' +
+            '<div class="task-meta">' +
+                '<span class="task-dates">' + formatDateShort(start) + ' → ' + formatDateShort(end) + '</span>' +
+                (!jalon && estChantier(t) ? '<span class="task-progress-badge">' + progress + '%</span>' : '') +
+                (estChantier(t) ? subBadge + childBadge : '') +
+                avatarsHtml +
+            '</div>' +
+        '</div>' +
+    '</div>';
+    return html;
+}
+
+function rendreListe() {
+    geometrieRendue = geometrieDesLignes();
+    fenetreRendue = fenetreVisee(geometrieRendue);
+    document.getElementById('taskList').innerHTML = avecCales(rangsConstruits(fenetreRendue), geometrieRendue,
+        i => ligneDeListe(currentVisible[i]), h => '<div class="cale" style="height:' + h + 'px"></div>');
+}
+
 function renderTaskList() {
     currentVisible = buildVisibleTasks();
     panelState.taskList = currentVisible.filter(v => v.task).map(v => v.task);
     const collapseBtn = document.getElementById('collapseAllBtn');
     if (collapseBtn) collapseBtn.style.display = tasks.some(t => hasChildren(t) && expandedTasks.has(t.id)) ? 'inline-flex' : 'none';
 
-    let html = '';
-    currentVisible.forEach(({ task: t, depth, dimmed, groupe }) => {
-        if (groupe) {
-            const liserets = groupe.domaines.length * HAUTEUR_BANDEAU_DOMAINE;
-            html += '<div class="groupe-projet' + (groupe.replie ? ' replie' : '') + '" data-projet="' + groupe.id + '"' +
-                ' style="background-image:' + aplatDeTeinte(groupe.couleur, 0.2) +
-                (liserets ? ';height:' + (HAUTEUR_LIGNE + liserets) + 'px;padding-top:' + liserets + 'px' : '') + '">' +
-                groupe.domaines.map(bandeauDomaine).join('') +
-                '<span class="groupe-chevron" onclick="event.stopPropagation();toggleGroupeProjet(' + groupe.id + ')" title="' + (groupe.replie ? 'Déplier' : 'Replier') + '">▼</span>' +
-                (groupe.categorie ? '<span class="groupe-badge">' + escapeHtml(groupe.categorie) + '</span>' : '') +
-                '<span class="groupe-nom">' + escapeHtml(groupe.nom) + '</span>' +
-            '</div>';
-            return;
-        }
-        const p = getTaskPriority(t);
-        const isParent = hasChildren(t);
-        // Dates affichées : agrégées si parent sans dates propres, sinon dates du parent
-        let start = gristToDate(t.dateDebut), end = gristToDate(t.dateEcheance);
-        if (isParent && !start && !end) { const agg = aggregateDates(t); start = gristToDate(agg.start); end = gristToDate(agg.end); }
-        const jalon = isJalon(t);
-        const progress = isParent ? aggregateProgress(t) : (t.progression || 0);
-        const selected = t.id === selectedTaskId;
-        const assignees = estChantier(t) ? personnesDeChantier(t).filter(id => id !== t.Responsable) : getAssigneesArray(t);
-        const avatarsHtml = pastillesDeLigne(t, assignees);
-        const subs = getSubtasks(t);
-        const subsDone = subs.filter(s => s.done).length;
-        const subBadge = subs.length ? '<span class="task-subtask-badge' + (subsDone === subs.length ? ' complete' : '') + '" title="Sous-tâches">◎ ' + subsDone + '/' + subs.length + '</span>' : '';
-        const nChildren = getChildren(t.id).length;
-        const childBadge = nChildren ? '<span class="task-subtask-badge" title="Sous-tâches structurelles">↳ ' + nChildren + '</span>' : '';
-
-        const chevron = isParent
-            ? '<span class="tree-chevron' + (expandedTasks.has(t.id) ? ' expanded' : '') + '" onclick="event.stopPropagation();toggleExpand(' + t.id + ')" title="' + (expandedTasks.has(t.id) ? 'Replier' : 'Déplier') + '">▶</span>'
-            : '<span class="tree-chevron-placeholder"></span>';
-        const indent = depth * 18;
-        const domaine = domaineAffiche(t);
-        const classes =['task-row', selected ? 'selected' : '', dimmed ? 'dimmed' : '', isParent ? 'parent' : '', domaine ? 'avec-domaine' : ''].filter(Boolean).join(' ');
-
-        html += '<div class="' + classes + '" data-id="' + t.id + '" data-projet="' + (t.projet || 0) + '" data-depth="' + depth + '" onclick="openTaskPanel(' + t.id + ')" style="padding-left:' + (12 + indent) + 'px' +
-            (domaine ? ';background-image:' + aplatDeTeinte(couleurDeDomaine(domaine), 0.12) : '') + '">' +
-            (domaine ? bandeauDomaine(domaine) : '') +
-            (sortMode === 'manual' ? '<span class="drag-handle">☰</span>' : '') +
-            chevron +
-            '<div class="task-info">' +
-                '<div class="task-name">' + (jalon ? '◆ ' : '') + (escapeHtml(t.titre) || 'Sans titre') + '</div>' +
-                '<div class="task-meta">' +
-                    '<span class="task-dates">' + formatDateShort(start) + ' → ' + formatDateShort(end) + '</span>' +
-                    (!jalon && estChantier(t) ? '<span class="task-progress-badge">' + progress + '%</span>' : '') +
-                    (estChantier(t) ? subBadge + childBadge : '') +
-                    avatarsHtml +
-                '</div>' +
-            '</div>' +
-        '</div>';
-    });
-    document.getElementById('taskList').innerHTML = html;
+    rendreListe();
 
     // Sortable en mode manuel : autorisé uniquement au sein d'une fratrie (limite via check dans onEnd)
     if (sortMode === 'manual') {
@@ -1436,10 +1496,36 @@ function peindreFondGrille(grid, unite, start, totalDays, numCells, cw) {
     }
 }
 
+function pisteDeLigne(iLigne, ft, totalWidth) {
+    let gridHtml = '';
+    const groupe = currentVisible[iLigne] && currentVisible[iLigne].groupe;
+    if (groupe) {
+        const bandes = groupe.domaines.map(d => { const c = escapeAttr(couleurDeDomaine(d)); return 'linear-gradient(' + c + ', ' + c + ')'; });
+        gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background-image:' +
+            bandes.concat(aplatDeTeinte(groupe.couleur, 0.2)).join(', ') +
+            (bandes.length
+                ? ';height:' + (HAUTEUR_LIGNE + bandes.length * HAUTEUR_BANDEAU_DOMAINE) + 'px;background-repeat:no-repeat' +
+                  ';background-size:' + bandes.map(() => '100% ' + HAUTEUR_BANDEAU_DOMAINE + 'px').concat('100% 100%').join(', ') +
+                  ';background-position:' + bandes.map((_, i) => '0 ' + i * HAUTEUR_BANDEAU_DOMAINE + 'px').concat('0 0').join(', ')
+                : '') + '"></div>';
+        return gridHtml;
+    }
+    // Bande et teinte en fond : la grille ne porte aucun élément dans ses rangs.
+    const domaine = domaineAffiche(ft[iLigne]);
+    const couleur = domaine ? escapeAttr(couleurDeDomaine(domaine)) : '';
+    gridHtml += domaine
+        ? '<div class="grid-row avec-domaine" data-id="' + ft[iLigne].id + '" style="background-image:linear-gradient(' +
+            couleur + ', ' + couleur + '), ' + aplatDeTeinte(couleurDeDomaine(domaine), 0.12) + '"></div>'
+        : '<div class="grid-row"></div>';
+    return gridHtml;
+}
+
 function renderTimeline() {
     // WBS-02: utiliser currentVisible (ordre DFS) au lieu d'une liste plate filtrée
     const ft = currentVisible.map(v => v.task);
-    const lignes = geometrieDesLignes();
+    const lignes = geometrieRendue;
+    const rangs = rangsConstruits(fenetreRendue);
+    const construits = new Set(rangs);
     const dimmedSet = new Set(currentVisible.filter(v => v.dimmed).map(v => v.task.id));
     const start = effectiveStart;
     const totalDays = effectiveDays;
@@ -1461,28 +1547,8 @@ function renderTimeline() {
     // pxPerDay = effectivePxPerDay (déjà calculé depuis effectiveCellWidth)
     const pxPerDay = effectivePxPerDay;
 
-    let gridHtml = '';
-    ft.forEach((_, iLigne) => {
-        const groupe = currentVisible[iLigne] && currentVisible[iLigne].groupe;
-        if (groupe) {
-            const bandes = groupe.domaines.map(d => { const c = escapeAttr(couleurDeDomaine(d)); return 'linear-gradient(' + c + ', ' + c + ')'; });
-            gridHtml += '<div class="grid-row piste-groupe" style="width:' + totalWidth + 'px;background-image:' +
-                bandes.concat(aplatDeTeinte(groupe.couleur, 0.2)).join(', ') +
-                (bandes.length
-                    ? ';height:' + (HAUTEUR_LIGNE + bandes.length * HAUTEUR_BANDEAU_DOMAINE) + 'px;background-repeat:no-repeat' +
-                      ';background-size:' + bandes.map(() => '100% ' + HAUTEUR_BANDEAU_DOMAINE + 'px').concat('100% 100%').join(', ') +
-                      ';background-position:' + bandes.map((_, i) => '0 ' + i * HAUTEUR_BANDEAU_DOMAINE + 'px').concat('0 0').join(', ')
-                    : '') + '"></div>';
-            return;
-        }
-        // Bande et teinte en fond : la grille ne porte aucun élément dans ses rangs.
-        const domaine = domaineAffiche(ft[iLigne]);
-        const couleur = domaine ? escapeAttr(couleurDeDomaine(domaine)) : '';
-        gridHtml += domaine
-            ? '<div class="grid-row avec-domaine" data-id="' + ft[iLigne].id + '" style="background-image:linear-gradient(' +
-                couleur + ', ' + couleur + '), ' + aplatDeTeinte(couleurDeDomaine(domaine), 0.12) + '"></div>'
-            : '<div class="grid-row"></div>';
-    });
+    const gridHtml = avecCales(rangs, lignes, i => pisteDeLigne(i, ft, totalWidth),
+        h => '<div class="grid-row cale" style="height:' + h + 'px"></div>');
 
     const grid = document.getElementById('timelineGrid');
     grid.innerHTML = gridHtml;
@@ -1543,6 +1609,7 @@ function renderTimeline() {
         // largeur et collée au bord, ce qui la ferait lire comme une tâche du jour.
         if (tEnd < start || tStart > addDays(start, totalDays)) return;
         barresTracees.add(t.id);
+        if (!construits.has(idx)) return;
 
         const p = getTaskPriority(t);
         const jalon = isJalon(t);
@@ -3379,6 +3446,20 @@ restaurerLargeurs();
 afficherVersion();
 brancherPoignee('poigneeTaskList', 'taskList', 1);
 brancherPoignee('poigneePanel', 'panel', -1);
+// Au défilement, seules la liste et la timeline se reconstruisent, et seulement quand l'écran
+// sort des lignes construites.
+let renduDefilement = null;
+document.getElementById('timelineScroll').addEventListener('scroll', () => {
+    if (renduDefilement !== null) return;
+    renduDefilement = requestAnimationFrame(() => {
+        renduDefilement = null;
+        if (!fenetreDepassee()) return;
+        if (gesteSourisEnCours) { renduEnAttente = true; return; }
+        ancrerDefilement();
+        rendreListe();
+        renderTimeline();
+    });
+});
 brancherBulles(document.getElementById('taskList'), '.task-row');
 brancherBulles(document.getElementById('timelineGrid'), '.gantt-bar, .gantt-milestone');
 // Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre). Un
