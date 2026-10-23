@@ -50,19 +50,20 @@ try { groupesReplies = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_g
 let expandedTasks = new Set();
 try { expandedTasks = new Set(JSON.parse(localStorage.getItem('taskflow_gantt_expanded') || '[]').map(Number).filter(n => !isNaN(n))); } catch (e) {}
 let sortableInstance = null;
-let filters = { project: [], domaine: [], responsable: [] };  // GEN-02: Arrays pour compatibilité inter-widgets
+let filters = { project: [], domaine: [], responsable: [], tag: [] };  // GEN-02: Arrays pour compatibilité inter-widgets
 // Un dropdown par facette dans la barre : le descripteur tient l'ordre et les cibles DOM, pour que
 // menus, compteurs et pastilles se construisent au même endroit.
 const FACETTES = [
     { cle: 'project', dropdown: 'filtreProjet', menu: 'menuProjet' },
     { cle: 'domaine', dropdown: 'filtreDomaine', menu: 'menuDomaine' },
-    { cle: 'responsable', dropdown: 'filtreResponsable', menu: 'menuResponsable' }
+    { cle: 'responsable', dropdown: 'filtreResponsable', menu: 'menuResponsable' },
+    { cle: 'tag', dropdown: 'filtreTag', menu: 'menuTag' }
 ];
 // Filtres cross-page : persistés en localStorage, cloisonnés par document (setOption reste par-section).
 let filterDocId = 'local';
 function filterStorageKey() { return 'taskflow_gantt_filters:' + filterDocId; }
 function persistFilters() {
-    try { localStorage.setItem(filterStorageKey(), JSON.stringify({ project: filters.project, domaine: filters.domaine, responsable: filters.responsable })); } catch (e) {}
+    try { localStorage.setItem(filterStorageKey(), JSON.stringify({ project: filters.project, domaine: filters.domaine, responsable: filters.responsable, tag: filters.tag })); } catch (e) {}
 }
 function hydrateFilters() {
     try {
@@ -71,6 +72,7 @@ function hydrateFilters() {
         filters.project = Array.isArray(s.project) ? s.project : [];
         filters.domaine = Array.isArray(s.domaine) ? s.domaine : [];
         filters.responsable = Array.isArray(s.responsable) ? s.responsable : [];
+        filters.tag = Array.isArray(s.tag) ? s.tag : [];
     } catch (e) {}
 }
 // Vue appliquée : on retire les valeurs absentes des données courantes (ex. autre page/table).
@@ -78,7 +80,8 @@ function effectiveFilters() {
     return {
         project: filters.project.filter(id => projects.some(p => p.id === id)),
         domaine: filters.domaine.filter(d => domainesConnus().includes(d)),
-        responsable: filters.responsable.filter(id => team.some(m => m.id === id))
+        responsable: filters.responsable.filter(id => team.some(m => m.id === id)),
+        tag: filters.tag.filter(t => tagsConnus().includes(t))
     };
 }
 
@@ -120,6 +123,27 @@ const bandeauDomaine = (domaine, rang = 0) => '<span class="bandeau-domaine" sty
 function basculerDomaine(rang) {
     const d = domainesConnus()[rang];
     if (d) toggleFilter('domaine', d);
+}
+
+function tagsConnus() {
+    const vus = new Set();
+    for (const t of tasks) for (const tag of getTagsArray(t)) vus.add(tag);
+    return Array.from(vus).sort(parOrdreAlphabetique);
+}
+// Le tag d'un chantier ou d'une tâche parente vaut pour toute sa descendance.
+function tagsDeLigne(t) {
+    const tags = new Set();
+    let cur = t, guard = 0;
+    while (cur && guard++ < 64) {
+        for (const tag of getTagsArray(cur)) tags.add(tag);
+        const parent = cur.parentTask;
+        cur = parent ? tasks.find(x => x.id === parent) : null;
+    }
+    return tags;
+}
+function basculerTag(rang) {
+    const t = tagsConnus()[rang];
+    if (t) toggleFilter('tag', t);
 }
 let dragState = { active: false, type: null, taskId: null, startX: 0, originalLeft: 0, originalWidth: 0, originalStart: null, originalEnd: null, deplace: false };
 let panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: [], editData: null, dirty: false };
@@ -896,7 +920,7 @@ function toggleFilter(key, val) {
 }
 function broadcastFilters() {
     if (gristReady && typeof grist !== 'undefined' && grist.setOption) {
-        try { grist.setOption('filters', { project: filters.project, domaine: filters.domaine, responsable: filters.responsable }); } 
+        try { grist.setOption('filters', { project: filters.project, domaine: filters.domaine, responsable: filters.responsable, tag: filters.tag }); } 
         catch (e) { console.log('setOption not available'); }
     }
 }
@@ -927,6 +951,7 @@ function optionsDeResponsables() {
 
 function updateFilterMenus() {
     const domaines = domainesConnus();
+    const tags = tagsConnus();
     const contenus = {
         project: projects.length
             ? projects.slice().sort((a, b) => parOrdreAlphabetique(a.nom, b.nom))
@@ -935,7 +960,9 @@ function updateFilterMenus() {
             : '<div class="filter-option muted">Aucun projet</div>',
         domaine: domaines.map((d, rang) => optionDeFiltre('domaine', escapeAttr(d), `basculerDomaine(${rang})`,
             filters.domaine.includes(d), couleurDeDomaine(d), escapeHtml(d))).join(''),
-        responsable: optionsDeResponsables()
+        responsable: optionsDeResponsables(),
+        tag: tags.map((t, rang) => optionDeFiltre('tag', escapeAttr(t), `basculerTag(${rang})`,
+            filters.tag.includes(t), null, escapeHtml(t))).join('')
     };
     const recherche = '<div class="fm-search-zone"><input class="fm-search" type="text" placeholder="Rechercher"'
         + ' oninput="filtrerOptionsDeMenu(this)" onkeydown="toucheDansMenuDeFiltre(event, this)"></div>';
@@ -949,6 +976,8 @@ function updateFilterMenus() {
     // barre plutôt que d'ouvrir un menu vide.
     const dropdownDomaine = document.getElementById('filtreDomaine');
     if (dropdownDomaine) dropdownDomaine.hidden = !domaines.length;
+    const dropdownTag = document.getElementById('filtreTag');
+    if (dropdownTag) dropdownTag.hidden = !tags.length;
     synchroniserCochesFiltres();
     updateFilterUI();
 }
@@ -959,7 +988,7 @@ function updateFilterMenus() {
 function synchroniserCochesFiltres() {
     document.querySelectorAll('.filter-menu .filter-option[data-filtre]').forEach(opt => {
         const cle = opt.dataset.filtre;
-        const valeur = cle === 'domaine' ? opt.dataset.valeur : Number(opt.dataset.valeur);
+        const valeur = cle === 'domaine' || cle === 'tag' ? opt.dataset.valeur : Number(opt.dataset.valeur);
         const coche = opt.querySelector('input[type="checkbox"]');
         if (coche) coche.checked = filters[cle].includes(valeur);
     });
@@ -989,6 +1018,7 @@ function renderFilterChips() {
     eff.project.forEach(id => { const p = projects.find(x=>x.id===id); chips.push(chip('project', id, p?escapeHtml(p.nom):'Projet', null)); });
     eff.domaine.forEach(d => { const rang = domainesConnus().indexOf(d); chips.push(`<span class="fc-chip">${escapeHtml(d)}<span class="fc-x" title="Retirer" onclick="basculerDomaine(${rang})">${X}</span></span>`); });
     eff.responsable.forEach(id => { const m = team.find(x=>x.id===id); chips.push(chip('responsable', id, m?escapeHtml(m.nom):'Membre', m&&getTeamMemberColor(id))); });
+    eff.tag.forEach(t => { const rang = tagsConnus().indexOf(t); chips.push(`<span class="fc-chip">${escapeHtml(t)}<span class="fc-x" title="Retirer" onclick="basculerTag(${rang})">${X}</span></span>`); });
     if (!chips.length) { bar.style.display = 'none'; bar.innerHTML = ''; return; }
     bar.style.display = 'flex';
     bar.innerHTML = '<span class="fc-label">Filtres actifs</span>' + chips.join('') + '<span class="fc-clear-all" onclick="clearAllGanttFilters()">Tout effacer</span>';
@@ -999,6 +1029,7 @@ function renderFilterChips() {
     if (f.domaine.length && !domainesDeLigne(t).some(d => f.domaine.includes(d))) return false;
     // Le pilote de la ligne, pas ses participants : être assigné à une tâche ne la fait pas entrer.
     if (f.responsable.length && !f.responsable.includes(t.Responsable)) return false;
+    if (f.tag.length) { const tags = tagsDeLigne(t); if (!f.tag.some(x => tags.has(x))) return false; }
     return true;
 }
 
@@ -1082,7 +1113,7 @@ function renderGanttSkeleton() {
     ov.innerHTML = '<div class="tf-gskel">'+rows+'</div>';
     ov.style.display = "flex";
 }
-function clearAllGanttFilters() { filters = { project: [], domaine: [], responsable: [] }; appliquerFiltres(); }
+function clearAllGanttFilters() { filters = { project: [], domaine: [], responsable: [], tag: [] }; appliquerFiltres(); }
 function effacerFiltre(cle) { filters[cle] = []; appliquerFiltres(); }
 function appliquerFiltres() { synchroniserCochesFiltres(); updateFilterUI(); broadcastFilters(); persistFilters(); render(); }
 function updateGanttOverlay() {
@@ -3159,6 +3190,7 @@ async function initGrist() {
                 filters.project = Array.isArray(f.project) ? f.project : [];
                 filters.domaine = Array.isArray(f.domaine) ? f.domaine : [];
                 filters.responsable = Array.isArray(f.responsable) ? f.responsable : [];
+                filters.tag = Array.isArray(f.tag) ? f.tag : [];
                 persistFilters();
                 updateFilterMenus();
                 render();

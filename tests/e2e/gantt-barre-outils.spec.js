@@ -30,12 +30,12 @@ test('la gauche de la barre porte le jour, puis la periode entre ses fleches', a
     expect(gauche).toEqual(['badgeVersion', "Aujourd'hui", '◀', 'currentPeriod', '▶']);
 });
 
-test('la droite de la barre porte la couleur, les trois filtres puis l ajout', async ({ page }) => {
+test('la droite de la barre porte la couleur, les filtres puis l ajout', async ({ page }) => {
     await D.ouvrirGantt(page);
 
     const droite = await page.locator('.header-right > *').evaluateAll((els) => els.map((e) => e.id));
 
-    expect(droite).toEqual(['libelleCouleurs', 'zoneCouleur', 'libelleFiltres', 'filtreProjet', 'filtreDomaine', 'filtreResponsable', 'zoneAjout']);
+    expect(droite).toEqual(['libelleCouleurs', 'zoneCouleur', 'libelleFiltres', 'filtreProjet', 'filtreDomaine', 'filtreResponsable', 'filtreTag', 'zoneAjout']);
 });
 
 test('les libelles Couleurs et Filtres sont ecrits comme la periode, sans deux-points', async ({ page }) => {
@@ -53,12 +53,12 @@ test('les libelles Couleurs et Filtres sont ecrits comme la periode, sans deux-p
     expect(polices[1]).toBe(polices[2]);
 });
 
-test('le dropdown unique de filtres a laisse la place a trois menus independants', async ({ page }) => {
+test('le dropdown unique de filtres a laisse la place a des menus independants', async ({ page }) => {
     await D.ouvrirGantt(page);
 
     await expect(page.locator('#filterGantt')).toHaveCount(0);
     await expect(page.locator('#filterAllMenu')).toHaveCount(0);
-    await expect(page.locator('.header-right .filter-btn')).toHaveText(['Projet', 'Domaine', 'Responsable']);
+    await expect(page.locator('.header-right .filter-btn')).toHaveText(['Projet', 'Domaine', 'Responsable', 'Tag']);
 });
 
 test('ouvrir un menu de filtre referme le precedent', async ({ page }) => {
@@ -76,7 +76,7 @@ test('ouvrir un menu de filtre referme le precedent', async ({ page }) => {
 test('la priorite n est plus un filtre du gantt', async ({ page }) => {
     await D.ouvrirGantt(page);
 
-    expect(await page.evaluate(() => Object.keys(filters).sort())).toEqual(['domaine', 'project', 'responsable']);
+    expect(await page.evaluate(() => Object.keys(filters).sort())).toEqual(['domaine', 'project', 'responsable', 'tag']);
     await expect(page.locator('.filter-option[data-filtre="priority"]')).toHaveCount(0);
 });
 
