@@ -40,6 +40,7 @@ let tachesLues = false;
 // consommé au rendu, quand la grille a ses dimensions définitives.
 let calerSurFenetre = false;
 let selectedTaskId = null;
+let largeurRendue = null;
 let sortMode = 'date';
 let colorMode = 'responsable';
 let categoriesProjet = [];
@@ -171,7 +172,8 @@ const escapeAttr = (t) => escapeHtml(t).replace(/"/g, '&quot;');
 const couleurSure = (c) => (typeof c === 'string' && /^#[0-9a-f]{3,8}$/i.test(c)) ? c : '#6366f1';
 const gristToDate = (ts) => { if (ts == null || ts === '') return null; const n = Number(ts); return isNaN(n) ? null : new Date(n * 1000); };
 const dateToGrist = (d) => d ? Math.floor(d.getTime() / 1000) : null;
-const formatDateShort = (d) => d ? new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' }).format(d) : '-';
+const FORMAT_DATE_COURTE = new Intl.DateTimeFormat('fr-FR', { day: '2-digit', month: 'short' });
+const formatDateShort = (d) => d ? FORMAT_DATE_COURTE.format(d) : '-';
 const formatDateISO = (d) => d ? d.toISOString().split('T')[0] : '';
 const isWeekend = (d) => d.getDay() === 0 || d.getDay() === 6;
 const isSameDay = (a, b) => a && b && a.toDateString() === b.toDateString();
@@ -1101,6 +1103,16 @@ function render() {
     renderTimeline();
     syncScroll();
     updateGanttOverlay();
+    largeurRendue = document.getElementById('timelineScroll').clientWidth;
+}
+
+// La sélection ne change que des classes : la reconstruire entière coûtait un rendu complet par clic.
+function marquerSelection() {
+    const choisie = (el) => Number(el.dataset.id) === selectedTaskId;
+    document.querySelectorAll('#taskList .task-row').forEach(l => l.classList.toggle('selected', choisie(l)));
+    document.querySelectorAll('#timelineGrid .gantt-bar, #timelineGrid .gantt-milestone').forEach(b => b.classList.toggle('selected', choisie(b)));
+    document.querySelectorAll('.dependencies-layer [data-de]').forEach(d => d.classList.toggle('highlight',
+        selectedTaskId !== null && (Number(d.dataset.de) === selectedTaskId || Number(d.dataset.vers) === selectedTaskId)));
 }
 
 function renderGanttSkeleton() {
@@ -1649,6 +1661,8 @@ function renderDependencies(ft, start, pxPerDay, barresTracees, lignes) {
             const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
             path.setAttribute('d', dep.pathD);
             path.classList.add('dependency-line');
+            path.dataset.de = depId;
+            path.dataset.vers = t.id;
             if (lien === 'debut') path.classList.add('depart-debut');
             if (highlight) path.classList.add('highlight');
             svg.appendChild(path);
@@ -1656,6 +1670,8 @@ function renderDependencies(ft, start, pxPerDay, barresTracees, lignes) {
             const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
             arrow.setAttribute('points', dep.arrowPoints);
             arrow.classList.add('dependency-arrow');
+            arrow.dataset.de = depId;
+            arrow.dataset.vers = t.id;
             if (highlight) arrow.classList.add('highlight');
             svg.appendChild(arrow);
         });
@@ -1784,7 +1800,7 @@ function closePanel() {
     document.getElementById('ganttWrapper').classList.remove('panel-open');
     panelState = { open: false, isNew: false, taskId: null, taskIndex: -1, taskList: panelState.taskList, editData: null, dirty: false };
     selectedTaskId = null;
-    render();
+    marquerSelection();
 }
 async function confirmClosePanel() {
     if (panelState.isNew && panelState.editData?.titre?.trim()) {
@@ -1817,7 +1833,7 @@ function openTaskPanel(taskId) {
     renderPanel();
     openPanel();
     if (gristReady) grist.setSelectedRows([taskId]);
-    render();
+    marquerSelection();
 }
 
 function openCreatePanel() { openCreateTaskWithParent(null); }
@@ -3318,7 +3334,7 @@ document.addEventListener('click', (e) => {
     if (!e.target.closest('.gantt-bar, .gantt-milestone, .panel, .task-row, .toolbar, .filter-dropdown, .view-controls')) {
         if (selectedTaskId !== null && !panelState.open) {
             selectedTaskId = null;
-            render();
+            marquerSelection();
         }
     }
 });
@@ -3348,11 +3364,23 @@ brancherPoignee('poigneePanel', 'panel', -1);
 // Relancer le rendu quand le widget est redimensionné (ex: panel ouvert/fermé, fenêtre). Un
 // redimensionnement émet un événement par image : sans ce regroupement, chaque pixel de la poignée
 // déclenchait un rendu complet, et la souris avançait plus vite que le widget.
+// Seule la largeur compte : la hauteur bouge avec la barre des filtres actifs, sans rien changer au
+// rendu. Pendant l'animation du volet, la largeur change à chaque image : on attend qu'elle finisse.
 let renduRedimensionnement = null;
-new ResizeObserver(() => {
-    if (renduRedimensionnement !== null) return;
+let voletEnMouvement = false;
+function redessinerSiElargi() {
+    if (renduRedimensionnement !== null || voletEnMouvement) return;
+    if (document.getElementById('timelineScroll').clientWidth === largeurRendue) return;
     renduRedimensionnement = requestAnimationFrame(() => { renduRedimensionnement = null; render(); });
-}).observe(document.getElementById('timelineScroll'));
+}
+new ResizeObserver(redessinerSiElargi).observe(document.getElementById('timelineScroll'));
+const enveloppeGantt = document.getElementById('ganttWrapper');
+enveloppeGantt.addEventListener('transitionrun', (e) => { if (e.target === enveloppeGantt) voletEnMouvement = true; });
+['transitionend', 'transitioncancel'].forEach(type => enveloppeGantt.addEventListener(type, (e) => {
+    if (e.target !== enveloppeGantt) return;
+    voletEnMouvement = false;
+    redessinerSiElargi();
+}));
 renderGanttSkeleton();  // 06 · squelette pendant le chargement
 // Repli auto vers données d'exemple si Grist n'a pas répondu au handshake sous 2.8s
 // (aperçu / hors-ligne). Des lectures lentes ne comptent pas : Grist est là, on attend.
