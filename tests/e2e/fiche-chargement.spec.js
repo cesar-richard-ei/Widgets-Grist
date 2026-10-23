@@ -19,7 +19,8 @@ test('changer de projet ne relit que la table des projets', async ({ page }) => 
     await D.ouvrirFiche(page, null, DATALAB);
     await compterLectures(page);
 
-    await page.evaluate(() => charger({ id: 1 }));
+    await page.evaluate(() => grist.setSelectedRows([1]));
+    await expect(page.locator('.fiche-titre')).toHaveText('Portail habilitations');
 
     expect(await page.evaluate(() => window.__lectures)).toEqual(['Projects']);
 });
@@ -29,7 +30,7 @@ test('une modification des tables recharge tout', async ({ page }) => {
     await D.ouvrirFiche(page, null, DATALAB);
     await compterLectures(page);
 
-    await page.evaluate(() => charger({ id: 2 }, true));
+    await page.evaluate(() => charger(true));
 
     const lues = await page.evaluate(() => window.__lectures);
     expect(lues).toContain('Tasks');
@@ -63,7 +64,7 @@ test('une table absente du schema n est pas demandee', async ({ page }) => {
     await D.ouvrirFiche(page, doc, DATALAB);
     await compterLectures(page);
 
-    await page.evaluate(() => charger({ id: 2 }, true));
+    await page.evaluate(() => charger(true));
 
     expect(await page.evaluate(() => window.__lectures)).not.toContain('Categorie_de_projet');
 });
