@@ -642,6 +642,11 @@ function sectionChantier(data, recherche, sansResultat) {
 }
 
 function choisirChantier(id) {
+    const data = panelState.editData;
+    if (data && data.parentTask && data.parentTask < ID_CHANTIER) {
+        const parent = tasks.find(t => t.id === data.parentTask);
+        if (parent && (parent.chantier || null) !== (id || null)) data.parentTask = null;
+    }
     updateField('chantier', id || null);
     const menu = document.getElementById('chantierSelect');
     if (menu) menu.classList.remove('open');
@@ -2088,6 +2093,16 @@ function setParent(newParentId) {
         showToast('Cycle détecté — choix impossible', 'error');
         return;
     }
+    // Une sous-tâche appartient au chantier de sa tâche. Un chantier choisi comme parent est un
+    // rattachement : son identifiant décalé ne partirait pas en base.
+    const parent = tasks.find(t => t.id === newParentId);
+    const data = panelState.editData;
+    if (estChantier(parent)) {
+        data.parentTask = null;
+        updateField('chantier', parent.idChantier);
+        return;
+    }
+    if (parent && data && colonneChantier()) data.chantier = parent.chantier || null;
     updateField('parentTask', newParentId);
 }
 
@@ -2771,12 +2786,18 @@ async function saveTaskToGrist() {
 
     const record = seulementModifies(recordDeTache(data));
     if (!Object.keys(record).length) return;
+    const actions = [['UpdateRecord', 'Tasks', panelState.taskId, pruneTaskRecord(Object.assign({}, record))]];
+    const suiveuses = 'chantier' in record
+        ? getAllDescendants(panelState.taskId).filter(t => !estChantier(t) && (t.chantier || null) !== (record.chantier || null))
+        : [];
+    for (const t of suiveuses) actions.push(['UpdateRecord', 'Tasks', t.id, pruneTaskRecord({ chantier: record.chantier || null })]);
     try {
-        await grist.docApi.applyUserActions([['UpdateRecord', 'Tasks', panelState.taskId, pruneTaskRecord(Object.assign({}, record))]]);
+        await grist.docApi.applyUserActions(actions);
         retenirEcrit(record);
         showSaveIndicator();
         const idx = tasks.findIndex(t => t.id === panelState.taskId);
         if (idx !== -1) tasks[idx] = { ...tasks[idx], ...record };
+        for (const t of suiveuses) t.chantier = record.chantier || null;
     } catch (e) {
         console.error(e);
         showToast('Erreur sauvegarde', 'error');
