@@ -1678,29 +1678,20 @@
             for (const t of tasks) for (const tag of getTagsArray(t)) vus.add(tag);
             return Array.from(vus).sort(parOrdreAlphabetique);
         }
-        // Le tag d'un chantier ou d'une tâche parente vaut pour toute sa descendance.
+        // Un seul niveau : le tag d'un chantier vaut pour ses tâches, celui d'une tâche pour ses sous-tâches.
+        // Même règle que la colonne Tasks.tagsEffectifs du document.
         function tagsDeLigne(t) {
-            const tags = new Set();
-            let cur = t, guard = 0;
-            while (cur && guard++ < 64) {
-                for (const tag of getTagsArray(cur)) tags.add(tag);
-                const parent = cur.parentTask;
-                cur = parent ? tasks.find(x => x.id === parent) : null;
-            }
+            const tags = new Set(getTagsArray(t));
+            const parent = t && t.parentTask ? tasks.find(x => x.id === t.parentTask) : null;
+            for (const tag of getTagsArray(parent)) tags.add(tag);
             return tags;
         }
-        // Tags reçus du chantier et des tâches parentes, avec le titre de la ligne qui les porte.
+        // Tags reçus du parent direct, avec le titre de la ligne qui les porte.
         function tagsHerites(data) {
+            let parent = data.parentTask ? tasks.find(x => x.id === data.parentTask) : null;
+            if (!parent && data.chantier) parent = tasks.find(x => estChantier(x) && x.idChantier === data.chantier);
             const herites = new Map();
-            let cur = data.parentTask ? tasks.find(x => x.id === data.parentTask) : null;
-            if (!cur && data.chantier) cur = tasks.find(x => estChantier(x) && x.idChantier === data.chantier);
-            let guard = 0;
-            while (cur && guard++ < 64) {
-                for (const tag of getTagsArray(cur)) if (!herites.has(tag)) herites.set(tag, cur.titre || '');
-                const parent = cur.parentTask;
-                cur = parent ? tasks.find(x => x.id === parent) : null;
-            }
-            for (const tag of data.tags) herites.delete(tag);
+            for (const tag of getTagsArray(parent)) if (!data.tags.includes(tag)) herites.set(tag, parent.titre || '');
             return herites;
         }
         function basculerTag(rang) {

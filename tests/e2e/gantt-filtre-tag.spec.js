@@ -4,7 +4,8 @@ const { test, expect } = require('@playwright/test');
 const D = require('./documents.js');
 
 // Un tag rassemble les chantiers et les tâches d'un même programme. Le tag d'un chantier vaut pour
-// toutes ses tâches ; une tâche marquée seule ramène son chantier, pour le contexte.
+// ses tâches, celui d'une tâche pour ses sous-tâches ; une tâche marquée seule ramène son chantier,
+// pour le contexte.
 
 const filtrer = (page, tag) => page.evaluate((t) => toggleFilter('tag', t), tag);
 
@@ -91,16 +92,34 @@ function sousTacheSousChantierTague() {
     return doc;
 }
 
-test('le volet d une sous-tache montre les tags herites et leur origine', async ({ page }) => {
+test('le volet d une sous-tache montre les tags de sa tache, pas ceux du chantier', async ({ page }) => {
     await D.ouvrirGantt(page, sousTacheSousChantierTague());
     await D.toutDeplier(page);
     await D.ouvrirVolet(page, 'Atelier de cadrage');
 
     const herites = page.locator('#panel .tag-chip.herite');
-    await expect(herites).toHaveText(['#poc', '#ACCES']);
-    await expect(herites.first()).toHaveAttribute('title', 'Hérité de Cadrage des outils');
-    await expect(herites.nth(1)).toHaveAttribute('title', 'Hérité de Socle technique');
+    await expect(herites).toHaveText(['#poc']);
+    await expect(herites).toHaveAttribute('title', 'Hérité de Cadrage des outils');
     await expect(herites.locator('.remove')).toHaveCount(0);
+});
+
+test('le volet d une tache montre le tag de son chantier', async ({ page }) => {
+    await D.ouvrirGantt(page, sousTacheSousChantierTague());
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    await expect(page.locator('#panel .tag-chip.herite')).toHaveText(['#ACCES']);
+    await expect(page.locator('#panel .tag-chip.herite')).toHaveAttribute('title', 'Hérité de Socle technique');
+});
+
+// Un seul niveau : le tag d'un chantier va sur ses tâches, pas sur leurs sous-tâches.
+test('le tag d un chantier ne retient pas les sous-taches de ses taches', async ({ page }) => {
+    await D.ouvrirGantt(page, sousTacheSousChantierTague());
+    await D.toutDeplier(page);
+    await filtrer(page, 'ACCES');
+
+    await expect(D.ligne(page, 'Cadrage des outils')).not.toHaveClass(/dimmed/);
+    await expect(D.ligne(page, 'Atelier de cadrage')).toHaveClass(/dimmed/);
 });
 
 test('un tag herite ne part pas en base avec les tags de la tache', async ({ page }) => {
