@@ -517,3 +517,62 @@ test('un chantier dont le responsable n a pas de domaine reste sans bandeau', as
     await expect(D.ligne(page, 'Socle technique')).toBeVisible();
     await expect(D.ligne(page, 'Socle technique').locator('.bandeau-domaine')).toHaveCount(0);
 });
+
+// Une tâche créée sans chantier puis rangée sous une autre restait hors de tout chantier : seul
+// parentTask partait en base.
+const recetteSansChantier = () => {
+    const doc = D.documentCible();
+    const recette = doc.Tasks.records.find((t) => t.id === 3);
+    recette.chantier = null;
+    recette.projet = 1;
+    return doc;
+};
+
+const choisirParent = async (page, titre) => {
+    await volet(page).locator('#parentSelect .addbtn').click();
+    await volet(page).locator('#parentSelect .multi-select-option', { hasText: titre }).click();
+};
+
+test('une tache rangee sous une autre prend le chantier de son parent', async ({ page }) => {
+    await D.ouvrirGantt(page, recetteSansChantier());
+    await D.ouvrirVolet(page, 'Recette');
+
+    await choisirParent(page, 'Cadrage des outils');
+
+    await expect.poll(() => D.champTache(page, 3, 'parentTask')).toBe(1);
+    expect(await D.champTache(page, 3, 'chantier')).toBe(1);
+});
+
+test('choisir un chantier comme parent rattache la tache a ce chantier', async ({ page }) => {
+    await D.ouvrirGantt(page, recetteSansChantier());
+    await D.ouvrirVolet(page, 'Recette');
+
+    await choisirParent(page, 'Socle technique');
+
+    await expect.poll(() => D.champTache(page, 3, 'chantier')).toBe(1);
+    expect(await D.champTache(page, 3, 'parentTask') || 0).toBe(0);
+});
+
+test('changer le chantier d une tache emmene ses sous-taches', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    await volet(page).locator('#chantierSelect .addbtn').click();
+    await volet(page).locator('#chantierSelect .multi-select-option', { hasText: 'Guides utilisateurs' }).click();
+
+    await expect.poll(() => D.champTache(page, 6, 'chantier')).toBe(2);
+    expect(await D.champTache(page, 6, 'parentTask')).toBe(1);
+});
+
+test('changer le chantier d une sous-tache la sort de sa tache', async ({ page }) => {
+    await D.ouvrirGantt(page);
+    await D.toutDeplier(page);
+    await D.ouvrirVolet(page, 'Atelier de cadrage');
+
+    await volet(page).locator('#chantierSelect .addbtn').click();
+    await volet(page).locator('#chantierSelect .multi-select-option', { hasText: 'Guides utilisateurs' }).click();
+
+    await expect.poll(() => D.champTache(page, 6, 'chantier')).toBe(2);
+    expect(await D.champTache(page, 6, 'parentTask') || 0).toBe(0);
+});
