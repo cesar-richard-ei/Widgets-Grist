@@ -118,6 +118,7 @@ Pour lire l'identifiant réel d'une colonne : panneau de droite dans Grist, ongl
 | `Responsable` | Ref:Team | Porte la couleur de la ligne et la pastille de la colonne de gauche |
 | `dependDe` | RefList:Tasks | Dépendances, tracées en courbes |
 | `tags` | ChoiceList | Étiquettes |
+| `tagsEffectifs` | ChoiceList, formule | Tags de la tâche et ceux reçus de ses parents, pour filtrer la table. Jamais écrite, voir plus bas |
 | `estimationH`, `tempsPasse` | Numeric | Heures |
 | `couleur` | Text | Couleur hexadécimale qui prime sur tout le reste pour cette ligne |
 | `subtasks` | Text | JSON `[{id, text, done}]`, la case à cocher du volet |
@@ -138,6 +139,7 @@ Ces identifiants sont attendus **tels quels**.
 | `Projets` | RefList:Projects | Rattachement aux projets. **Le premier de la liste** porte l'affichage |
 | `Contributeurs` | RefList:Team | Remontée des intervenants, écrite à l'enregistrement du volet |
 | `Responsable` | Ref:Team | Porte la couleur de la ligne |
+| `tags` | ChoiceList | Étiquettes, reçues par toutes les tâches du chantier |
 
 Sans table `Chantiers`, le Gantt retombe sur une hiérarchie de tâches seule et le bouton de création
 d'un chantier disparaît.
@@ -170,6 +172,27 @@ d'un chantier disparaît.
 
 `Disponibilites`, créée par le widget Plan : `membre` (Ref:Team), `type` (Text), `dateDebut` et
 `dateFin` (Date), `dispo` (Numeric **de 0 à 1**, part de capacité conservée), `commentaire` (Text).
+
+### Tags hérités
+
+Un tag posé sur un chantier ou sur une tâche vaut pour toute sa descendance. Le Gantt en tient compte
+dans son filtre et le volet affiche les tags hérités en grisé, sans les écrire. Pour filtrer la même
+chose dans une table Grist, `Tasks.tagsEffectifs` est une colonne calculée, posée à la main dans le
+document (qualif et prod le 30/10/2026) :
+
+```python
+tags = set($tags or [])
+if $parentTask:
+  tags.update($parentTask.tagsEffectifs or [])
+elif $Chantier:
+  tags.update($Chantier.tags or [])
+return sorted(tags)
+```
+
+`Chantier` est le nom de la colonne de rattachement dans ces documents : la formule le reprend tel
+quel. Une sous-tâche hérite du chantier par sa tâche parente, même si son propre rattachement est
+vide. Les choix de la colonne reprennent ceux de `tags` : un nouveau tag reste filtrable, mais Grist
+le marque comme hors liste tant qu'il n'y est pas ajouté.
 
 ### Colonnes créées par le widget Plan
 

@@ -82,3 +82,44 @@ test('une branche depliee par le filtre se replie encore a la main', async ({ pa
 
     await expect(D.ligne(page, 'Cadrage des outils')).toHaveCount(0);
 });
+
+// Le volet montre ce que le filtre retient : les tags reçus du chantier et des tâches parentes
+// s'affichent à côté des siens, sans pouvoir s'y retirer ni partir en base.
+function sousTacheSousChantierTague() {
+    const doc = documentTague();
+    doc.Chantiers.records.find((c) => c.id === 1).tags = ['L', 'ACCES'];
+    return doc;
+}
+
+test('le volet d une sous-tache montre les tags herites et leur origine', async ({ page }) => {
+    await D.ouvrirGantt(page, sousTacheSousChantierTague());
+    await D.toutDeplier(page);
+    await D.ouvrirVolet(page, 'Atelier de cadrage');
+
+    const herites = page.locator('#panel .tag-chip.herite');
+    await expect(herites).toHaveText(['#poc', '#ACCES']);
+    await expect(herites.first()).toHaveAttribute('title', 'Hérité de Cadrage des outils');
+    await expect(herites.nth(1)).toHaveAttribute('title', 'Hérité de Socle technique');
+    await expect(herites.locator('.remove')).toHaveCount(0);
+});
+
+test('un tag herite ne part pas en base avec les tags de la tache', async ({ page }) => {
+    await D.ouvrirGantt(page, sousTacheSousChantierTague());
+    await D.toutDeplier(page);
+    await D.ouvrirVolet(page, 'Atelier de cadrage');
+
+    await page.locator('#tagInput').fill('atelier');
+    await page.locator('#tagInput').press('Enter');
+
+    await expect.poll(() => D.champTache(page, 6, 'tags')).toEqual(['L', 'atelier']);
+});
+
+test('un tag pose sur la tache n est pas repete comme herite', async ({ page }) => {
+    const doc = sousTacheSousChantierTague();
+    doc.Tasks.records.find((t) => t.id === 1).tags = ['L', 'poc', 'ACCES'];
+    await D.ouvrirGantt(page, doc);
+    await D.deplier(page, 'Socle technique', 'Cadrage des outils');
+    await D.ouvrirVolet(page, 'Cadrage des outils');
+
+    await expect(page.locator('#panel .tag-chip.herite')).toHaveCount(0);
+});

@@ -193,6 +193,20 @@ function tagsDeLigne(t) {
     }
     return tags;
 }
+// Tags reçus du chantier et des tâches parentes, avec le titre de la ligne qui les porte.
+function tagsHerites(data) {
+    const herites = new Map();
+    let cur = data.parentTask ? tasks.find(x => x.id === data.parentTask) : null;
+    if (!cur && data.chantier) cur = tasks.find(x => estChantier(x) && x.idChantier === data.chantier);
+    let guard = 0;
+    while (cur && guard++ < 64) {
+        for (const tag of getTagsArray(cur)) if (!herites.has(tag)) herites.set(tag, cur.titre || '');
+        const parent = cur.parentTask;
+        cur = parent ? tasks.find(x => x.id === parent) : null;
+    }
+    for (const tag of data.tags) herites.delete(tag);
+    return herites;
+}
 function basculerTag(rang) {
     const t = tagsConnus()[rang];
     if (t) toggleFilter('tag', t);
@@ -2277,7 +2291,9 @@ function renderPanel() {
         if (groupes) blockedHtml = '<div class="deps-display">' + groupes + '</div>';
     }
 
-    const tagsChips = data.tags.map(tag =>
+    const tagsHeritesChips = panelState.estChantier ? '' : Array.from(tagsHerites(data), ([tag, source]) =>
+        '<span class="tag-chip herite" title="Hérité de ' + escapeAttr(source) + '">#' + escapeHtml(tag) + '</span>').join('');
+    const tagsChips = tagsHeritesChips + data.tags.map(tag =>
         '<span class="tag-chip">#' + escapeHtml(tag) + '<span class="remove" onclick="removeTag(\'' + escapeHtml(tag) + '\')">×</span></span>'
     ).join('');
     const estim = data.estimationH || 0;
