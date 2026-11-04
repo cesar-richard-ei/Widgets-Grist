@@ -2,8 +2,8 @@ name: Release
 
 run-name: Release${{ inputs.simulation && ' (simulation)' || '' }}
 
-# Declenchement manuel depuis main : c'est le seul chemin qui cree une release, donc le seul qui
-# met la racine du site a jour. Un push sur main ne publie que /dev/.
+# Declenchement manuel depuis la branche release : c'est le seul chemin qui cree une release, donc le
+# seul qui met la racine du site a jour. Un push sur main ne publie que /dev/.
 on:
   workflow_dispatch:
     inputs:
