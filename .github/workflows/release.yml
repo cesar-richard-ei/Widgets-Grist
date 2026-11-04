@@ -64,6 +64,13 @@ jobs:
             "${binaire}"
           fi
 
+      - name: Annonce sur les PR de main
+        if: steps.semantic.outputs.version != ''
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.semantic.outputs.version }}
+        run: node scripts/prs-livrees.js "${VERSION}"
+
   publication:
     name: Publication du site
     needs: [version]

@@ -31,7 +31,7 @@ Guide de développement pour le repository de widgets Grist.
 ```
 projects/tasks_app/fiche.html  ──site.json──►  site/taskflow/fiche/index.html
                                                  ├── /dev/ : main, à chaque push
-                                                 └── racine : dernière release
+                                                 └── racine : dernière release, publiée depuis la branche release
 ```
 
 ### Avant de coder sur un projet
@@ -153,7 +153,8 @@ cd projects/mon-widget/
 ### 2. Publier
 
 Merger sur `main` : `pages.yml` reconstruit le site et le sert sous `/dev/`, la qualif. Pour la racine,
-servie en prod, créer une release. Voir la section CI/CD.
+servie en prod, reprendre les sujets validés sur la branche `release` et créer une release. Voir la
+section CI/CD.
 
 ## Configuration Grist
 
@@ -319,8 +320,14 @@ exemple `v1.19.2-12-gbfa201d`, qui donne la distance à la dernière version liv
 
 ### `release.yml` — livrer en production
 
-Déclenchement manuel depuis l'onglet Actions, sur `main`. C'est le seul chemin qui crée une release,
-donc le seul qui met la racine du site à jour.
+Déclenchement manuel sur la branche `release` : `gh workflow run release.yml --ref release`. C'est le
+seul chemin qui crée une release, donc le seul qui met la racine du site à jour.
+
+`release` ne reçoit que les sujets validés en qualif. Chaque lot arrive par une PR vers `release`, qui
+reprend par `git cherry-pick -x`, dans l'ordre de `main`, les commits des issues en "À déployer en Prod"
+et tous les commits liés à aucune issue (dépendances, CI). Un commit qui ne passe pas sans un sujet
+encore en recette attend avec lui. Quand tout `main` est validé, un merge de `main` dans `release`
+réaligne les deux branches. La procédure pas à pas est dans le README, section "Livrer en production".
 
 `semantic-release` analyse les commits accumulés depuis le dernier tag, en déduit la version, pose le
 tag annoté et crée la release avec ses notes :
@@ -336,7 +343,10 @@ Le bump le plus fort du lot l'emporte. Un lot composé uniquement de la dernièr
 le run le signale et s'arrête, sans republier le site.
 
 `@semantic-release/github` commente ensuite chaque PR incluse dans la version et lui pose le label
-`livré`. La file de vérification produit se lit donc `is:merged label:"A tester" -label:livré`.
+`livré`. Il ne voit que les PR vers `release` : les commits cherry-pickés n'ont plus le SHA de `main`.
+`scripts/prs-livrees.js` retrouve les PR de `main` par la ligne `cherry picked from commit` et leur
+pose le même commentaire et le même label. La file de vérification produit se lit donc
+`is:merged label:"A tester" -label:livré`.
 
 L'entrée `simulation` du déclenchement passe `--dry-run` : la version calculée et les notes
 s'affichent dans le run, rien n'est publié.
@@ -370,7 +380,7 @@ fois par semaine. Les alertes remontent dans l'onglet Security, elles ne bloquen
 1. Settings → Pages
 2. Source : GitHub Actions
 
-L'environnement `github-pages` n'accepte les déploiements que depuis `main` et les tags `v*`.
+L'environnement `github-pages` n'accepte les déploiements que depuis `main`, `release` et les tags `v*`.
 
 ### Réglages du dépôt
 
@@ -381,8 +391,8 @@ Les contrôles suivants sont actifs et valent la peine d'être connus avant de t
   SHA est imposé côté dépôt : une action référencée par tag est refusée à l'exécution ;
 - analyse de secrets et protection au push actives ;
 - alertes et correctifs Dependabot actifs, signalement privé de vulnérabilité ouvert ;
-- `main` exige une PR, le rebase comme seule méthode de merge, et les checks `tests`, `Messages de commit`,
-  `Analyse actions` et `Analyse javascript-typescript` ;
+- `main` et `release` exigent une PR, le rebase comme seule méthode de merge, et les checks `tests`,
+  `Messages de commit`, `Analyse actions` et `Analyse javascript-typescript` ;
 - les tags `v*` ne peuvent être ni supprimés ni réécrits.
 
 ## Conventions
