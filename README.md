@@ -191,6 +191,22 @@ qui a été lu, table par table.
 
 ---
 
+## Livrer en production
+
+La racine du site sert la dernière release, `/dev/` sert `main`. Les releases partent de la branche
+`release`, qui ne reçoit que les sujets validés en qualif :
+
+1. Partir de `release` et reprendre, dans l'ordre de `main`, les commits des issues en
+   "À déployer en Prod" et tous ceux qui ne sont liés à aucune issue (dépendances, CI) :
+   `git cherry-pick -x <commit>`.
+2. Ouvrir la PR vers `release`, la merger une fois la CI verte.
+3. Lancer la release : `gh workflow run release.yml --ref release`.
+
+Un commit qui ne passe pas sans un sujet encore en recette attend la release suivante avec lui.
+Quand tout `main` est validé, un merge de `main` dans `release` réaligne les deux branches.
+
+---
+
 ## Contribuer
 
 - **Signaler un bug** : [Ouvrir une issue](../../issues/new)
